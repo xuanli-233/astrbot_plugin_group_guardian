@@ -556,6 +556,7 @@ def _initial_config(schema):
         "local_ocr_driver": "python",
         "local_ocr_python_module": "ocr_mock.py",
         "broadcast_interval_seconds": 1,
+        "directory_min_interval_ms": 300,
         "group_black_list": [],
     })
     return config

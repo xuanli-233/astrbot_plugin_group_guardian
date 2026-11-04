@@ -107,7 +107,9 @@ class GroupNameTaskMixin:
     # 改名
     # ------------------------------------------------------------------
     async def _get_group_name(self, client, gid: str) -> Optional[str]:
-        ok, data, err = await self._call_group_api_result(
+        """实时读取群名（改名前必须用最新值，才能识别手动改名）。经 _dir_call 限流。"""
+        caller = getattr(self, "_dir_call", None) or self._call_group_api_result
+        ok, data, err = await caller(
             client, "get_group_info", "获取群信息", group_id=self._safe_int(gid, 0), no_cache=True,
         )
         if not ok or not isinstance(data, dict):
@@ -116,28 +118,41 @@ class GroupNameTaskMixin:
         return str(data.get("group_name") or "")
 
     async def _apply_group_suffix(self, client, gid: str, suffix: str, tasks: Dict[str, dict],
-                                  template: str = "") -> Tuple[bool, str]:
-        """把群名改成「基础名 + suffix」，更新 tasks[gid]。返回 (成功, 说明)。"""
+                                  template: str = "", log: Optional[dict] = None) -> Tuple[bool, str]:
+        """把群名改成「基础名 + suffix」，更新 tasks[gid]。返回 (成功, 说明)。
+
+        log：操作记录上下文 {"action", "source", "operator", "reason"}，每次改名记一条（旧名 → 新名）。
+        """
+        log = dict(log or {})
+        action = log.pop("action", "") or "修改群名"
         current = await self._get_group_name(client, gid)
         if current is None:
+            self._record_op(action, group_id=gid, result="失败：获取群名失败", **log)
             return False, "获取群名失败"
         record = tasks.get(gid) or {}
         base = self._derive_base_name(current, record, template)
         max_len = self._cfg_int("group_name_max_length", 30)
         new_name = self._compose_group_name(base, suffix, max_len)
         if not new_name.strip():
+            self._record_op(action, group_id=gid, result="失败：改名后群名为空", **log)
             return False, "改名后群名为空"
         if new_name != current:
             ok, err = await self._call_group_api(
                 client, "set_group_name", "修改群名", group_id=self._safe_int(gid, 0), group_name=new_name,
             )
+            self._record_op(action, group_id=gid, result="成功" if ok else f"失败：{err or '修改失败'}",
+                            detail=f"{current} → {new_name}", **log)
             if not ok:
                 return False, err or "修改失败"
+            setter = getattr(self, "_dir_set_group_name", None)
+            if callable(setter):
+                setter(gid, new_name)
         record.update({"base": base, "suffix": suffix, "applied": new_name})
         tasks[gid] = record
         return True, new_name
 
-    async def _apply_to_groups(self, client, groups: List[str], tasks: Dict[str, dict], suffix_for) -> Tuple[List[str], Dict[str, str]]:
+    async def _apply_to_groups(self, client, groups: List[str], tasks: Dict[str, dict], suffix_for,
+                               log: Optional[dict] = None) -> Tuple[List[str], Dict[str, str]]:
         """suffix_for(gid) -> (suffix, template)；返回 (成功列表 '群号→新群名', 失败 {群号: 原因})。"""
         done: List[str] = []
         failed: Dict[str, str] = {}
@@ -146,7 +161,7 @@ class GroupNameTaskMixin:
             if index:
                 await asyncio.sleep(interval)
             suffix, template = suffix_for(gid)
-            ok, info = await self._apply_group_suffix(client, gid, suffix, tasks, template)
+            ok, info = await self._apply_group_suffix(client, gid, suffix, tasks, template, log=log)
             if ok:
                 done.append(f"{gid} → {info}")
             else:
@@ -167,6 +182,9 @@ class GroupNameTaskMixin:
             if last is not None:
                 return last, tokens[:-1]
         return None, tokens
+
+    def _name_cmd_log(self, event: AstrMessageEvent) -> dict:
+        return {"source": "指令", "operator": self._try_get_sender_id(event)}
 
     async def _name_task_precheck(self, event: AstrMessageEvent, name: str) -> Optional[str]:
         unsupported = self._onebot_unsupported_message(event)
@@ -216,7 +234,7 @@ class GroupNameTaskMixin:
             yield event.plain_result(f"没有可操作的群{f'：{list_err}' if list_err else ''}")
             return
         if scheduled_at is not None:
-            err = await self._name_schedule_suffix(targets, suffix, scheduled_at)
+            err = await self._name_schedule_suffix(targets, suffix, scheduled_at, log=self._name_cmd_log(event))
             if err:
                 yield event.plain_result(err)
             else:
@@ -224,7 +242,7 @@ class GroupNameTaskMixin:
                     f"已登记：{scheduled_at.strftime('%Y-%m-%d %H:%M')} 把 {len(targets)} 个群的后缀改为「{suffix or '（清除）'}」")
             return
         yield event.plain_result(f"开始修改 {len(targets)} 个群的群名……")
-        done, failed = await self._name_set_suffix(client, targets, suffix)
+        done, failed = await self._name_set_suffix(client, targets, suffix, log=self._name_cmd_log(event))
         msg = self._format_apply_result("群名后缀修改完成", done, failed)
         if denied:
             msg += f"\n不在管理范围内、已排除：{', '.join(denied)}"
@@ -271,7 +289,7 @@ class GroupNameTaskMixin:
             yield event.plain_result(f"没有可操作的群{f'：{list_err}' if list_err else ''}")
             return
         yield event.plain_result(f"开始为 {len(targets)} 个群设置倒计时……")
-        done, failed = await self._name_set_countdown(client, targets, target, template)
+        done, failed = await self._name_set_countdown(client, targets, target, template, log=self._name_cmd_log(event))
         msg = self._format_apply_result(
             f"倒计时已设置（目标 {target.isoformat()}，每天 {self._countdown_update_time()} 更新）", done, failed)
         if denied:
@@ -296,7 +314,7 @@ class GroupNameTaskMixin:
 
     async def _countdown_stop_or_refresh(self, event: AstrMessageEvent, sub: str, groups: Optional[List[str]]):
         if sub == "停止":
-            stopped = await self._name_stop_countdown(groups)
+            stopped = await self._name_stop_countdown(groups, log=self._name_cmd_log(event))
             if not stopped:
                 yield event.plain_result("没有符合条件的倒计时任务")
             else:
@@ -307,7 +325,7 @@ class GroupNameTaskMixin:
         if not client:
             yield event.plain_result("无法获取QQ客户端")
             return
-        done, failed = await self._name_refresh_countdown(client, groups)
+        done, failed = await self._name_refresh_countdown(client, groups, log=self._name_cmd_log(event))
         if not done and not failed:
             yield event.plain_result("没有符合条件的倒计时任务")
             return
@@ -315,19 +333,24 @@ class GroupNameTaskMixin:
 
     # ------------------------------------------------------------------
     # 核心操作（指令与 WebUI 共用）
+    # log：操作记录上下文 {"source": 指令/WebUI/自动, "operator": QQ号, "reason": ...}
     # ------------------------------------------------------------------
-    async def _name_set_suffix(self, client, groups: List[str], suffix: str) -> Tuple[List[str], Dict[str, str]]:
+    async def _name_set_suffix(self, client, groups: List[str], suffix: str,
+                               log: Optional[dict] = None) -> Tuple[List[str], Dict[str, str]]:
         """立即把这些群的后缀改为 suffix（空串 = 清除）。会结束这些群的倒计时，避免第二天被覆盖。"""
+        action = "清除群名后缀" if not suffix else "修改群名后缀"
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
-            done, failed = await self._apply_to_groups(client, groups, tasks, lambda _g: (suffix, ""))
+            done, failed = await self._apply_to_groups(
+                client, groups, tasks, lambda _g: (suffix, ""), log=dict(log or {}, action=action))
             for gid in groups:
                 if gid in tasks and tasks[gid].get("countdown"):
                     tasks[gid]["countdown"] = None
             self._save_name_tasks(tasks)
         return done, failed
 
-    async def _name_schedule_suffix(self, groups: List[str], suffix: str, at: datetime) -> str:
+    async def _name_schedule_suffix(self, groups: List[str], suffix: str, at: datetime,
+                                    log: Optional[dict] = None) -> str:
         """登记定时改后缀。返回错误说明，成功返回空串。"""
         if at <= datetime.now():
             return "定时时间必须晚于现在"
@@ -335,31 +358,40 @@ class GroupNameTaskMixin:
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
             for gid in groups:
-                tasks.setdefault(gid, {}).setdefault("scheduled", []).append({"at": stamp, "suffix": suffix})
+                tasks.setdefault(gid, {}).setdefault("scheduled", []).append(
+                    {"at": stamp, "suffix": suffix, "source": (log or {}).get("source", ""),
+                     "operator": (log or {}).get("operator", "")})
+                self._record_op("登记定时改群名", group_id=gid, detail=f"{stamp} 后缀改为「{suffix or '（清除）'}」",
+                                **(log or {}))
             self._save_name_tasks(tasks)
         return ""
 
-    async def _name_cancel_scheduled(self, groups: Optional[List[str]] = None) -> int:
+    async def _name_cancel_scheduled(self, groups: Optional[List[str]] = None, log: Optional[dict] = None) -> int:
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
             count = 0
             for gid in (groups or list(tasks)):
-                record = tasks.get(gid) or {}
-                count += len(record.get("scheduled") or [])
-                if gid in tasks:
+                pending = (tasks.get(gid) or {}).get("scheduled") or []
+                if pending:
+                    count += len(pending)
                     tasks[gid]["scheduled"] = []
+                    self._record_op("取消定时改群名", group_id=gid,
+                                    detail="；".join(f"{p['at']}「{p.get('suffix') or '（清除）'}」" for p in pending),
+                                    **(log or {}))
             self._save_name_tasks(tasks)
         return count
 
-    async def _name_set_countdown(self, client, groups: List[str], target: date,
-                                  template: str) -> Tuple[List[str], Dict[str, str]]:
+    async def _name_set_countdown(self, client, groups: List[str], target: date, template: str,
+                                  log: Optional[dict] = None) -> Tuple[List[str], Dict[str, str]]:
         today = date.today()
         suffix = self._render_countdown(template, target, today)
         if suffix is None:
             return [], {g: "目标日期已经过去了" for g in groups}
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
-            done, failed = await self._apply_to_groups(client, groups, tasks, lambda _g: (suffix, template))
+            done, failed = await self._apply_to_groups(
+                client, groups, tasks, lambda _g: (suffix, template),
+                log=dict(log or {}, action="设置群名倒计时", reason=f"目标 {target.isoformat()}，模板 {template}"))
             for gid in groups:
                 if gid in tasks and gid not in failed:
                     tasks[gid]["countdown"] = {
@@ -368,31 +400,44 @@ class GroupNameTaskMixin:
             self._save_name_tasks(tasks)
         return done, failed
 
-    async def _name_stop_countdown(self, groups: Optional[List[str]] = None) -> List[str]:
+    async def _name_stop_countdown(self, groups: Optional[List[str]] = None, log: Optional[dict] = None) -> List[str]:
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
             stopped = [g for g in (groups or list(tasks)) if (tasks.get(g) or {}).get("countdown")]
             for gid in stopped:
+                cd = tasks[gid]["countdown"]
                 tasks[gid]["countdown"] = None
+                self._record_op("停止群名倒计时", group_id=gid,
+                                detail=f"目标 {cd.get('target')}，模板 {cd.get('template')}", **(log or {}))
             self._save_name_tasks(tasks)
         return stopped
 
-    async def _name_refresh_countdown(self, client, groups: Optional[List[str]] = None) -> Tuple[List[str], Dict[str, str]]:
+    async def _name_refresh_countdown(self, client, groups: Optional[List[str]] = None,
+                                      log: Optional[dict] = None) -> Tuple[List[str], Dict[str, str]]:
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
             selected = [g for g in (groups or list(tasks)) if (tasks.get(g) or {}).get("countdown")]
-            done, failed = await self._run_countdowns(client, tasks, selected, force=True)
+            done, failed = await self._run_countdowns(client, tasks, selected, force=True, log=log)
             self._save_name_tasks(tasks)
         return done, failed
 
     async def _name_overview(self, client, groups: List[str]) -> List[dict]:
-        """WebUI 用：各群当前群名、基础名、后缀、倒计时、定时任务。"""
+        """WebUI 用：各群群名、基础名、后缀、倒计时、定时任务。
+
+        群名取自本地缓存（group_directory），打开页面不会对每个群调用一次接口；
+        真正改名时 _apply_group_suffix 仍会实时读取最新群名。
+        """
         tasks = self._load_name_tasks()
         today = date.today()
+        cached = {}
+        dir_groups = getattr(self, "_dir_groups", None)
+        if callable(dir_groups):
+            items, _err = await dir_groups(client)
+            cached = {g["group_id"]: g.get("group_name", "") for g in items}
         out = []
         for gid in groups:
             record = tasks.get(gid) or {}
-            current = await self._get_group_name(client, gid)
+            current = cached.get(gid) if gid in cached else await self._get_group_name(client, gid)
             cd = record.get("countdown")
             days = None
             if cd:
@@ -418,7 +463,8 @@ class GroupNameTaskMixin:
         return value if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) else "00:05"
 
     async def _run_countdowns(self, client, tasks: Dict[str, dict], groups: List[str],
-                              force: bool = False, today: Optional[date] = None) -> Tuple[List[str], Dict[str, str]]:
+                              force: bool = False, today: Optional[date] = None,
+                              log: Optional[dict] = None) -> Tuple[List[str], Dict[str, str]]:
         today = today or date.today()
         now_ts = int(datetime.now().timestamp())
         due: List[str] = []
@@ -442,7 +488,8 @@ class GroupNameTaskMixin:
                 return "", cd["template"]
             return suffix, cd["template"]
 
-        done, failed = await self._apply_to_groups(client, due, tasks, suffix_for)
+        done, failed = await self._apply_to_groups(
+            client, due, tasks, suffix_for, log=dict(log or {"source": "自动"}, action="群名倒计时更新"))
         for gid in due:
             if gid in failed:
                 # 失败（如机器人不是管理员）30 分钟后再试，避免每分钟重复调用
@@ -451,6 +498,7 @@ class GroupNameTaskMixin:
             tasks[gid]["countdown"].pop("retry_after", None)
             if gid in expired:
                 tasks[gid]["countdown"] = None
+                self._record_op("群名倒计时结束", group_id=gid, source="自动", detail="目标日期已过，已去掉后缀")
             else:
                 tasks[gid]["countdown"]["last_date"] = today.isoformat()
         return done, failed
@@ -475,8 +523,13 @@ class GroupNameTaskMixin:
                 if not ready:
                     continue
                 record["scheduled"] = [item for item in pending if item not in ready]
-                suffix = ready[-1].get("suffix", "")
-                ok, info = await self._apply_group_suffix(client, gid, suffix, tasks)
+                item = ready[-1]
+                ok, info = await self._apply_group_suffix(
+                    client, gid, item.get("suffix", ""), tasks,
+                    log={"action": "定时改群名", "source": "自动",
+                         "operator": item.get("operator", ""),
+                         "reason": f"{item.get('at')} 的定时任务（登记来源：{item.get('source') or '未知'}）"},
+                )
                 logger.info(f"[GroupMgr] 定时改群名 {gid}: {'成功 ' + info if ok else '失败 ' + info}")
                 changed = True
             if now.strftime("%H:%M") >= self._countdown_update_time():

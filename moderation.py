@@ -2456,6 +2456,16 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
                 event, block=self._cfg("blacklist_native_block_enabled", True, group_id=group_id),
             )
             mute_succeeded = await self._mute_member(event, 60)
+            recorder = getattr(self, "_record_op", None)
+            if callable(recorder):
+                meta = (getattr(self, "_bl_meta_all", lambda: {})() or {}).get(str(user_id)) or {}
+                recorder("黑名单发言踢出", source="自动", group_id=group_id, target=user_id,
+                         reason=f"黑名单用户发言（拉黑原因：{meta.get('reason') or '未记录'}）",
+                         result="成功" if kick_succeeded else ("仅禁言" if mute_succeeded else "失败"))
+                if kick_succeeded:
+                    remover = getattr(self, "_dir_remove_member", None)
+                    if callable(remover):
+                        remover(group_id, user_id)
             if kick_succeeded:
                 notice = self._cfg_str(
                     "ban_notice",

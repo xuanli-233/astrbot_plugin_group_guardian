@@ -451,6 +451,30 @@
         "default": "00:05",
         "hint": "HH:MM，按服务器本地时间；每天到点后刷新一次倒计时天数"
     },
+    "directory_group_ttl": {
+        "description": "群列表缓存有效期（秒）",
+        "type": "int",
+        "default": 3600,
+        "hint": "群列表缓存多久后重新拉取，范围 60-86400。机器人进新群时会自动刷新"
+    },
+    "directory_member_ttl": {
+        "description": "群成员缓存有效期（秒）",
+        "type": "int",
+        "default": 21600,
+        "hint": "每个群的成员列表缓存多久后重新拉取，范围 300-604800。入群 / 退群 / 管理员任免等通知会实时更新缓存，所以可以设得较长"
+    },
+    "directory_min_interval_ms": {
+        "description": "列表接口最小调用间隔（毫秒）",
+        "type": "int",
+        "default": 1500,
+        "hint": "拉取群列表 / 成员列表 / 群信息时，相邻两次调用至少间隔这么久，防止触发协议端限流，范围 200-10000"
+    },
+    "directory_background_refresh_enabled": {
+        "description": "后台补齐群成员缓存",
+        "type": "bool",
+        "default": true,
+        "hint": "每 5 分钟最多刷新 2 个已过期的群，慢慢补齐，不会集中请求"
+    },
     "kick_recall_enabled": {
         "description": "踢人时自动撤回该成员最近消息",
         "type": "bool",

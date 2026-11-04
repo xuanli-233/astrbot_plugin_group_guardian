@@ -740,6 +740,10 @@ class MembershipMixin:
             group_id, user_id, "", f"[加群申请] {comment}",
             action, audit_reason, [],
         )
+        recorder = getattr(self, "_record_op", None)
+        if callable(recorder):
+            recorder("通过加群申请" if approve else "拒绝加群申请", source="自动", group_id=group_id,
+                     target=user_id, reason=audit_reason, detail=f"验证信息：{comment[:200]}" if comment else "")
         await self._notify_join_audit(
             group_id, user_id, comment, approve, audit_reason
         )

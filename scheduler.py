@@ -49,6 +49,9 @@ class SchedulerMixin:
             # 群名定时改名 / 倒计时（group_name_task.py），每分钟检查一次
             if callable(getattr(self, "_group_name_loop", None)):
                 self._group_name_task = asyncio.create_task(self._group_name_loop())
+            # 群成员缓存后台补齐（group_directory.py），每 5 分钟最多刷新 2 个过期的群
+            if callable(getattr(self, "_dir_background_loop", None)):
+                self._dir_task = asyncio.create_task(self._dir_background_loop())
             ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
             if ai_enabled and callable(getattr(self, "_run_lexicon_learning", None)):
                 self._learn_task = asyncio.create_task(self._lexicon_learn_loop())
@@ -81,13 +84,15 @@ class SchedulerMixin:
                 await self._learn_task
             except asyncio.CancelledError:
                 logger.debug("[GroupMgr] 上下文学习任务已取消")
-        group_name_task = getattr(self, "_group_name_task", None)
-        if group_name_task and not group_name_task.done():
-            group_name_task.cancel()
-            try:
-                await group_name_task
-            except asyncio.CancelledError:
-                logger.debug("[GroupMgr] 群名定时任务已取消")
+        for attr, label in (("_group_name_task", "群名定时任务"), ("_dir_task", "群成员缓存任务"),
+                            ("_dir_refresh_task", "群成员缓存刷新")):
+            task = getattr(self, attr, None)
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    logger.debug(f"[GroupMgr] {label}已取消")
         if (self._moderation_review_task
                 and not self._moderation_review_task.done()):
             self._moderation_review_task.cancel()

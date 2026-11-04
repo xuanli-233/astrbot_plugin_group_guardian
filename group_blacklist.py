@@ -18,6 +18,7 @@ QQ 原生群黑名单只能在踢人那一刻附带（set_group_kick 的 reject_
 方法在 Main 上都存在（Main 不继承 CommandsMixin，因此这里不能调用其方法）。
 """
 import asyncio
+import re
 from typing import Dict, List, Optional, Tuple
 
 from astrbot.api import logger
@@ -33,9 +34,21 @@ class GroupBlacklistMixin:
     # ------------------------------------------------------------------
     # 参数解析与名单
     # ------------------------------------------------------------------
+    _REASON_RE = re.compile(r"(?:原因|理由)\s*[:：]?\s*|[#＃]\s*")
+
+    @classmethod
+    def _split_reason(cls, text: str) -> Tuple[str, str]:
+        """'/全群踢黑 111 222 原因：发广告' → ('/全群踢黑 111 222', '发广告')。"""
+        text = str(text or "")
+        m = cls._REASON_RE.search(text)
+        if not m:
+            return text, ""
+        return text[: m.start()], text[m.end():].strip()
+
     def _parse_kick_targets(self, event: AstrMessageEvent) -> List[str]:
-        """从指令参数和 @ 中解析目标 QQ 号，去重并保持顺序。"""
-        args = str(getattr(event, "message_str", "") or "").split()[1:]
+        """从指令参数和 @ 中解析目标 QQ 号，去重并保持顺序。原因部分里的数字不算目标。"""
+        head, _reason = self._split_reason(getattr(event, "message_str", "") or "")
+        args = head.split()[1:]
         try:
             at_targets = self._extract_at_targets(event)
         except Exception:
@@ -62,15 +75,20 @@ class GroupBlacklistMixin:
         except Exception:
             return False
 
-    def _add_user_blacklist(self, user_id: str, reason: str = "") -> bool:
-        """加入插件用户黑名单（跨群通用）。豁免用户或已在名单中时返回 False。"""
+    def _add_user_blacklist(self, user_id: str, reason: str = "", source: str = "自动",
+                            operator: str = "", group_id: str = "") -> bool:
+        """加入插件用户黑名单（跨群通用），并记录拉黑原因与操作记录。豁免用户或已在名单中时返回 False。"""
         uid = str(user_id or "").strip()
         if self._is_blacklist_exempt(uid):
             return False
         if uid in (getattr(self, "_user_black_set", None) or set()):
             return False
         try:
-            self._managed_list_add("user_black", uid)
+            adder = getattr(self, "_bl_add", None)
+            if callable(adder):
+                adder(uid, reason, source=source, operator=operator, group_id=group_id)
+            else:
+                self._managed_list_add("user_black", uid)
         except Exception as e:
             logger.warning(f"[GroupMgr] 加入用户黑名单失败({uid}): {e}")
             return False
@@ -94,12 +112,19 @@ class GroupBlacklistMixin:
         return True
 
     async def _list_managed_groups(self, client) -> Tuple[List[str], str]:
-        """机器人所在、且插件允许管理的群列表。"""
-        ok, data, error = await self._call_group_api_result(client, "get_group_list", "获取群列表")
-        if not ok:
-            return [], error or "获取群列表失败"
+        """机器人所在、且插件允许管理的群列表。优先读本地缓存（group_directory）。"""
+        dir_groups = getattr(self, "_dir_groups", None)
+        if callable(dir_groups):
+            items, error = await dir_groups(client)
+            if not items and error:
+                return [], error
+        else:
+            ok, data, error = await self._call_group_api_result(client, "get_group_list", "获取群列表")
+            if not ok:
+                return [], error or "获取群列表失败"
+            items = self._extract_list_result(data)
         groups: List[str] = []
-        for item in self._extract_list_result(data):
+        for item in items:
             if not isinstance(item, dict) or item.get("group_id") is None:
                 continue
             gid = str(item.get("group_id"))
@@ -107,8 +132,12 @@ class GroupBlacklistMixin:
                 groups.append(gid)
         return groups, ""
 
-    async def _get_member_roles(self, client, group_id) -> Optional[Dict[str, str]]:
-        """{QQ号: 角色}。拉取失败返回 None（调用方回退为逐个查询）。"""
+    async def _get_member_roles(self, client, group_id, force: bool = False) -> Optional[Dict[str, str]]:
+        """{QQ号: 角色}。优先读本地缓存；拉取失败返回 None（调用方回退为逐个查询）。"""
+        dir_members = getattr(self, "_dir_members", None)
+        if callable(dir_members):
+            members = await dir_members(client, group_id, force=force)
+            return {uid: m.get("role") or "member" for uid, m in members.items()} if members else None
         gid = self._safe_int(group_id, 0)
         # no_cache：刚入群的广告号正是要踢的目标，不能用协议端的旧缓存
         ok, data, error = await self._call_group_api_result(
@@ -127,26 +156,36 @@ class GroupBlacklistMixin:
     # 踢人核心
     # ------------------------------------------------------------------
     async def _kick_targets_in_group(self, client, group_id, targets: List[str], block: bool,
-                                     assume_present: bool = False) -> dict:
+                                     assume_present: bool = False, log: Optional[dict] = None) -> dict:
         """在单个群踢出 targets 中在群的人。
 
         返回 {"kicked": [...], "failed": {uid: 原因}, "absent": int, "skipped": 原因或 ""}。
         block=True 时附带 reject_add_request，即 QQ 原生「拒绝此人再次申请加群」。
         assume_present=True 用于刚入群的成员：协议端成员列表/信息可能尚未刷新，
         查不到角色时按普通成员处理，而不是当作不在群。
+        log：操作记录上下文 {"action", "source", "operator", "reason"}，每次踢人尝试记一条。
         """
         result = {"kicked": [], "failed": {}, "absent": 0, "skipped": ""}
         gid = self._safe_int(group_id, 0)
         if not gid:
             result["skipped"] = "群号无效"
             return result
+        log = dict(log or {})
+        action = log.pop("action", "") or ("踢出并拉黑" if block else "踢人")
+
+        def record(uid, ok, why=""):
+            self._record_op(action, group_id=str(gid), target=str(uid),
+                            result="成功" if ok else f"失败：{why}", **log)
+
         bot_uin = await self._get_bot_uin(client)
-        bot_role = await self._get_role_by_id(client, gid, bot_uin) if bot_uin else ""
+        # 成员列表（本地缓存）里就有机器人自己的角色，不必再单独查询
+        roles = None if assume_present else await self._get_member_roles(client, gid)
+        bot_role = (roles or {}).get(str(bot_uin), "") if bot_uin else ""
+        if not bot_role and bot_uin:
+            bot_role = await self._get_role_by_id(client, gid, bot_uin)
         if bot_role not in ("admin", "owner"):
             result["skipped"] = "机器人不是管理员"
             return result
-
-        roles = None if assume_present else await self._get_member_roles(client, gid)
         first = True
         for uid in targets:
             if str(uid) == str(bot_uin):
@@ -165,9 +204,11 @@ class GroupBlacklistMixin:
                     role = "member"
             if role == "owner":
                 result["failed"][uid] = "目标是群主"
+                record(uid, False, "目标是群主")
                 continue
             if role == "admin" and bot_role != "owner":
                 result["failed"][uid] = "目标是管理员"
+                record(uid, False, "目标是管理员")
                 continue
             if not first:
                 await asyncio.sleep(self.KICK_INTERVAL)
@@ -183,8 +224,12 @@ class GroupBlacklistMixin:
             )
             if done:
                 result["kicked"].append(uid)
+                remover = getattr(self, "_dir_remove_member", None)
+                if callable(remover):
+                    remover(gid, uid)
             else:
                 result["failed"][uid] = err or "踢人失败"
+            record(uid, done, err or "踢人失败")
         return result
 
     @staticmethod
@@ -218,7 +263,8 @@ class GroupBlacklistMixin:
     async def cmd_kick_all_groups(self, event: AstrMessageEvent, block: bool = False):
         '''在所有管理的群踢人。block=True 时同时原生拉黑并加入插件用户黑名单。'''
         name = "全群踢黑" if block else "全群踢人"
-        usage = f"用法: /{name} <QQ1> <QQ2> ... 或 @某人\n示例: /{name} 111 222 333"
+        usage = (f"用法: /{name} <QQ1> <QQ2> ... [原因：xxx]\n示例: /{name} 111 222 原因：发广告"
+                 "\n原因会写进操作记录" + ("和黑名单" if block else ""))
         unsupported = self._onebot_unsupported_message(event)
         if unsupported:
             yield event.plain_result(unsupported)
@@ -247,18 +293,23 @@ class GroupBlacklistMixin:
         if not client:
             yield event.plain_result("无法获取QQ客户端")
             return
+        _head, reason = self._split_reason(getattr(event, "message_str", "") or "")
         yield event.plain_result(f"开始处理 {len(targets) - len(protected)} 个 QQ 号，请稍候……")
-        result = await self._kick_users_across_groups(client, targets, block, reason=name)
+        result = await self._kick_users_across_groups(
+            client, targets, block, reason=reason or f"/{name}",
+            source="指令", operator=self._try_get_sender_id(event),
+        )
         if result["error"]:
             yield event.plain_result(f"{name}失败：{result['error']}")
             return
         yield event.plain_result(self._format_kick_summary(name, result["per_group"], result["blacklisted"]))
 
     async def _kick_users_across_groups(self, client, targets: List[str], block: bool,
-                                        groups: Optional[List[str]] = None, reason: str = "") -> dict:
+                                        groups: Optional[List[str]] = None, reason: str = "",
+                                        source: str = "", operator: str = "") -> dict:
         """在多个群踢出（并可拉黑）这些人。指令与 WebUI 共用。
 
-        groups 为 None 时作用于全部管理的群。返回
+        groups 为 None 时作用于全部管理的群。reason / source / operator 写进黑名单与操作记录。返回
         {"protected": [...], "blacklisted": int(未拉黑为 -1), "per_group": {...}, "error": str}
         """
         protected = [t for t in targets if self._is_blacklist_exempt(t)]
@@ -269,7 +320,9 @@ class GroupBlacklistMixin:
             return result
         if block:
             # 先进黑名单：即使有群踢失败，其后续加群申请/入群也会被拦截
-            result["blacklisted"] = sum(1 for t in targets if self._add_user_blacklist(t, reason or "踢出并拉黑"))
+            result["blacklisted"] = sum(1 for t in targets if self._add_user_blacklist(
+                t, reason or "踢出并拉黑", source=source, operator=operator))
+        log = {"source": source, "operator": operator, "reason": reason}
         if groups is None:
             groups, err = await self._list_managed_groups(client)
             if not groups:
@@ -279,7 +332,7 @@ class GroupBlacklistMixin:
             groups = [g for g in groups if self._group_id_allowed(g)]
         for gid in groups:
             try:
-                result["per_group"][gid] = await self._kick_targets_in_group(client, gid, targets, block)
+                result["per_group"][gid] = await self._kick_targets_in_group(client, gid, targets, block, log=log)
             except Exception as e:
                 logger.warning(f"[GroupMgr] 踢人处理群 {gid} 出错: {e}")
                 result["per_group"][gid] = {"kicked": [], "failed": {}, "absent": 0, "skipped": f"出错: {e}"}
@@ -296,7 +349,10 @@ class GroupBlacklistMixin:
             yield event.plain_result(err)
             return
         targets = targets[: self.KICK_TARGETS_MAX]
-        result = await self._kick_targets_in_group(client, gid, targets, block=True)
+        _head, reason = self._split_reason(getattr(event, "message_str", "") or "")
+        result = await self._kick_targets_in_group(client, gid, targets, block=True, log={
+            "source": "指令", "operator": self._try_get_sender_id(event), "reason": reason or "/批量踢黑",
+        })
         if result["skipped"]:
             yield event.plain_result(f"批量踢黑失败：{result['skipped']}")
             return
@@ -337,7 +393,8 @@ class GroupBlacklistMixin:
             return False
         if not self._cfg("leave_auto_blacklist_enabled", False, group_id=group_id):
             return False
-        return self._add_user_blacklist(user_id, f"主动退出群 {group_id}")
+        return self._add_user_blacklist(user_id, f"主动退出群 {group_id}（退群自动拉黑）",
+                                        source="自动", group_id=group_id)
 
     async def _handle_blacklisted_join(self, event: AstrMessageEvent) -> bool:
         """黑名单用户入群（被邀请等绕过了申请）→ 立即踢出并原生拉黑。返回是否已踢出。"""
@@ -358,8 +415,11 @@ class GroupBlacklistMixin:
         if not client:
             return False
         block = self._cfg("blacklist_native_block_enabled", True, group_id=group_id)
+        meta = (getattr(self, "_bl_meta_all", lambda: {})() or {}).get(user_id) or {}
         result = await self._kick_targets_in_group(
             client, group_id, [user_id], block=block, assume_present=True,
+            log={"action": "黑名单入群踢出", "source": "自动",
+                 "reason": f"黑名单用户入群（拉黑原因：{meta.get('reason') or '未记录'}）"},
         )
         if result["kicked"]:
             logger.info(f"[GroupMgr] 黑名单用户 {user_id} 入群 {group_id}，已踢出并拉黑")

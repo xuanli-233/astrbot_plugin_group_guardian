@@ -479,6 +479,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <span>踢人与黑名单</span>
 
         </a>
+        <a class="nav-item" data-tab="oplog">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          <span>操作记录</span>
+        </a>
+        <a class="nav-item" data-tab="directory">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
+          <span>群成员缓存</span>
+        </a>
 
         <a class="nav-item" data-tab="records">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
@@ -1055,6 +1063,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
                 <label><input type="radio" name="kickMode" value="kick" /> 仅踢出</label>
               </div>
               <div class="mn-row"><label>范围</label><select class="input-sm" id="kickScope" style="flex:1"></select></div>
+              <div class="mn-row"><label>原因</label><input class="input-sm" id="kickReason" style="flex:1" placeholder="例如：发广告引流（踢出并拉黑时必填，会记录在黑名单和操作记录里）" /></div>
+              <div class="mn-row"><label><input type="checkbox" id="kickRefresh" /> 执行前刷新这些群的成员缓存（群多时较慢，用于确保刚进群的人也能踢到）</label></div>
               <div class="mn-row"><button class="btn btn-danger btn-sm" id="btnKick">执行</button></div>
               <div id="kickResult"></div>
             </div>
@@ -1067,9 +1077,64 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         <div class="card">
           <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
           <div class="mn-body">
-            <div class="mn-row"><input class="input-sm" id="ubAdd" placeholder="QQ 号" /><button class="btn btn-primary btn-sm" id="btnUbAdd">加入黑名单</button></div>
-            <div class="mn-rule-list" id="ubList"></div>
+            <div class="mn-row">
+              <input class="input-sm" id="ubAdd" placeholder="QQ 号（可多个）" />
+              <input class="input-sm" id="ubReason" style="flex:1" placeholder="拉黑原因（必填）" />
+              <button class="btn btn-primary btn-sm" id="btnUbAdd">加入黑名单</button>
+            </div>
+            <p class="mn-hint" style="margin-bottom:8px">只加入插件黑名单（申请自动拒绝、入群即踢），不会立即踢人。要同时从群里踢出，请用上面的「批量踢人」。</p>
+            <div class="log-container" id="ubList" style="padding:0"></div>
           </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-oplog">
+        <div class="page-header"><h1>操作记录</h1><button class="btn btn-ghost btn-sm" id="btnOpRefresh">刷新</button></div>
+        <p class="mn-intro">插件执行的每一个操作都在这里：踢人、拉黑、移出黑名单、关键词 / 葵花码撤回、自动拉黑、入群即踢、加群申请处理、发布公告、改群名、倒计时、修改规则和配置。来源分为「指令」（群里发的指令，操作人为发送者 QQ）、「WebUI」（管理页面）和「自动」（插件根据规则自动执行）。</p>
+        <div class="card">
+          <div class="card-header"><h2>记录</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="opAction" style="width:150px"><option value="">全部操作</option></select>
+              <select class="input-sm" id="opSource" style="width:110px"><option value="">全部来源</option><option value="指令">指令</option><option value="WebUI">WebUI</option><option value="自动">自动</option></select>
+              <input class="input-sm" id="opKeyword" placeholder="QQ号 / 群号 / 原因" style="width:160px" />
+              <button class="btn btn-outline btn-sm" id="btnOpFilter">筛选</button>
+            </div></div>
+          <div class="log-container" id="opTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="opPager"></div></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-directory">
+        <div class="page-header"><h1>群成员缓存</h1><button class="btn btn-ghost btn-sm" id="btnDirReload">刷新页面数据</button></div>
+        <p class="mn-intro">群列表和群成员保存在本地，跨群踢人、批量公告、群名任务、管理员判断都优先读缓存，避免频繁调用有限流的接口。入群、退群、被踢、管理员任免、改名片会实时更新缓存；过期后自动重新拉取（逐个限速），后台也会慢慢补齐。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>查找某人在哪些群</h2></div>
+            <div class="mn-body">
+              <div class="mn-row"><input class="input-sm" id="dirFindUid" placeholder="QQ 号" /><button class="btn btn-primary btn-sm" id="btnDirFind">查找</button></div>
+              <div id="dirFindResult"><p class="mn-hint">只查本地缓存，不调用接口；未缓存成员的群查不到。</p></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>缓存设置</h2></div>
+            <div class="settings-list" id="dirSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:150px">群列表有效期（秒）</label><input type="number" class="input-sm" id="dirGroupTtl" style="width:120px" /></div>
+              <div class="mn-row"><label style="width:150px">群成员有效期（秒）</label><input type="number" class="input-sm" id="dirMemberTtl" style="width:120px" /></div>
+              <div class="mn-row"><label style="width:150px">接口最小间隔（毫秒）</label><input type="number" class="input-sm" id="dirInterval" style="width:120px" /></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnDirSave">保存</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>各群缓存状态</h2>
+            <div class="header-actions">
+              <button class="btn btn-outline btn-sm" id="btnDirGroups">只刷新群列表</button>
+              <button class="btn btn-outline btn-sm" id="btnDirSelected">刷新选中群的成员</button>
+              <button class="btn btn-primary btn-sm" id="btnDirAll">全部刷新</button>
+            </div></div>
+          <div class="mn-body" style="padding-bottom:0"><div id="dirSummary" class="mn-hint"></div></div>
+          <div class="log-container" id="dirTable"><p class="empty">加载中...</p></div>
         </div>
       </div>
 
@@ -1206,6 +1271,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 
       <span>踢人与黑名单</span>
 
+    </a>
+    <a class="mobile-nav-item" data-tab="oplog">
+      <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+      <span>操作记录</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="directory">
+      <svg viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
+      <span>群成员缓存</span>
     </a>
 
     <a class="mobile-nav-item" data-tab="records">
@@ -1831,6 +1904,8 @@ function switchTab(tabName) {
   if (tabName === 'broadcast') loadBroadcast();
   if (tabName === 'names') loadNames();
   if (tabName === 'kick') loadKick();
+  if (tabName === 'oplog') loadOplog(1);
+  if (tabName === 'directory') loadDirectory();
   if (tabName === 'settings') loadSettings();
 }
 
@@ -3001,6 +3076,10 @@ var MANUAL_SETTING_KEYS = {
   local_ocr_driver: true,
   local_ocr_service_url: true,
   local_ocr_python_module: true,
+  directory_group_ttl: true,
+  directory_member_ttl: true,
+  directory_min_interval_ms: true,
+  directory_background_refresh_enabled: true,
   recall_enabled: true,
   whole_ban_enabled: true,
   set_admin_enabled: true,
@@ -4950,15 +5029,28 @@ async function mnNamesAction(url, body, boxSel, confirmText) {
 }
 
 /* ---- 踢人与黑名单 ---- */
+function mnTime(ts) {
+  if (!ts) return '';
+  var d = new Date(Number(ts) * 1000);
+  return d.getFullYear() + '-' + mnPad(d.getMonth() + 1) + '-' + mnPad(d.getDate()) + ' ' + mnPad(d.getHours()) + ':' + mnPad(d.getMinutes());
+}
 function mnRenderBlacklist() {
-  var list = (MN.overview && MN.overview.user_blacklist) || [];
+  var list = (MN.overview && MN.overview.blacklist) || [];
   $('#ubCount').textContent = list.length ? '共 ' + list.length + ' 人' : '';
-  $('#ubList').innerHTML = list.length ? list.map(function(u) {
-    return '<div class="mn-rule"><span class="mn-val">' + esc(u) + '</span><button class="btn btn-ghost btn-sm" data-ub-del="' + escAttr(u) + '">移出黑名单</button></div>';
-  }).join('') : '<div class="mn-empty">黑名单为空</div>';
+  if (!list.length) { $('#ubList').innerHTML = '<div class="mn-empty">黑名单为空</div>'; return; }
+  $('#ubList').innerHTML = '<table class="mn-table"><thead><tr><th>QQ 号</th><th>拉黑原因</th><th>来源</th><th>时间</th><th></th></tr></thead><tbody>' +
+    list.map(function(e) {
+      var src = (e.source || '') + (e.operator ? '（' + e.operator + '）' : '') + (e.group_id ? ' · 群 ' + e.group_id : '');
+      return '<tr><td>' + esc(e.user_id) + '</td><td>' + (esc(e.reason) || '<span class="mn-hint">未记录（早于原因记录功能加入）</span>') + '</td>' +
+        '<td>' + (esc(src) || '<span class="mn-hint">—</span>') + '</td><td>' + (esc(mnTime(e.created_at)) || '<span class="mn-hint">—</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm" data-ub-del="' + escAttr(e.user_id) + '">移出黑名单</button></td></tr>';
+    }).join('') + '</tbody></table>';
   $$('[data-ub-del]').forEach(function(btn) {
     btn.addEventListener('click', async function() {
-      var res = await safePost('user_blacklist/remove', { user_id: btn.getAttribute('data-ub-del') });
+      var uid = btn.getAttribute('data-ub-del');
+      var reason = prompt('把 ' + uid + ' 移出插件黑名单？可以填写原因（会写进操作记录）：', '');
+      if (reason === null) return;
+      var res = await safePost('minimal/blacklist/remove', { user_id: uid, reason: reason });
       if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
       toast('已移出插件黑名单（QQ 群黑名单需在 QQ 里手动解除）', 'success');
       loadKick();
@@ -4979,10 +5071,13 @@ async function mnKick() {
   if (!ids) { toast('请填写 QQ 号', 'warning'); return; }
   var block = ($('input[name=kickMode]:checked') || {}).value === 'block';
   var scope = $('#kickScope').value;
-  if (!confirm('确定' + (block ? '踢出并拉黑' : '踢出') + '这些人吗？范围：' + (scope ? '群 ' + scope : '所有管理的群'))) return;
+  var reason = $('#kickReason').value.trim();
+  if (block && !reason) { toast('踢出并拉黑需要填写原因', 'warning'); $('#kickReason').focus(); return; }
+  if (!confirm('确定' + (block ? '踢出并拉黑' : '踢出') + '这些人吗？\n范围：' + (scope ? '群 ' + scope : '所有管理的群') + (reason ? '\n原因：' + reason : ''))) return;
   var btn = $('#btnKick'); btn.disabled = true;
-  $('#kickResult').innerHTML = '<div class="mn-result no">处理中……</div>';
-  var res = await safePost('minimal/kick', { user_ids: ids, block: block, groups: scope ? [scope] : [] }, 120000);
+  $('#kickResult').innerHTML = '<div class="mn-result no">处理中……' + ($('#kickRefresh').checked ? '（正在逐个刷新成员缓存，群多时需要一些时间）' : '') + '</div>';
+  var res = await safePost('minimal/kick', { user_ids: ids, block: block, reason: reason, refresh: $('#kickRefresh').checked,
+    groups: scope ? [scope] : [] }, 300000);
   btn.disabled = false;
   if (isApiError(res)) {
     $('#kickResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return;
@@ -5000,6 +5095,80 @@ async function mnKick() {
   });
   $('#kickResult').innerHTML = '<div class="mn-result ok">' + esc(lines.join('\n')) + '</div>';
   loadKick();
+}
+
+/* ---- 操作记录 ---- */
+var OP_STATE = { page: 1, pageSize: 50 };
+async function loadOplog(page) {
+  if (page) OP_STATE.page = page;
+  var res = await safeGet('minimal/oplog', { action: $('#opAction').value, source: $('#opSource').value,
+    keyword: $('#opKeyword').value.trim(), page: OP_STATE.page, page_size: OP_STATE.pageSize });
+  if (isApiError(res)) { $('#opTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res);
+  var sel = $('#opAction'), cur = sel.value;
+  sel.innerHTML = '<option value="">全部操作</option>' + (d.actions || []).map(function(a) { return '<option value="' + escAttr(a) + '">' + esc(a) + '</option>'; }).join('');
+  sel.value = cur;
+  var items = d.items || [];
+  $('#opTable').innerHTML = items.length ? '<table class="mn-table"><thead><tr><th>时间</th><th>来源</th><th>操作</th><th>群</th><th>对象</th><th>原因</th><th>结果</th><th>详情</th></tr></thead><tbody>' +
+    items.map(function(r) {
+      var bad = String(r.result || '').indexOf('失败') === 0;
+      return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(r.source) + (r.operator ? '<br><span class="mn-hint">' + esc(r.operator) + '</span>' : '') + '</td>' +
+        '<td>' + esc(r.action) + '</td><td>' + esc(r.group_id) + '</td><td>' + esc(r.target) + '</td><td>' + esc(r.reason) + '</td>' +
+        '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.result) + '</td><td style="max-width:320px;word-break:break-all">' + esc(r.detail) + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
+  var pages = Math.max(1, Math.ceil((d.total || 0) / OP_STATE.pageSize));
+  $('#opPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 条，第 ' + OP_STATE.page + ' / ' + pages + ' 页</span>' +
+    '<button class="btn btn-ghost btn-sm" id="opPrev"' + (OP_STATE.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+    '<button class="btn btn-ghost btn-sm" id="opNext"' + (OP_STATE.page >= pages ? ' disabled' : '') + '>下一页</button>';
+  bindIfExists('opPrev', function() { loadOplog(OP_STATE.page - 1); });
+  bindIfExists('opNext', function() { loadOplog(OP_STATE.page + 1); });
+}
+
+/* ---- 群成员缓存 ---- */
+var DIR_POLL = null;
+async function loadDirectory() {
+  if (!await mnLoadOverview()) return;
+  MN_SWITCHES.dirSwitches = [{ key: 'directory_background_refresh_enabled', label: '后台补齐缓存', desc: '每 5 分钟最多刷新 2 个已过期的群' }];
+  mnRenderSwitches('dirSwitches');
+  $('#dirGroupTtl').value = mnCfg('directory_group_ttl') || 3600;
+  $('#dirMemberTtl').value = mnCfg('directory_member_ttl') || 21600;
+  $('#dirInterval').value = mnCfg('directory_min_interval_ms') || 1500;
+  var res = await safeGet('minimal/directory');
+  if (isApiError(res)) { $('#dirTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res);
+  var checked = {}; $$('#dirTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
+  var prog = d.refreshing;
+  $('#dirSummary').innerHTML = '群列表' + (d.groups_updated_at ? '更新于 ' + esc(mnTime(d.groups_updated_at)) + (d.groups_fresh ? '' : '（已过期）') : '尚未缓存') +
+    ' · 本次运行共调用列表接口 ' + d.api_calls + ' 次' + (prog ? ' · <strong>正在刷新：' + prog.done + ' / ' + prog.total + '</strong>' : '');
+  var roles = { owner: '群主', admin: '管理员', member: '普通成员', '': '未知' };
+  $('#dirTable').innerHTML = (d.groups || []).length ? '<table class="mn-table"><thead><tr><th></th><th>群</th><th>机器人身份</th><th>已缓存成员</th><th>成员更新时间</th></tr></thead><tbody>' +
+    d.groups.map(function(g) {
+      return '<tr><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (checked[g.group_id] ? ' checked' : '') + ' /></td>' +
+        '<td>' + esc(g.group_name || '未命名') + '<br><span class="mn-hint">' + esc(g.group_id) + '</span></td><td>' + esc(roles[g.bot_role] || g.bot_role) + '</td>' +
+        '<td>' + (g.members_cached ? g.members_cached + ' 人' : '<span class="mn-hint">未缓存</span>') + '</td>' +
+        '<td>' + (g.members_updated_at ? esc(mnTime(g.members_updated_at)) + (g.members_fresh ? '' : ' <span style="color:var(--warning)">（已过期）</span>') : '<span class="mn-hint">—</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">还没有缓存群列表，点「只刷新群列表」开始</p>';
+  clearTimeout(DIR_POLL);
+  if (prog && $('#tab-directory').classList.contains('active')) DIR_POLL = setTimeout(loadDirectory, 2000);
+}
+async function mnDirRefresh(body) {
+  var res = await safePost('minimal/directory/refresh', body);
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  toast(mnData(res).started ? '已开始在后台刷新' : '群列表已刷新', 'success');
+  loadDirectory();
+}
+async function mnDirFind() {
+  var uid = $('#dirFindUid').value.trim();
+  if (!/^\d+$/.test(uid)) { toast('请输入 QQ 号', 'warning'); return; }
+  var res = await safeGet('minimal/directory/find', { user_id: uid });
+  var box = $('#dirFindResult');
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res);
+  var roles = { owner: '群主', admin: '管理员', member: '成员' };
+  var bl = d.blacklisted ? '<div class="mn-result err">在插件黑名单中' + (d.blacklist_reason ? '，原因：' + esc(d.blacklist_reason) : '') + '</div>' : '';
+  box.innerHTML = bl + (d.groups.length ? '<div class="mn-result ok">在 ' + d.groups.length + ' 个群中：\n' + d.groups.map(function(g) {
+    return '· ' + esc(g.group_name) + '（' + esc(g.group_id) + '）' + esc(roles[g.role] || g.role) + ' · ' + esc(g.card || g.nickname);
+  }).join('\n') + '</div>' : '<div class="mn-result no">缓存中没有找到这个人（可能不在任何群，或所在群的成员还没缓存）</div>');
 }
 
 function initMinimalPages() {
@@ -5057,13 +5226,39 @@ function initMinimalPages() {
   bindIfExists('btnKickRefresh', loadKick);
   bindIfExists('btnKick', mnKick);
   bindIfExists('btnUbAdd', async function() {
-    var uid = $('#ubAdd').value.trim();
-    if (!/^\d+$/.test(uid)) { toast('请输入 QQ 号', 'warning'); return; }
-    var res = await safePost('user_blacklist/add', { user_id: uid });
+    var ids = $('#ubAdd').value.trim(), reason = $('#ubReason').value.trim();
+    if (!ids) { toast('请输入 QQ 号', 'warning'); return; }
+    if (!reason) { toast('请填写拉黑原因', 'warning'); $('#ubReason').focus(); return; }
+    var res = await safePost('minimal/blacklist/add', { user_ids: ids, reason: reason });
     if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
-    $('#ubAdd').value = '';
-    toast('已加入插件黑名单', 'success');
+    var d = mnData(res);
+    $('#ubAdd').value = ''; $('#ubReason').value = '';
+    toast('已加入 ' + (d.added || []).length + ' 人' + ((d.skipped || []).length ? '，跳过 ' + d.skipped.join(', ') + '（已在名单中或为管理员 / 白名单）' : ''), 'success');
     loadKick();
+  });
+
+  bindIfExists('btnOpRefresh', function() { loadOplog(1); });
+  bindIfExists('btnOpFilter', function() { loadOplog(1); });
+  bindIfExists('opKeyword', function(e) { if (e.key === 'Enter') loadOplog(1); }, 'keydown');
+  bindIfExists('opAction', function() { loadOplog(1); }, 'change');
+  bindIfExists('opSource', function() { loadOplog(1); }, 'change');
+
+  bindIfExists('btnDirReload', loadDirectory);
+  bindIfExists('btnDirFind', mnDirFind);
+  bindIfExists('dirFindUid', function(e) { if (e.key === 'Enter') mnDirFind(); }, 'keydown');
+  bindIfExists('btnDirGroups', function() { mnDirRefresh({ groups: [] }); });
+  bindIfExists('btnDirSelected', function() {
+    var groups = mnSelectedGroups('#dirTable');
+    if (!groups.length) { toast('请先勾选群', 'warning'); return; }
+    mnDirRefresh({ groups: groups });
+  });
+  bindIfExists('btnDirAll', function() {
+    if (!confirm('逐个刷新所有群的成员？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行。')) return;
+    mnDirRefresh({ all: true });
+  });
+  bindIfExists('btnDirSave', function() {
+    mnSaveConfig({ directory_group_ttl: Number($('#dirGroupTtl').value), directory_member_ttl: Number($('#dirMemberTtl').value),
+      directory_min_interval_ms: Number($('#dirInterval').value) }, '已保存').then(loadDirectory);
   });
 }
 

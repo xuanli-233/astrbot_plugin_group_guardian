@@ -157,7 +157,7 @@ class GroupBroadcastMixin:
         sender = self._try_get_sender_id(event) or "?"
         self._pending_broadcasts()[sender] = {
             "todo": todo, "groups": targets, "content": content, "options": options,
-            "image": image, "created": time.time(),
+            "image": image, "created": time.time(), "source": "指令", "operator": sender,
         }
         opt_text = "、".join(k for k, v in NOTICE_FLAGS.items() if options.get(v)) or "无"
         lines = [
@@ -260,6 +260,14 @@ class GroupBroadcastMixin:
                 ok_groups.append(gid)
             else:
                 failed[gid] = err or "发送失败"
+            flags = "、".join(k for k, v in NOTICE_FLAGS.items() if options.get(v))
+            self._record_op(
+                "发布待办公告" if task.get("todo") else "发布群公告",
+                source=task.get("source", ""), operator=task.get("operator", ""), group_id=gid,
+                result="成功" if done else f"失败：{err or '发送失败'}",
+                detail=(f"[{flags}] " if flags else "") + task["content"][:200]
+                + (f"（配图：{task['image']}）" if task.get("image") else ""),
+            )
         return ok_groups, failed
 
     # ------------------------------------------------------------------

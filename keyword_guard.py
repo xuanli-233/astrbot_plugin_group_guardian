@@ -168,6 +168,12 @@ class KeywordGuardMixin:
             parts.append("已备份")
         action = "+".join(parts)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
+        self._record_op(
+            "葵花码撤回" if kind == "wxcode" else "关键词撤回", source="自动", group_id=group_id,
+            target=user_id, reason=reason, result=action,
+            detail=(f"{user_name}：" if user_name else "") + (text or "")[:200]
+            + (f"｜{extra_text[:200]}" if extra_text else ""),
+        )
         log_text = text if not extra_text else f"{text}\n{extra_text}"
         self._log_moderation(group_id, user_id, user_name, log_text, action, reason, image_urls or [])
         event.stop_event()

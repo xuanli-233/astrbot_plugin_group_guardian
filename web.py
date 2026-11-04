@@ -214,6 +214,9 @@ class WebMixin:
             "local_ocr_timeout": (1, 60),
             "broadcast_interval_seconds": (1, 30),
             "group_name_max_length": (10, 60),
+            "directory_group_ttl": (60, 86400),
+            "directory_member_ttl": (300, 604800),
+            "directory_min_interval_ms": (200, 10000),
         }
 
     def _normalize_int_config_value(self, key: str, value) -> int:
@@ -841,6 +844,12 @@ class WebMixin:
                 ("/minimal/names/stop", self._web_minimal_names_stop, ["POST"], "停止倒计时 / 取消定时"),
                 ("/minimal/names/refresh", self._web_minimal_names_refresh, ["POST"], "立即刷新倒计时"),
                 ("/minimal/kick", self._web_minimal_kick, ["POST"], "跨群踢人 / 踢出并拉黑"),
+                ("/minimal/directory", self._web_minimal_directory, ["GET"], "群成员缓存状态"),
+                ("/minimal/directory/refresh", self._web_minimal_directory_refresh, ["POST"], "刷新群成员缓存"),
+                ("/minimal/directory/find", self._web_minimal_directory_find, ["GET"], "查找某人所在的群"),
+                ("/minimal/oplog", self._web_minimal_oplog, ["GET"], "操作记录"),
+                ("/minimal/blacklist/add", self._web_minimal_blacklist_add, ["POST"], "加入黑名单（带原因）"),
+                ("/minimal/blacklist/remove", self._web_minimal_blacklist_remove, ["POST"], "移出黑名单"),
             ]
             registered = 0
             ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
@@ -1045,6 +1054,12 @@ class WebMixin:
                     "status": "error",
                     "message": "配置持久化失败，本次修改未生效",
                 })
+            changed = [k for k in updated if old_values.get(k, missing) != self.config.get(k)]
+            if changed:
+                def show(value):
+                    return "（未设置）" if value is missing else str(value)[:60]
+                self._record_op("修改配置", source="WebUI", detail="；".join(
+                    f"{k}: {show(old_values.get(k, missing))} → {show(self.config.get(k))}" for k in changed[:20]))
             if "auto_moderate_enabled" in updated:
                 self.auto_moderate_enabled = self._parse_bool(self.config.get("auto_moderate_enabled", True), True)
             # 仅在 lexicon_* 开关值实际变更时按分类增量重建，并后台做一次全量校验重建
@@ -2094,7 +2109,12 @@ class WebMixin:
             user_id = str(data.get("user_id", "")).strip()
             if not user_id:
                 return jsonify({"status": "error", "message": "缺少 user_id"})
-            self._managed_list_add("user_black", user_id)
+            reason = str(data.get("reason", "") or "").strip() or "WebUI 名单管理添加（未填写原因）"
+            adder = getattr(self, "_bl_add", None)
+            if callable(adder):  # 记录拉黑原因与操作记录
+                adder(user_id, reason, source="WebUI")
+            else:
+                self._managed_list_add("user_black", user_id)
             return jsonify({"status": "success", "user_id": user_id, "user_black_list": self.user_black_list})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
@@ -2106,8 +2126,14 @@ class WebMixin:
             if not user_id:
                 return jsonify({"status": "error", "message": "缺少 user_id"})
             # 审核白名单与用户黑名单互斥
-            self._managed_list_remove("user_black", user_id)
+            was_black = user_id in (self._user_black_set or set())
+            remover = getattr(self, "_bl_remove", None)
+            if was_black and callable(remover):
+                remover(user_id, reason="加入审核白名单，自动移出黑名单", source="WebUI")
+            else:
+                self._managed_list_remove("user_black", user_id)
             self._managed_list_add("user_white", user_id)
+            self._record_op("加入审核白名单", source="WebUI", target=user_id)
             return jsonify({"status": "success", "user_id": user_id, "user_white_list": self.user_white_list})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
@@ -2118,7 +2144,11 @@ class WebMixin:
             user_id = str(data.get("user_id", "")).strip()
             if not user_id:
                 return jsonify({"status": "error", "message": "缺少 user_id"})
-            self._managed_list_remove("user_black", user_id)
+            remover = getattr(self, "_bl_remove", None)
+            if callable(remover):  # 同时删除拉黑原因并写操作记录
+                remover(user_id, reason=str(data.get("reason", "") or "").strip(), source="WebUI")
+            else:
+                self._managed_list_remove("user_black", user_id)
             return jsonify({"status": "success", "user_id": user_id, "user_black_list": self.user_black_list})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
@@ -2130,6 +2160,7 @@ class WebMixin:
             if not user_id:
                 return jsonify({"status": "error", "message": "缺少 user_id"})
             self._managed_list_remove("user_white", user_id)
+            self._record_op("移出审核白名单", source="WebUI", target=user_id)
             return jsonify({"status": "success", "user_id": user_id, "user_white_list": self.user_white_list})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
@@ -2518,6 +2549,8 @@ class WebMixin:
         "wxcode_driver", "wxcode_service_url", "wxcode_python_module", "wxcode_timeout",
         "local_ocr_driver", "local_ocr_service_url", "local_ocr_python_module", "local_ocr_timeout",
         "broadcast_interval_seconds", "group_name_max_length", "countdown_update_time",
+        "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
+        "directory_background_refresh_enabled",
     }
 
     # ==================== AI 特殊检测（特殊数字）风险确认门禁 ====================

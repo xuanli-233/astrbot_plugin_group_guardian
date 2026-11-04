@@ -19,6 +19,8 @@ from .lexicon_learn import LexiconLearnMixin
 from .constants import PLUGIN_NAME, PLUGIN_VERSION
 from .group_blacklist import GroupBlacklistMixin
 from .group_broadcast import GroupBroadcastMixin
+from .group_directory import GroupDirectoryMixin
+from .operation_log import OperationLogMixin
 from .group_name_task import GroupNameTaskMixin
 from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
@@ -36,7 +38,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir", "QQ群智能守护者 - AI审核+群管工具集", PLUGIN_VERSION, "https://github.com/zcj-ui/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, GroupBroadcastMixin, GroupNameTaskMixin, KeywordGuardMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, OperationLogMixin, KeywordGuardMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -496,6 +498,15 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
             self._on_member_unbanned(raw.get("group_id"), raw.get("user_id"))
         except Exception as e:
             logger.debug(f"[GroupMgr] 解禁通知处理出错: {e}")
+
+    # 群成员缓存：入群 / 退群 / 被踢 / 管理员任免 / 改名片通知实时更新本地缓存。广播型通知，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_directory_notice(self, event: AiocqhttpMessageEvent):
+        try:
+            await GroupDirectoryMixin._dir_handle_notice(self, event)
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 群成员缓存更新出错: {e}")
 
     # 退群自动拉黑：成员主动退群（group_decrease / leave）时加入插件用户黑名单。广播型通知，不 stop_event。
     @filter.event_message_type(filter.EventMessageType.ALL)

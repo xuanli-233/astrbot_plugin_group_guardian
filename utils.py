@@ -17,6 +17,12 @@ class UtilitiesMixin:
     # AI 总闸，挂到实例上供不直接导入 constants 的模块（scheduler、web）读取
     AI_FEATURES_ENABLED = AI_FEATURES_ENABLED
 
+    def _record_op(self, action: str, **kwargs) -> None:
+        """写一条操作记录（operation_log.OperationLogMixin）；未加载该模块时什么也不做。"""
+        writer = getattr(self, "_op_log", None)
+        if callable(writer):
+            writer(action, **kwargs)
+
     @staticmethod
     async def _run_in_thread(func, *args, **kwargs):
         """在线程池执行阻塞函数，兼容没有 asyncio.to_thread 的 Python。"""

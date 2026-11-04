@@ -27,6 +27,8 @@ except ImportError:  # 单元测试环境
 # 规则配置项 → 是否每条都按正则处理
 RULE_KEYS = {"keyword_rules": False, "wxcode_regex_rules": True}
 RULES_MAX = 500
+# WebUI 发起的操作在操作记录里的来源（AstrBot 不把登录的面板用户传给插件，操作人留空）
+WEB_LOG = {"source": "WebUI", "operator": ""}
 
 # 新功能页面用到的配置项（总览接口一并返回当前值）
 MINIMAL_CONFIG_KEYS = (
@@ -39,6 +41,8 @@ MINIMAL_CONFIG_KEYS = (
     "leave_auto_blacklist_enabled", "blacklist_reject_join_enabled", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
+    "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
+    "directory_background_refresh_enabled",
 )
 
 
@@ -85,10 +89,9 @@ class MinimalWebMixin:
         client = await self._get_client()
         groups = []
         if client:
-            ok, data, _err = await self._call_group_api_result(client, "get_group_list", "获取群列表")
-            for item in (self._extract_list_result(data) if ok else []):
-                if not isinstance(item, dict) or item.get("group_id") is None:
-                    continue
+            # 群列表读本地缓存（group_directory），打开页面不会每次都调用接口
+            items, _err = await self._dir_groups(client)
+            for item in items:
                 gid = str(item.get("group_id"))
                 groups.append({
                     "group_id": gid,
@@ -102,6 +105,7 @@ class MinimalWebMixin:
             "groups": groups,
             "config": {k: self._minimal_config_value(k) for k in MINIMAL_CONFIG_KEYS},
             "user_blacklist": list(getattr(self, "user_black_list", []) or []),
+            "blacklist": self._bl_entries(),
         }})
 
     # ------------------------------------------------------------------
@@ -137,6 +141,13 @@ class MinimalWebMixin:
         if not self._save_config_safe():
             self.config[key] = previous
             return self._minimal_error("配置持久化失败，本次修改未生效")
+        before = list(previous or [])
+        added = [r for r in rules if r not in before]
+        removed = [r for r in before if r not in rules]
+        if added or removed:
+            label = "关键词规则" if key == "keyword_rules" else "葵花码规则"
+            self._record_op(f"修改{label}", **WEB_LOG, detail="；".join(
+                ([f"新增 {', '.join(added)}"] if added else []) + ([f"删除 {', '.join(removed)}"] if removed else [])))
         return jsonify({"status": "success", "data": {"key": key, "rules": rules}})
 
     async def _web_minimal_rules_test(self):
@@ -176,7 +187,7 @@ class MinimalWebMixin:
         if not targets:
             return self._minimal_error(f"没有可发布的群{f'：{err}' if err else ''}")
         task = {"todo": todo, "groups": targets, "content": content, "options": options,
-                "image": str(data.get("image") or "").strip()}
+                "image": str(data.get("image") or "").strip(), "source": "WebUI", "operator": ""}
         ok_groups, failed = await self._publish_notice_to_groups(client, task)
         if todo and ok_groups:
             self._record_todo(content, ok_groups)
@@ -229,12 +240,12 @@ class MinimalWebMixin:
                 at = datetime.strptime(at_raw[:16], "%Y-%m-%d %H:%M")
             except ValueError:
                 return self._minimal_error("定时格式应为 YYYY-MM-DD HH:MM")
-            err = await self._name_schedule_suffix(targets, suffix, at)
+            err = await self._name_schedule_suffix(targets, suffix, at, log=WEB_LOG)
             if err:
                 return self._minimal_error(err)
             return jsonify({"status": "success", "data": {"scheduled": at.strftime("%Y-%m-%d %H:%M"),
                                                           "groups": targets}})
-        done, failed = await self._name_set_suffix(client, targets, suffix)
+        done, failed = await self._name_set_suffix(client, targets, suffix, log=WEB_LOG)
         return jsonify({"status": "success", "data": {"done": done, "failed": failed}})
 
     async def _web_minimal_names_countdown(self):
@@ -251,14 +262,14 @@ class MinimalWebMixin:
         client, targets, err = await self._minimal_name_targets(data)
         if err:
             return self._minimal_error(err)
-        done, failed = await self._name_set_countdown(client, targets, target, template)
+        done, failed = await self._name_set_countdown(client, targets, target, template, log=WEB_LOG)
         return jsonify({"status": "success", "data": {"done": done, "failed": failed}})
 
     async def _web_minimal_names_stop(self):
         data = await self._minimal_body()
         groups = self._minimal_groups_arg(data.get("groups"))
-        stopped = await self._name_stop_countdown(groups)
-        cancelled = await self._name_cancel_scheduled(groups) if data.get("scheduled") else 0
+        stopped = await self._name_stop_countdown(groups, log=WEB_LOG)
+        cancelled = await self._name_cancel_scheduled(groups, log=WEB_LOG) if data.get("scheduled") else 0
         return jsonify({"status": "success", "data": {"stopped": stopped, "cancelled": cancelled}})
 
     async def _web_minimal_names_refresh(self):
@@ -266,8 +277,86 @@ class MinimalWebMixin:
         client = await self._get_client()
         if not client:
             return self._minimal_error("无法获取QQ客户端")
-        done, failed = await self._name_refresh_countdown(client, self._minimal_groups_arg(data.get("groups")))
+        done, failed = await self._name_refresh_countdown(client, self._minimal_groups_arg(data.get("groups")), log=WEB_LOG)
         return jsonify({"status": "success", "data": {"done": done, "failed": failed}})
+
+    # ------------------------------------------------------------------
+    # 群成员缓存
+    # ------------------------------------------------------------------
+    async def _web_minimal_directory(self):
+        return jsonify({"status": "success", "data": self._dir_status()})
+
+    async def _web_minimal_directory_refresh(self):
+        data = await self._minimal_body()
+        client = await self._get_client()
+        if not client:
+            return self._minimal_error("无法获取QQ客户端")
+        groups = None if data.get("all") else self._minimal_ids(data.get("groups"))
+        if groups is not None and not groups:
+            # 只刷新群列表
+            _items, err = await self._dir_groups(client, force=True)
+            if err:
+                return self._minimal_error(err)
+            return jsonify({"status": "success", "data": {"started": False, "groups_only": True}})
+        if not self._dir_start_refresh(client, groups):
+            return self._minimal_error("已有刷新任务在进行中，请稍后再试")
+        self._record_op("刷新群成员缓存", **WEB_LOG,
+                        detail="全部群" if groups is None else f"{len(groups)} 个群：{', '.join(groups[:20])}")
+        return jsonify({"status": "success", "data": {"started": True}})
+
+    async def _web_minimal_directory_find(self):
+        uid = str(quart_request.args.get("user_id", "") or "").strip()
+        if not uid.isdigit():
+            return self._minimal_error("请输入 QQ 号")
+        meta = self._bl_meta_all().get(uid)
+        return jsonify({"status": "success", "data": {
+            "user_id": uid, "groups": self._dir_find_user(uid),
+            "blacklisted": uid in (getattr(self, "_user_black_set", None) or set()),
+            "blacklist_reason": (meta or {}).get("reason", ""),
+        }})
+
+    # ------------------------------------------------------------------
+    # 操作记录
+    # ------------------------------------------------------------------
+    async def _web_minimal_oplog(self):
+        args = quart_request.args
+        items, total = self._op_list(
+            action=str(args.get("action", "") or ""), keyword=str(args.get("keyword", "") or "").strip(),
+            source=str(args.get("source", "") or ""),
+            page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+        )
+        return jsonify({"status": "success", "data": {
+            "items": items, "total": total, "actions": self._op_actions(),
+        }})
+
+    # ------------------------------------------------------------------
+    # 黑名单（带原因）
+    # ------------------------------------------------------------------
+    async def _web_minimal_blacklist_add(self):
+        data = await self._minimal_body()
+        ids = self._minimal_ids(data.get("user_ids") or data.get("user_id"))
+        reason = str(data.get("reason") or "").strip()
+        if not ids:
+            return self._minimal_error("请填写 QQ 号")
+        if not reason:
+            return self._minimal_error("请填写拉黑原因")
+        added, skipped = [], []
+        for uid in ids:
+            if self._is_blacklist_exempt(uid):
+                skipped.append(uid)
+            elif self._bl_add(uid, reason, **WEB_LOG):
+                added.append(uid)
+            else:
+                skipped.append(uid)  # 已在黑名单（原因已更新）
+        return jsonify({"status": "success", "data": {"added": added, "skipped": skipped}})
+
+    async def _web_minimal_blacklist_remove(self):
+        data = await self._minimal_body()
+        uid = str(data.get("user_id") or "").strip()
+        if not uid:
+            return self._minimal_error("请填写 QQ 号")
+        removed = self._bl_remove(uid, reason=str(data.get("reason") or "").strip(), **WEB_LOG)
+        return jsonify({"status": "success", "data": {"removed": removed}})
 
     # ------------------------------------------------------------------
     # 跨群踢人
@@ -280,13 +369,23 @@ class MinimalWebMixin:
         targets = self._minimal_ids(data.get("user_ids"))
         if not targets:
             return self._minimal_error("请填写要处理的 QQ 号")
+        block = bool(data.get("block"))
+        reason = str(data.get("reason") or "").strip()
+        if block and not reason:
+            return self._minimal_error("踢出并拉黑需要填写原因（会记录在黑名单和操作记录里）")
         client = await self._get_client()
         if not client:
             return self._minimal_error("无法获取QQ客户端")
-        block = bool(data.get("block"))
+        if data.get("refresh"):
+            # 执行前强制刷新目标群的成员缓存（限速逐个刷新），避免漏掉刚进群的人
+            scope = self._minimal_groups_arg(data.get("groups"))
+            if scope is None:
+                scope, _err = await self._list_managed_groups(client)
+            for gid in scope:
+                await self._dir_members(client, gid, force=True)
         result = await self._kick_users_across_groups(
             client, targets, block, groups=self._minimal_groups_arg(data.get("groups")),
-            reason="WebUI 踢出并拉黑" if block else "WebUI 踢人",
+            reason=reason or "WebUI 踢人", **WEB_LOG,
         )
         if result["error"]:
             protected = f"（已跳过：{', '.join(result['protected'])}）" if result["protected"] else ""

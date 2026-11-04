@@ -238,6 +238,18 @@ class OneBotMixin:
         """实际查询成员角色并写缓存；失败返回 '' 并记录退避时间。"""
         epoch = getattr(self, "_role_epoch", 0)
         role = None
+        # 先查本地群成员缓存（group_directory）：未过期就不调用接口。
+        # 管理员任免通知会实时更新缓存，所以缓存里的角色是可信的。
+        dir_role = getattr(self, "_dir_member_role", None)
+        if callable(dir_role):
+            try:
+                cached_role = dir_role(group_id, user_id)
+            except Exception:
+                cached_role = ""
+            if cached_role:
+                if getattr(self, "_role_epoch", 0) == epoch:
+                    self._admin_role_cache[cache_key] = (cached_role, time.time())
+                return cached_role
         try:
             client = await self._get_client(event)
             if client:

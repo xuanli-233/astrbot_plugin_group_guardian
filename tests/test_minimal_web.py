@@ -79,6 +79,8 @@ group_broadcast = _load(f"{PKG}.group_broadcast", "group_broadcast.py")
 group_name_task = _load(f"{PKG}.group_name_task", "group_name_task.py")
 keyword_guard = _load(f"{PKG}.keyword_guard", "keyword_guard.py")
 message_backup = _load(f"{PKG}.message_backup", "message_backup.py")
+group_directory = _load(f"{PKG}.group_directory", "group_directory.py")
+operation_log = _load(f"{PKG}.operation_log", "operation_log.py")
 web_minimal = _load(f"{PKG}.web_minimal", "web_minimal.py", quart_stub=True)
 
 BOT = 999
@@ -123,8 +125,29 @@ class _Config(dict):
 
 
 class _Storage:
+    """meta 用字典；_connect 指向临时 SQLite 文件（群成员缓存与操作记录建表用）。"""
+
     def __init__(self):
+        import tempfile
         self.meta = {}
+        self.added = []
+        self.removed = []
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "test.db"
+
+    def _connect(self):
+        import contextlib
+        import sqlite3
+
+        @contextlib.contextmanager
+        def cm():
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
+        return cm()
 
     def get_meta(self, key, default=""):
         return self.meta.get(key, default)
@@ -132,8 +155,12 @@ class _Storage:
     def set_meta(self, key, value):
         self.meta[key] = value
 
-    def add_managed_list_value(self, *_a):
-        pass
+    def add_managed_list_value(self, list_type, value):
+        self.added.append((list_type, value))
+
+    def remove_managed_list_value(self, list_type, value):
+        self.removed.append((list_type, value))
+        return True
 
 
 class _Harness(
@@ -143,14 +170,17 @@ class _Harness(
     group_name_task.GroupNameTaskMixin,
     keyword_guard.KeywordGuardMixin,
     message_backup.MessageBackupMixin,
+    group_directory.GroupDirectoryMixin,
+    operation_log.OperationLogMixin,
     onebot.OneBotMixin,
     utilities.UtilitiesMixin,
 ):
-    def __init__(self, client, config=None):
+    def __init__(self, client, config=None, storage=None):
         self.client = client
-        self.config = _Config({"disclaimer_agreed": True, "broadcast_interval_seconds": 0, **(config or {})})
+        self.config = _Config({"disclaimer_agreed": True, "broadcast_interval_seconds": 0,
+                               "directory_min_interval_ms": 0, **(config or {})})
         self._config_schema = {"broadcast_interval_seconds": {"type": "int", "default": 2}}
-        self._storage = _Storage()
+        self._storage = storage or _Storage()
         self._client = client
         self._bot_uin_cache = 0
         self._group_white_set = set()
@@ -264,7 +294,9 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(out["data"]["cancelled"], 1)
 
     async def test_kick_across_groups_with_block(self):
-        out = await call(self.h._web_minimal_kick, {"user_ids": "30001 10000", "block": True})
+        no_reason = await call(self.h._web_minimal_kick, {"user_ids": "30001", "block": True})
+        self.assertIn("需要填写原因", no_reason["message"])
+        out = await call(self.h._web_minimal_kick, {"user_ids": "30001 10000", "block": True, "reason": "发广告"})
         data = out["data"]
         self.assertEqual(data["protected"], ["10000"])
         self.assertEqual(data["kicked_total"], 2)
@@ -274,6 +306,156 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(list(scoped["data"]["per_group"]), ["10001"])
         empty = await call(self.h._web_minimal_kick, {"user_ids": "abc"})
         self.assertEqual(empty["status"], "error")
+
+
+def _notice(kind, sub, gid, uid, **extra):
+    return types.SimpleNamespace(raw_event={"post_type": "notice", "notice_type": kind, "sub_type": sub,
+                                            "group_id": int(gid), "user_id": int(uid), "self_id": BOT, **extra})
+
+
+class DirectoryCacheTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        groups = _groups()
+        groups["10001"]["members"] = {"30001": "member", "20001": "admin", str(BOT): "admin"}
+        self.client = _Client(groups)
+        self.h = _Harness(self.client)
+        self.h._get_raw_event = staticmethod(lambda e: e.raw_event)
+
+    def count(self, action):
+        return len(self.client.actions(action))
+
+    async def test_group_list_and_members_are_cached(self):
+        await self.h._dir_groups(self.client)
+        await self.h._dir_groups(self.client)
+        self.assertEqual(self.count("get_group_list"), 1)
+        await self.h._dir_members(self.client, "10001")
+        await self.h._dir_members(self.client, "10001")
+        self.assertEqual(self.count("get_group_member_list"), 1)
+        await self.h._dir_members(self.client, "10001", force=True)
+        self.assertEqual(self.count("get_group_member_list"), 2)
+        self.assertTrue(self.client.actions("get_group_member_list")[-1]["no_cache"])
+
+    async def test_expired_cache_refetches(self):
+        await self.h._dir_members(self.client, "10001")
+        self.h._dir()["members_ts"]["10001"] -= 10 ** 6
+        await self.h._dir_members(self.client, "10001")
+        self.assertEqual(self.count("get_group_member_list"), 2)
+
+    async def test_calls_are_rate_limited(self):
+        import time as _t
+        self.h.config["directory_min_interval_ms"] = 60
+        start = _t.monotonic()
+        await self.h._dir_members(self.client, "10001")
+        await self.h._dir_members(self.client, "10002")
+        await self.h._dir_members(self.client, "900000001")
+        self.assertGreaterEqual(_t.monotonic() - start, 0.11)
+
+    async def test_notices_update_cache_and_role_lookup_uses_it(self):
+        await self.h._dir_members(self.client, "10001")
+        await self.h._dir_handle_notice(_notice("group_increase", "approve", "10001", "40001"))
+        self.assertIn("40001", self.h._dir()["members"]["10001"])
+        await self.h._dir_handle_notice(_notice("group_admin", "set", "10001", "40001"))
+        self.assertEqual(self.h._dir_member_role("10001", "40001"), "admin")
+        await self.h._dir_handle_notice(_notice("group_decrease", "leave", "10001", "30001"))
+        self.assertNotIn("30001", self.h._dir()["members"]["10001"])
+        await self.h._dir_handle_notice(_notice("group_card", "", "10001", "20001", card_new="新名片"))
+        self.assertEqual(self.h._dir_cached_member("10001", "20001")["card"], "新名片")
+        self.h._admin_role_cache = {}
+        before = self.count("get_group_member_info")
+        role = await self.h._fetch_member_role(None, "10001", "20001", "10001:20001")
+        self.assertEqual(role, "admin")
+        self.assertEqual(self.count("get_group_member_info"), before)  # 没有调用接口
+
+    async def test_cache_survives_restart_and_find_user(self):
+        await self.h._dir_groups(self.client)
+        await self.h._dir_members(self.client, "10001")
+        await self.h._dir_members(self.client, "10002")
+        fresh = _Harness(self.client, storage=self.h._storage)
+        found = sorted(g["group_id"] for g in fresh._dir_find_user("30001"))
+        self.assertEqual(found, ["10001", "10002"])
+        calls = len(self.client.calls)
+        await fresh._dir_members(self.client, "10001")
+        self.assertEqual(len(self.client.calls), calls)  # 从 SQLite 载入，未过期不调接口
+
+    async def test_kick_uses_cache_and_removes_member(self):
+        result = await self.h._kick_users_across_groups(self.client, ["30001"], False, groups=["10001"])
+        self.assertEqual(result["per_group"]["10001"]["kicked"], ["30001"])
+        self.assertEqual(self.count("get_group_member_info"), 0)  # 机器人角色来自成员缓存
+        self.assertIsNone(self.h._dir_cached_member("10001", "30001"))
+
+    async def test_web_directory_endpoints(self):
+        await self.h._dir_groups(self.client)
+        await self.h._dir_members(self.client, "10001")
+        status = await call(self.h._web_minimal_directory)
+        row = [g for g in status["data"]["groups"] if g["group_id"] == "10001"][0]
+        self.assertEqual(row["members_cached"], 3)
+        web_minimal.quart_request.args = {"user_id": "30001"}
+        found = await call(self.h._web_minimal_directory_find)
+        self.assertEqual([g["group_id"] for g in found["data"]["groups"]], ["10001"])
+        started = await call(self.h._web_minimal_directory_refresh, {"all": True})
+        self.assertTrue(started["data"]["started"])
+        await self.h._dir_refresh_task
+        self.assertEqual(self.h._dir_refresh_info["done"], 3)
+
+
+class OperationLogTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.client = _Client(_groups())
+        self.h = _Harness(self.client)
+
+    def logs(self, action=""):
+        items, _total = self.h._op_list(action=action)
+        return items
+
+    async def test_kick_block_records_reason_per_group_and_blacklist_meta(self):
+        await call(self.h._web_minimal_kick, {"user_ids": "30001", "block": True, "reason": "发广告"})
+        records = self.logs("踢出并拉黑")
+        self.assertEqual(sorted(r["group_id"] for r in records), ["10001", "10002"])
+        self.assertTrue(all(r["reason"] == "发广告" and r["source"] == "WebUI" and r["result"] == "成功"
+                            for r in records))
+        (entry,) = self.h._bl_entries()
+        self.assertEqual((entry["user_id"], entry["reason"], entry["source"]), ("30001", "发广告", "WebUI"))
+        self.assertEqual(len(self.logs("加入黑名单")), 1)
+
+    async def test_blacklist_add_requires_reason_and_remove_logs(self):
+        missing = await call(self.h._web_minimal_blacklist_add, {"user_ids": "30005"})
+        self.assertIn("拉黑原因", missing["message"])
+        out = await call(self.h._web_minimal_blacklist_add, {"user_ids": "30005 10000", "reason": "骗子"})
+        self.assertEqual(out["data"], {"added": ["30005"], "skipped": ["10000"]})
+        await call(self.h._web_minimal_blacklist_remove, {"user_id": "30005", "reason": "误判"})
+        self.assertEqual(self.h._bl_entries(), [])
+        (removed,) = self.logs("移出黑名单")
+        self.assertEqual(removed["reason"], "误判")
+
+    async def test_rule_changes_broadcast_and_rename_are_recorded(self):
+        await call(self.h._web_minimal_rules_save, {"key": "keyword_rules", "rules": ["加微信"]})
+        self.assertIn("新增 加微信", self.logs("修改关键词规则")[0]["detail"])
+        await call(self.h._web_minimal_broadcast, {"groups": ["10001"], "content": "通知内容"})
+        self.assertEqual(self.logs("发布群公告")[0]["detail"], "通知内容")
+        await call(self.h._web_minimal_names_suffix, {"groups": ["10001"], "suffix": "|活动"})
+        (rename,) = self.logs("修改群名后缀")
+        self.assertEqual(rename["detail"], "一群 → 一群|活动")
+
+    async def test_oplog_endpoint_filters_and_pages(self):
+        for i in range(5):
+            self.h._record_op("踢人", source="指令", operator="10000", group_id="10001", target=f"3000{i}")
+        self.h._record_op("加入黑名单", source="自动", target="39999", reason="主动退出群 10001")
+        web_minimal.quart_request.args = {"keyword": "39999"}
+        out = await call(self.h._web_minimal_oplog)
+        self.assertEqual(out["data"]["total"], 1)
+        web_minimal.quart_request.args = {"action": "踢人", "page": "2", "page_size": "2"}
+        out = await call(self.h._web_minimal_oplog)
+        self.assertEqual(out["data"]["total"], 5)
+        self.assertEqual(len(out["data"]["items"]), 2)
+        self.assertIn("加入黑名单", out["data"]["actions"])
+
+    def test_command_reason_parsing(self):
+        split = self.h._split_reason
+        self.assertEqual(split("/全群踢黑 111 222 原因：发了 123456 群号"), ("/全群踢黑 111 222 ", "发了 123456 群号"))
+        self.assertEqual(split("/全群踢黑 111 #广告"), ("/全群踢黑 111 ", "广告"))
+        self.assertEqual(split("/全群踢黑 111"), ("/全群踢黑 111", ""))
+        event = types.SimpleNamespace(message_str="/全群踢黑 111 原因 发了 123456", get_messages=lambda: [])
+        self.assertEqual(self.h._parse_kick_targets(event), ["111"])  # 原因里的数字不算目标
 
 
 class DashboardWiringTests(unittest.TestCase):
