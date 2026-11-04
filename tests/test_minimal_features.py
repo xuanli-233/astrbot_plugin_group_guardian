@@ -420,6 +420,15 @@ class BroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("1 个群", out[0])
         self.assertIn("已排除：10002", out[0])
 
+    async def test_all_groups_excludes_backup_groups_unless_named(self):
+        client = self._client()
+        client.groups["900000001"] = {"name": "备份群", "bot": "admin"}
+        h = _Harness(client, config={"backup_group_id": "900000001"})
+        targets, _denied, _err = await h._resolve_target_groups(client, None)
+        self.assertEqual(targets, ["10001", "10002"])
+        targets, _denied, _err = await h._resolve_target_groups(client, ["900000001"])
+        self.assertEqual(targets, ["900000001"])
+
     async def test_cancel(self):
         h = _Harness(self._client())
         await _collect(h.cmd_broadcast_notice(_Event("/全群公告 x"), todo=False))

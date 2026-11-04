@@ -88,12 +88,19 @@ class GroupBroadcastMixin:
         return ""
 
     async def _resolve_target_groups(self, client, explicit: Optional[List[str]]) -> Tuple[List[str], List[str], str]:
-        """返回 (目标群, 被拒绝的群, 错误)。explicit 为 None 时取全部管理的群。"""
+        """返回 (目标群, 被拒绝的群, 错误)。
+
+        explicit 为 None 时取全部管理的群，但排除备份群 / 葵花码转发群（那是存放违规内容的群，
+        不应收到公告或被改名）；明确写了群号时按所写的来。
+        """
         if explicit:
             allowed = [g for g in explicit if self._group_id_allowed(g)]
             denied = [g for g in explicit if g not in allowed]
             return allowed, denied, ""
         groups, err = await self._list_managed_groups(client)
+        is_backup = getattr(self, "_is_backup_group", None)
+        if callable(is_backup):
+            groups = [g for g in groups if not is_backup(g)]
         return groups, [], err
 
     def _broadcast_interval(self) -> float:
