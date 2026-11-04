@@ -4,7 +4,7 @@
 
 请通过 GitHub 私有漏洞报告提交，切勿公开 Issue：
 
-👉 [报告安全漏洞](https://github.com/zcj-ui/astrbot_plugin_group_guardian/security/advisories/new)
+👉 [报告安全漏洞](https://github.com/xuanli-233/astrbot_plugin_group_guardian/security/advisories/new)
 
 该渠道仅维护者可见。
 

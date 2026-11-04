@@ -2,7 +2,7 @@ name: 🪲 报告问题
 description: 报告QQ群智能守护者插件的错误或异常行为
 title: "[BUG] "
 labels: ["bug"]
-assignees: [zcj-ui]
+assignees: [xuanli-233]
 body:
   - type: markdown
     attributes:
