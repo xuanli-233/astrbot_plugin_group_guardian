@@ -732,6 +732,37 @@ class MembershipApiResultTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.calls, [])
         self.assertEqual(harness.logs, [])
 
+    async def test_blacklisted_request_rejected_without_join_audit(self):
+        harness = _Harness()
+        harness.cfg_values["join_audit_enabled"] = False
+        harness._user_black_set = {"456"}
+
+        handled, harness, client = await self._run_harness(harness)
+
+        self.assertTrue(handled)
+        self.assertEqual(client.calls[0][0], "set_group_add_request")
+        self.assertFalse(client.calls[0][1]["approve"])
+
+    async def test_request_untouched_without_join_audit_when_not_blacklisted(self):
+        harness = _Harness()
+        harness.cfg_values["join_audit_enabled"] = False
+
+        handled, harness, client = await self._run_harness(harness)
+
+        self.assertFalse(handled)
+        self.assertEqual(client.calls, [])
+
+    async def test_blacklist_reject_without_audit_can_be_disabled(self):
+        harness = _Harness()
+        harness.cfg_values["join_audit_enabled"] = False
+        harness.cfg_values["blacklist_reject_join_enabled"] = False
+        harness._user_black_set = {"456"}
+
+        handled, harness, client = await self._run_harness(harness)
+
+        self.assertFalse(handled)
+        self.assertEqual(client.calls, [])
+
     def test_dashboard_can_store_explicit_empty_group_join_prompt(self):
         dashboard = (ROOT / "pages" / "dashboard" / "index.html").read_text(
             encoding="utf-8"

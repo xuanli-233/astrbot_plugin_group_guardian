@@ -161,7 +161,8 @@ class PenaltyCooldownTests(unittest.TestCase):
         host._on_member_unbanned("1", "")
 
     def test_plugin_unban_paths_clear_cooldown(self):
-        for rel in ("onebot.py", "commands.py", "llm_tools.py"):
+        # llm_tools.py 已随 AI 功能去除（见 constants.AI_FEATURES_ENABLED）
+        for rel in ("onebot.py", "commands.py"):
             self.assertIn("_on_member_unbanned", (ROOT / rel).read_text(encoding="utf-8"), rel)
 
     def test_lift_ban_notice_handler_registered(self):

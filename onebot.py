@@ -750,8 +750,8 @@ class OneBotMixin:
     async def _maybe_recall_on_kick(self, client, gid, user_id) -> int:
         """按 kick_recall_enabled 配置在踢人前撤回该成员近期消息，返回撤回条数。
 
-        定义在 OneBotMixin（Main 继承）而非 CommandsMixin/LlmToolsMixin，
-        因为 commands 和 llm_tools 两处踢人入口都要用 self 调用它，
+        定义在 OneBotMixin（Main 继承）而非 CommandsMixin，
+        因为 commands 和 group_blacklist 等踢人入口都要用 self 调用它，
         而 Main 不继承那两个 Mixin（会 AttributeError，同 #18/#19/#31 坑）。
         """
         group_id = str(gid)
@@ -795,7 +795,8 @@ class OneBotMixin:
             logger.debug(f"[GroupMgr] 撤回用户近期消息失败({group_id}/{user_id}): {e}")
         return recalled
 
-    async def _kick_member(self, event: AiocqhttpMessageEvent) -> bool:
+    async def _kick_member(self, event: AiocqhttpMessageEvent, block: bool = False) -> bool:
+        # block=True 时附带 reject_add_request，即 QQ 原生「拒绝此人再次申请加群」
         group_id = self._get_group_id(event)
         user_id = self._try_get_sender_id(event)
         if not group_id or not user_id:
@@ -810,7 +811,8 @@ class OneBotMixin:
         try:
             result = await asyncio.wait_for(
                 client.call_action(
-                    'set_group_kick', group_id=gid, user_id=uid
+                    'set_group_kick', group_id=gid, user_id=uid,
+                    reject_add_request=bool(block),
                 ),
                 timeout=ONEBOT_CALL_TIMEOUT,
             )

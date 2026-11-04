@@ -574,6 +574,16 @@ class MembershipMixin:
         if not group_id or not flag:
             return False
         if not self._cfg("join_audit_enabled", False, group_id=group_id):
+            # 未开启入群审核时，黑名单用户的加群申请仍自动拒绝（blacklist_reject_join_enabled）。
+            # 开启了入群审核的群走下方原流程（其中也会拒绝黑名单，且尊重本群规则的停用开关）。
+            if (sub_type == "add" and user_id and user_id in self._user_black_set
+                    and self._cfg("enabled", group_id=group_id)
+                    and self._cfg("blacklist_reject_join_enabled", True, group_id=group_id)
+                    and self._check_group_access(event)[0]):
+                return await self._complete_group_request(
+                    event, flag, sub_type, False, "您在黑名单中，无法加入",
+                    group_id, user_id, comment, "用户黑名单",
+                )
             return False
         allowed, _reason = self._check_group_access(event)
         if not allowed:

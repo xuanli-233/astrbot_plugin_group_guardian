@@ -2010,6 +2010,11 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
         if self._pre_check_message(event, group_id, user_id):
             return
 
+        # 备份群 / 葵花码转发群本身不参与审核，避免备份进来的违规内容被再次撤回
+        is_backup_group = getattr(self, "_is_backup_group", None)
+        if callable(is_backup_group) and is_backup_group(group_id):
+            return
+
         # Issue #90：QQ 开放平台机器人消息整体豁免内容审核与防刷屏（开关 + 按群覆盖）。
         if await self._is_exempt_official_bot(event, group_id, user_id):
             return
@@ -2089,6 +2094,18 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
         observe_fn = getattr(self, "_learn_observe_message", None)
         if observe_fn and text:
             observe_fn(group_id, text)
+
+        # 最小化插件主功能：关键词撤回 + 葵花码 / OCR 识别过滤（keyword_guard.py），
+        # 命中即备份到指定群并撤回，不再进入下面的内置规则审核。受自动审核开关控制。
+        hit_guards = getattr(self, "_run_hit_guards", None)
+        if moderation_enabled and callable(hit_guards):
+            handled, hit_notice = await hit_guards(
+                event, group_id, user_id, user_name, text, image_urls,
+            )
+            if handled:
+                if hit_notice:
+                    yield event.plain_result(hit_notice)
+                return
 
         qq_fav_handled, qq_fav_notice = await self._handle_qq_favorite(event, group_id, user_id, user_name, image_urls, forward_is_qq_favorite)
         if qq_fav_handled:
@@ -2434,7 +2451,10 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
             return True, None
         try:
             self._mark_moderation_penalty(group_id, user_id, 60)
-            kick_succeeded = await self._kick_member(event)
+            # 黑名单用户踢出时同时原生拉黑，防止其再次申请加群
+            kick_succeeded = await self._kick_member(
+                event, block=self._cfg("blacklist_native_block_enabled", True, group_id=group_id),
+            )
             mute_succeeded = await self._mute_member(event, 60)
             if kick_succeeded:
                 notice = self._cfg_str(

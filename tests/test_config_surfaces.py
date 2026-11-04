@@ -83,7 +83,8 @@ class ConfigSurfaceTests(unittest.TestCase):
     def test_base_decode_audit_is_enabled_and_group_overridable(self):
         setting = self.schema["base_decode_enabled"]
         self.assertEqual("bool", setting["type"])
-        self.assertTrue(setting["default"])
+        # 最小化插件：Base 解码审核默认关闭，需要时手动开启
+        self.assertFalse(setting["default"])
 
         categories = self._class_literal("_CONFIG_CATEGORIES")
         excluded = self._class_literal("_GROUP_CONFIG_EXCLUDE")

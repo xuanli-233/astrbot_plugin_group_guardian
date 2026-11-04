@@ -10,9 +10,12 @@ from typing import Dict, List, Tuple
 
 from astrbot.api import logger
 from .automaton import KeywordAutomaton
+from .constants import AI_FEATURES_ENABLED, ai_feature_blocked
 
 
 class UtilitiesMixin:
+    # AI 总闸，挂到实例上供不直接导入 constants 的模块（scheduler、web）读取
+    AI_FEATURES_ENABLED = AI_FEATURES_ENABLED
 
     @staticmethod
     async def _run_in_thread(func, *args, **kwargs):
@@ -216,6 +219,9 @@ class UtilitiesMixin:
     def _cfg(self, key: str, default: bool = True, group_id: str = None) -> bool:
         # 读取布尔配置：传 group_id 时优先用该群的覆盖值，否则用全局（config / schema 默认）。
         # 群覆盖值以字符串存储（"true"/"false"），实现真正的多群独立配置。
+        # AI 总闸（constants.AI_FEATURES_ENABLED）关闭时，AI 相关开关一律为 False。
+        if ai_feature_blocked(key):
+            return False
         if group_id:
             gv = self._get_group_override(group_id, key)
             if gv is not None:
@@ -573,7 +579,7 @@ class UtilitiesMixin:
         """统一计算各词库分类的启用状态，供审核阶段过滤复用。
 
         其中 supplement / livelihood / tencent_ban 跟随 other 开关，
-        ad 分类始终启用（由独立的广告规则匹配器控制）。传 group_id 时优先使用群覆盖。
+        swear / ad 分类跟随 scan_swear / scan_ad。传 group_id 时优先使用群覆盖。
         """
         enable_other = self._cfg("lexicon_other_enabled", True, group_id=group_id)
         return {
@@ -588,7 +594,11 @@ class UtilitiesMixin:
             "supplement": enable_other,
             "livelihood": enable_other,
             "tencent_ban": enable_other,
-            "ad": True,
+            # 词库中的脏话 / 广告分类跟随 scan_swear / scan_ad：
+            # 关闭内置脏话或广告检测时，词库里的同类词也不再触发（此前 ad 恒为 True、
+            # swear 缺省按启用处理，关掉开关也挡不住词库命中）。
+            "swear": self._cfg("scan_swear", True, group_id=group_id),
+            "ad": self._cfg("scan_ad", True, group_id=group_id),
         }
 
     @staticmethod

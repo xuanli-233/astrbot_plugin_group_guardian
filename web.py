@@ -23,7 +23,7 @@ from .ai_relay import (
     AI_RELAY_CONFIRM_KEYS,
     ai_relay_risk_acknowledged,
 )
-from .constants import PLUGIN_NAME, PLUGIN_VERSION
+from .constants import AI_CONFIG_KEYS, PLUGIN_NAME, PLUGIN_VERSION, ai_config_hidden
 
 
 class WebMixin:
@@ -210,6 +210,10 @@ class WebMixin:
             "lexicon_learn_sample_size": (15, 300),
             "moderation_review_interval": (300, 604800),
             "moderation_review_min_samples": (1, 20),
+            "wxcode_timeout": (1, 60),
+            "local_ocr_timeout": (1, 60),
+            "broadcast_interval_seconds": (1, 30),
+            "group_name_max_length": (10, 60),
         }
 
     def _normalize_int_config_value(self, key: str, value) -> int:
@@ -709,6 +713,21 @@ class WebMixin:
         enriched.sort(key=lambda x: (0 if x["is_plugin_admin"] else 1, x["display_name"].casefold()))
         return enriched
 
+    # 会主动调用大模型、或修改 AI 配置的接口。AI 总闸关闭时替换为 _web_ai_disabled。
+    _AI_ONLY_ROUTES = frozenset({
+        "/providers",
+        "/moderation_review/run",
+        "/moderation_review/suggestions/apply",
+        "/lexicon_learn/run",
+        "/lexicon_learn/config/set",
+    })
+
+    async def _web_ai_disabled(self):
+        return jsonify({
+            "status": "error",
+            "message": "AI 功能已停用（constants.AI_FEATURES_ENABLED = False）",
+        })
+
     def _register_web_apis(self):
         # 遍历路由表，每项含 path / handler / methods / desc，统一注册到 self.context.register_web_api。
         # 认证说明：register_web_api 注册的路由挂载在 AstrBot Dashboard 的 /api/plug/ 下，
@@ -812,7 +831,11 @@ class WebMixin:
                 ("/lexicon_learn/run", self._web_learn_run_now, ["POST"], "立即执行一次学习挖掘"),
             ]
             registered = 0
+            ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
             for path, handler, methods, desc in routes:
+                # AI 总闸关闭时，会主动调用大模型或修改 AI 配置的接口统一返回「已停用」
+                if not ai_enabled and path in self._AI_ONLY_ROUTES:
+                    handler = self._web_ai_disabled
                 try:
                     self.context.register_web_api(
                         f"/{PLUGIN_NAME}{path}",
@@ -935,6 +958,10 @@ class WebMixin:
         safe_config["_user_white_list"] = self.user_white_list
         safe_config["_admin_list"] = self._get_admin_list()
         safe_config["_ai_relay_ack_text"] = AI_RELAY_ACK_TEXT
+        # AI 总闸：前端据此隐藏 AI 页面、卡片与开关（见 constants.AI_FEATURES_ENABLED）
+        ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
+        safe_config["_ai_features_enabled"] = ai_enabled
+        safe_config["_ai_hidden_keys"] = [] if ai_enabled else sorted(AI_CONFIG_KEYS)
         return jsonify(safe_config)
 
     async def _web_update_config(self):
@@ -2474,6 +2501,11 @@ class WebMixin:
         "moderation_review_min_samples", "llm_moderation_review_guidance",
         "group_white_list", "group_black_list", "user_black_list", "user_white_list", "admin_list",
         "ai_relay_ack_recall", "ai_relay_ack_false_positive", "ai_relay_risk_ack",
+        # 最小化插件新增：目标群、识别服务、批量操作参数都是全局语义
+        "backup_group_id", "wxcode_forward_group_id",
+        "wxcode_driver", "wxcode_service_url", "wxcode_python_module", "wxcode_timeout",
+        "local_ocr_driver", "local_ocr_service_url", "local_ocr_python_module", "local_ocr_timeout",
+        "broadcast_interval_seconds", "group_name_max_length", "countdown_update_time",
     }
 
     # ==================== AI 特殊检测（特殊数字）风险确认门禁 ====================
@@ -2554,11 +2586,13 @@ class WebMixin:
     def _group_overridable_keys(self):
         # 动态计算可按群覆盖的配置项：schema 中除全局项外的通用配置。
         # list 类型通常是全局名单或复杂集合，WebUI 由专门页面维护，不进入单群覆盖。
+        # AI 总闸关闭时 AI 配置项不进入多群配置（见 constants.AI_CONFIG_KEYS）。
         supported_types = {"bool", "int", "string", "text"}
         return [
             k for k, meta in self._config_schema.items()
             if k not in self._GROUP_CONFIG_EXCLUDE
             and meta.get("type", "bool") in supported_types
+            and not ai_config_hidden(k)
         ]
 
     def _group_config_allowed(self, group_id: str) -> bool:
@@ -2587,6 +2621,11 @@ class WebMixin:
         "moderation_review_min_samples": "审核复盘",
         "llm_moderation_review_guidance": "审核复盘",
         "kick_recall_enabled": "审核规则", "kick_recall_count": "审核规则",
+        "leave_auto_blacklist_enabled": "黑名单", "blacklist_reject_join_enabled": "黑名单",
+        "blacklist_kick_on_join": "黑名单", "blacklist_native_block_enabled": "黑名单",
+        "keyword_guard_enabled": "关键词撤回", "backup_enabled": "关键词撤回",
+        "hit_mute_enabled": "关键词撤回", "hit_notice_enabled": "关键词撤回",
+        "hit_notice_template": "关键词撤回", "wxcode_enabled": "图片识别",
         "combine_detect_enabled": "重复检测", "combine_detect_count": "重复检测",
         "combine_detect_window_seconds": "重复检测",
         "custom_swear_keywords": "审核规则", "custom_ad_keywords": "审核规则",
@@ -2847,6 +2886,8 @@ class WebMixin:
         try:
             cfg = {}
             for k in self._CARD_MONITOR_KEYS:
+                if ai_config_hidden(k):  # card_audit_llm_always 等 AI 项随 AI 总闸隐藏
+                    continue
                 meta = self._config_schema.get(k, {})
                 value_type = meta.get("type", "bool")
                 if value_type == "int":

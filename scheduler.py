@@ -28,6 +28,7 @@ class SchedulerMixin:
         self._card_sync_task = None
         self._learn_task = None
         self._moderation_review_task = None
+        self._group_name_task = None
         self._moderation_review_wakeup = asyncio.Event()
         self._scheduler_stop = False
 
@@ -43,9 +44,15 @@ class SchedulerMixin:
             if callable(getattr(self, "_sync_group_cards", None)):
                 self._card_sync_task = asyncio.create_task(self._card_sync_loop())
             # 自适应上下文学习使用独立低频 loop；没有 LexiconLearnMixin 时自动跳过。
-            if callable(getattr(self, "_run_lexicon_learning", None)):
+            # 词库学习与误判复盘都依赖 AI，AI 总闸（constants.AI_FEATURES_ENABLED，
+            # 经 UtilitiesMixin 挂到实例上）关闭时不启动这两个 loop。
+            # 群名定时改名 / 倒计时（group_name_task.py），每分钟检查一次
+            if callable(getattr(self, "_group_name_loop", None)):
+                self._group_name_task = asyncio.create_task(self._group_name_loop())
+            ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
+            if ai_enabled and callable(getattr(self, "_run_lexicon_learning", None)):
                 self._learn_task = asyncio.create_task(self._lexicon_learn_loop())
-            if callable(getattr(self, "_run_moderation_feedback_review", None)):
+            if ai_enabled and callable(getattr(self, "_run_moderation_feedback_review", None)):
                 self._moderation_review_task = asyncio.create_task(
                     self._moderation_review_loop()
                 )
@@ -74,6 +81,13 @@ class SchedulerMixin:
                 await self._learn_task
             except asyncio.CancelledError:
                 logger.debug("[GroupMgr] 上下文学习任务已取消")
+        group_name_task = getattr(self, "_group_name_task", None)
+        if group_name_task and not group_name_task.done():
+            group_name_task.cancel()
+            try:
+                await group_name_task
+            except asyncio.CancelledError:
+                logger.debug("[GroupMgr] 群名定时任务已取消")
         if (self._moderation_review_task
                 and not self._moderation_review_task.done()):
             self._moderation_review_task.cancel()

@@ -391,6 +391,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .bar-hrow{position:relative}
 .bar-hrow:hover::after{content:attr(title);position:absolute;left:10px;bottom:100%;transform:translateY(-4px);background:rgba(0,0,0,.8);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;white-space:nowrap;z-index:10;pointer-events:none}
 [data-theme="dark"] .bar-col:hover::after,[data-theme="dark"] .bar-hrow:hover::after{background:rgba(240,240,240,.9);color:#333}
+    /* AI 总闸关闭（后端 constants.AI_FEATURES_ENABLED = False）时隐藏所有 AI 区块 */
+    body.ai-off [data-ai-feature] { display: none !important; }
   </style>
 </head>
 <body>
@@ -444,7 +446,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 11h6v2H6v-2zm0 4h4v2H6v-2z"/></svg>
           <span>名片监控</span>
         </a>
-        <a class="nav-item" data-tab="learn">
+        <a class="nav-item" data-tab="learn" data-ai-feature>
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
           <span>词库学习</span>
         </a>
@@ -600,7 +602,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="card-header"><h2>审核日志</h2><button class="btn btn-ghost btn-sm" id="btnRefreshLogs">刷新</button></div>
           <div class="log-container" id="logContainer"><p class="empty">暂无日志</p></div>
         </div>
-        <div class="card">
+        <div class="card" data-ai-feature>
           <div class="card-header"><h2>AI 误判复盘</h2><div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnRefreshReview">刷新</button><button class="btn btn-primary btn-sm" id="btnRunReview">立即复盘</button></div></div>
           <div class="settings-list">
             <div class="setting-item"><div class="setting-info"><div class="setting-label">定期自动生成候选</div><div class="setting-desc">只生成候选，仍需管理员明确应用</div></div><input type="checkbox" id="reviewAutoEnabled" style="accent-color:var(--primary)" /></div>
@@ -740,7 +742,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 
       <div class="tab-panel" id="tab-tasks">
         <div class="page-header"><h1>申诉 / 解禁</h1><button class="btn btn-ghost btn-sm" id="btnRefreshTasks">刷新</button></div>
-        <div class="card">
+        <div class="card" data-ai-feature>
           <div class="card-header"><h2>申诉记录</h2></div>
           <div class="log-container" id="appealList"><p class="empty">加载中...</p></div>
         </div>
@@ -780,7 +782,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
       </div>
 
-      <div class="tab-panel" id="tab-learn">
+      <div class="tab-panel" id="tab-learn" data-ai-feature>
         <div class="page-header"><h1>词库学习</h1>
           <div class="header-actions">
             <button class="btn btn-outline btn-sm" id="btnLearnRun">立即学习一次</button>
@@ -869,7 +871,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         <div class="settings-grid">
           <div class="card" data-settings-section="core"><div class="card-header"><h2>核心设置</h2></div><div class="settings-list" id="settingsCore"></div></div>
           <div class="card" data-settings-section="audit"><div class="card-header"><h2>审核设置</h2></div><div class="settings-list" id="settingsAudit"></div></div>
-          <div class="card" data-settings-section="ocr"><div class="card-header"><h2>OCR识图设置</h2></div><div class="settings-list" id="settingsOcr"></div></div>
+          <div class="card" data-settings-section="ocr" data-ai-feature><div class="card-header"><h2>OCR识图设置</h2></div><div class="settings-list" id="settingsOcr"></div></div>
           <div class="card" data-settings-section="lexicon"><div class="card-header"><h2>词库设置</h2></div><div class="settings-list" id="settingsLexicon"></div></div>
           <div class="card" data-settings-section="feature"><div class="card-header"><h2>功能开关</h2></div><div class="settings-list" id="settingsFeatures"></div></div>
           <div class="card card-full" data-settings-section="advanced"><div class="card-header"><h2>高级设置</h2></div><div class="settings-list" id="settingsExtra"></div></div>
@@ -940,7 +942,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
       <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
       <span>名片</span>
     </a>
-    <a class="mobile-nav-item" data-tab="learn">
+    <a class="mobile-nav-item" data-tab="learn" data-ai-feature>
       <svg viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
       <span>学习</span>
     </a>
@@ -1385,12 +1387,22 @@ async function safeDownload(path, params, filename) {
   }
 }
 
+/* ===== AI 总闸（后端 constants.AI_FEATURES_ENABLED）===== */
+// 后端在 /config 中下发 _ai_features_enabled 与 _ai_hidden_keys；
+// 关闭时 body 加 ai-off 类，CSS 隐藏所有 [data-ai-feature] 区块，渲染函数跳过 AI 配置项。
+function aiDisabled() { return CONFIG._ai_features_enabled === false; }
+function aiHiddenKey(key) { return aiDisabled() && (CONFIG._ai_hidden_keys || []).indexOf(key) >= 0; }
+function applyAiVisibility() {
+  if (document.body) document.body.classList.toggle('ai-off', aiDisabled());
+}
+
 async function loadConfigCached(force) {
   if (!force && CONFIG_PROMISE) return CONFIG_PROMISE;
   var epoch = ++CONFIG_REQUEST_EPOCH;
   var request = safeGet('config').then(function(res) {
     if (epoch === CONFIG_REQUEST_EPOCH && !isApiError(res) && res && typeof res === 'object' && !Array.isArray(res)) {
       CONFIG = Object.assign({}, CONFIG, res);
+      applyAiVisibility();
     }
     return res;
   }).catch(function(e) {
@@ -1493,13 +1505,14 @@ function switchTab(tabName) {
     loadGroups(false);
     loadAdmins();
   }
-  if (tabName === 'records') { loadUsers(); loadLogs(); loadModerationReview(); }
+  if (tabName === 'learn' && aiDisabled()) { switchTab('overview'); return; }
+  if (tabName === 'records') { loadUsers(); loadLogs(); if (!aiDisabled()) loadModerationReview(); }
   if (tabName === 'flood') loadFlood();
   if (tabName === 'rules') { renderRuleCenterShell(); loadRuleCenter(); }
   if (tabName === 'join') loadJoinRules();
   if (tabName === 'perms') { loadSuperAdmins(); loadGrants(); loadBlocks(); }
   if (tabName === 'groupcfg') loadGroupCfgGroups();
-  if (tabName === 'tasks') { loadAppeals(); loadUnbans(); }
+  if (tabName === 'tasks') { if (!aiDisabled()) loadAppeals(); loadUnbans(); }
   if (tabName === 'cardmon') loadCardMonitor();
   if (tabName === 'learn') loadLexiconLearn();
   if (tabName === 'settings') loadSettings();
@@ -2535,6 +2548,10 @@ var FEATURE_TOGGLES = [
   { key: 'ban_enabled', label: '禁言功能' },
   { key: 'unban_enabled', label: '解禁功能' },
   { key: 'kick_enabled', label: '踢人功能' },
+  { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '主动退群的成员加入用户黑名单，所有群通用' },
+  { key: 'blacklist_reject_join_enabled', label: '黑名单申请自动拒绝', desc: '未开启入群审核的群也拒绝黑名单用户的加群申请' },
+  { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
+  { key: 'blacklist_native_block_enabled', label: '踢黑名单时QQ拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' },
   { key: 'recall_enabled', label: '撤回消息' },
   { key: 'whole_ban_enabled', label: '全体禁言' },
   { key: 'set_admin_enabled', label: '设置管理员' },
@@ -2650,6 +2667,10 @@ var MANUAL_SETTING_KEYS = {
   ban_enabled: true,
   unban_enabled: true,
   kick_enabled: true,
+  leave_auto_blacklist_enabled: true,
+  blacklist_reject_join_enabled: true,
+  blacklist_kick_on_join: true,
+  blacklist_native_block_enabled: true,
   recall_enabled: true,
   whole_ban_enabled: true,
   set_admin_enabled: true,
@@ -2864,7 +2885,13 @@ async function loadSettings() {
   renderToggles('settingsFeatures', FEATURE_TOGGLES);
   renderListSettings();
   renderAllSettings();
-  await loadProviderList(true);
+  if (aiDisabled()) {
+    // AI 已停用：不请求 Provider 列表（后端也已停用该接口），直接渲染其余设置
+    renderExtraSettings();
+    renderOcrSettings();
+  } else {
+    await loadProviderList(true);
+  }
   if (!isCurrentLoad('settings', epoch)) return;
   renderSettingsSectionTabs();
   applySettingsSection();
@@ -2886,6 +2913,10 @@ function renderSettingsSectionTabs() {
     { key: 'schema', label: '全量' },
     { key: 'all', label: '全部' }
   ];
+  if (aiDisabled()) {
+    items = items.filter(function(it) { return it.key !== 'ocr'; });
+    if (SETTINGS_SECTION === 'ocr') SETTINGS_SECTION = 'core';
+  }
   tabs.innerHTML = items.map(function(it) {
     var active = SETTINGS_SECTION === it.key;
     return '<button type="button" class="btn btn-sm btn-tab ' + (active ? 'active' : '') + '" data-settings-tab="' + escAttr(it.key) + '">' + esc(it.label) + '</button>';
@@ -3443,6 +3474,7 @@ function renderAllSettings() {
   rows.push('<div style="padding:6px 0 10px"><input type="text" class="input-sm" id="allSettingsSearch" placeholder="搜索配置项（名称/说明）..." style="width:260px" /></div>');
   Object.keys(schema).forEach(function(key) {
     if (MANUAL_SETTING_KEYS[key]) return;
+    if (aiHiddenKey(key)) return;
     var def = schema[key] || {};
     var t = def.type || '';
     var val = (CONFIG[key] != null) ? CONFIG[key] : def.default;
@@ -3551,6 +3583,7 @@ async function runMigration() {
 
 function renderToggles(containerId, items) {
   var c = $('#' + containerId);
+  items = items.filter(function(item) { return !aiHiddenKey(item.key); });
   c.innerHTML = items.map(function(item) {
     var checked = CONFIG[item.key] ? 'checked' : '';
     return '<div class="setting-item"><div class="setting-info"><div class="setting-label">' + esc(item.label) + '</div>' + (item.desc ? '<div class="setting-desc">' + esc(item.desc) + '</div>' : '') + '</div><label class="toggle"><input type="checkbox" data-key="' + escAttr(item.key) + '" ' + checked + ' /><span class="slider"></span></label></div>';
@@ -3656,19 +3689,19 @@ function renderExtraSettings() {
 
   c.innerHTML =
     '<div class="setting-item"><div class="setting-info"><div class="setting-label">禁言时长（秒）</div><div class="setting-desc">违规用户自动禁言时长，默认 1800 秒（30分钟）</div></div><input type="number" class="input-sm" id="inputBanDuration" value="' + banDuration + '" min="60" max="2592000" style="width:100px" /></div>' +
-    '<div class="setting-item"><div class="setting-info"><div class="setting-label">审核 LLM 模型</div><div class="setting-desc">用于 AI 审核的 LLM 提供商（留空使用默认）</div></div><select class="input-sm" id="inputProviderId" style="width:220px">' + providerOptions + '</select></div>' +
+    '<div class="setting-item" data-ai-feature><div class="setting-info"><div class="setting-label">审核 LLM 模型</div><div class="setting-desc">用于 AI 审核的 LLM 提供商（留空使用默认）</div></div><select class="input-sm" id="inputProviderId" style="width:220px">' + providerOptions + '</select></div>' +
     '<div class="setting-item"><div class="setting-info"><div class="setting-label">封禁通知模板</div><div class="setting-desc">支持变量：{name} 用户名、{uid} QQ号、{group} 群号</div></div><input type="text" class="input-sm" id="inputBanNotice" value="' + escAttr(banNotice) + '" style="width:260px" /></div>' +
     '<hr style="margin:16px 0;border:none;border-top:1px solid var(--border)">' +
     '<h3 style="font-size:13px;font-weight:600;margin-bottom:12px">入群审核设置</h3>' +
     '<div class="setting-item"><div class="setting-info"><div class="setting-label">入群默认动作</div><div class="setting-desc">未命中通过/拒绝关键词时的兜底动作</div></div><select class="input-sm" id="inputJoinAction" style="width:160px"><option value="manual"' + (joinAction === 'manual' ? ' selected' : '') + '>转人工</option><option value="accept"' + (joinAction === 'accept' ? ' selected' : '') + '>自动通过</option><option value="reject"' + (joinAction === 'reject' ? ' selected' : '') + '>自动拒绝</option></select></div>' +
     '<div class="setting-item"><div class="setting-info"><div class="setting-label">入群拒绝理由</div><div class="setting-desc">自动拒绝加群申请时回传给申请人的理由</div></div><input type="text" class="input-sm" id="inputJoinRejectReason" value="' + escAttr(joinRejectReason) + '" style="width:260px" /></div>' +
-    '<div class="setting-item"><div class="setting-info"><div class="setting-label">入群最大搜索次数</div><div class="setting-desc">仅在「入群 AI 搜索增强」开启且第一轮 LLM 返回 search 时使用，范围 1-3</div></div><input type="number" class="input-sm" id="inputJoinSearchMaxQueries" value="' + joinSearchMaxQueries + '" min="1" max="3" style="width:80px" /></div>' +
-    '<div class="setting-item"><div class="setting-info"><div class="setting-label">入群 LLM 自定义审核标准</div><div class="setting-desc">仅在「入群 AI 审核」开启时生效；留空使用内置标准，可按群覆盖</div></div><textarea class="input-md" id="inputJoinLlmPrompt" rows="3" style="width:100%;max-width:520px" placeholder="例如：只拒绝明确广告引流，正常交流均通过">' + esc(joinLlmPrompt) + '</textarea></div>' +
+    '<div class="setting-item" data-ai-feature><div class="setting-info"><div class="setting-label">入群最大搜索次数</div><div class="setting-desc">仅在「入群 AI 搜索增强」开启且第一轮 LLM 返回 search 时使用，范围 1-3</div></div><input type="number" class="input-sm" id="inputJoinSearchMaxQueries" value="' + joinSearchMaxQueries + '" min="1" max="3" style="width:80px" /></div>' +
+    '<div class="setting-item" data-ai-feature><div class="setting-info"><div class="setting-label">入群 LLM 自定义审核标准</div><div class="setting-desc">仅在「入群 AI 审核」开启时生效；留空使用内置标准，可按群覆盖</div></div><textarea class="input-md" id="inputJoinLlmPrompt" rows="3" style="width:100%;max-width:520px" placeholder="例如：只拒绝明确广告引流，正常交流均通过">' + esc(joinLlmPrompt) + '</textarea></div>' +
     '<hr style="margin:16px 0;border:none;border-top:1px solid var(--border)">' +
     '<h3 style="font-size:13px;font-weight:600;margin-bottom:12px">申诉 / 解禁设置</h3>' +
-    '<div class="setting-item"><div class="setting-info"><div class="setting-label">申诉窗口（分钟）</div><div class="setting-desc">刷屏处罚后允许用户私聊申诉的时间</div></div><input type="number" class="input-sm" id="inputAppealWindow" value="' + appealWindow + '" min="1" max="10080" style="width:100px" /></div>' +
-    '<div class="setting-item"><div class="setting-info"><div class="setting-label">申诉上下文条数</div><div class="setting-desc">LLM 复核申诉时读取的最近群消息数量</div></div><input type="number" class="input-sm" id="inputAppealContext" value="' + appealContext + '" min="1" max="500" style="width:100px" /></div>' +
-    '<div class="setting-item"><div class="setting-info"><div class="setting-label">申诉@公示模板</div><div class="setting-desc">支持变量：{name} 昵称、{minutes} 申诉窗口分钟数</div></div><textarea class="input-md" id="inputAppealTemplate" rows="2" style="width:100%;max-width:420px">' + esc(appealTemplate) + '</textarea></div>' +
+    '<div class="setting-item" data-ai-feature><div class="setting-info"><div class="setting-label">申诉窗口（分钟）</div><div class="setting-desc">刷屏处罚后允许用户私聊申诉的时间</div></div><input type="number" class="input-sm" id="inputAppealWindow" value="' + appealWindow + '" min="1" max="10080" style="width:100px" /></div>' +
+    '<div class="setting-item" data-ai-feature><div class="setting-info"><div class="setting-label">申诉上下文条数</div><div class="setting-desc">LLM 复核申诉时读取的最近群消息数量</div></div><input type="number" class="input-sm" id="inputAppealContext" value="' + appealContext + '" min="1" max="500" style="width:100px" /></div>' +
+    '<div class="setting-item" data-ai-feature><div class="setting-info"><div class="setting-label">申诉@公示模板</div><div class="setting-desc">支持变量：{name} 昵称、{minutes} 申诉窗口分钟数</div></div><textarea class="input-md" id="inputAppealTemplate" rows="2" style="width:100%;max-width:420px">' + esc(appealTemplate) + '</textarea></div>' +
     '<div class="setting-item"><div class="setting-info"><div class="setting-label">自动解禁扫描间隔（秒）</div><div class="setting-desc">后台任务扫描到期解禁计划的间隔</div></div><input type="number" class="input-sm" id="inputUnbanInterval" value="' + unbanInterval + '" min="10" max="3600" style="width:100px" /></div>' +
     '<div class="setting-item"><div class="setting-info"><div class="setting-label">永久禁言托管时长（小时）</div><div class="setting-desc">插件发起永久禁言时登记的兜底解禁时长</div></div><input type="number" class="input-sm" id="inputUnbanPermanentHours" value="' + unbanPermanentHours + '" min="1" max="8760" style="width:100px" /></div>' +
     '<hr style="margin:16px 0;border:none;border-top:1px solid var(--border)">' +
@@ -4267,6 +4300,8 @@ function renderGroupCfgItems(items) {
 
 async function init() {
   initTabs();
+  // 尽早拉取配置，以便按 AI 总闸隐藏导航和页面中的 AI 区块
+  loadConfigCached(false);
   if (!REBUILD_STATUS_TIMER) {
     REBUILD_STATUS_TIMER = setInterval(function() {
       var active = $('#tab-rules');

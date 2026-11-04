@@ -1,0 +1,177 @@
+# -*- coding: utf-8 -*-
+"""关键词撤回 + 葵花码 / OCR 识别结果过滤（最小化插件，二次开发新增）。
+
+在消息审核流水线中、内置规则审核之前执行（moderation._handle_message 调用 _run_hit_guards）：
+  1. 消息正文（含合并转发内容）匹配 keyword_rules；
+  2. 图片交给葵花码识别器，识别内容匹配 wxcode_regex_rules；
+  3. 图片交给 OCR 识别器（local_ocr_driver，默认关），识别文字再匹配 keyword_rules。
+任一命中 → 先备份 / 转发到指定群 → 撤回 →（可选）禁言、群内提示 → 记审核日志 → 结束本条消息。
+
+规则写法（keyword_rules）：
+  普通文本        包含即命中（不区分大小写）
+  =文本           整条消息（去首尾空白）与之完全相同才命中
+  re:正则         正则搜索（不区分大小写）
+wxcode_regex_rules 每条都按正则处理（同样不区分大小写）。
+正则长度上限 REGEX_MAX_LEN，含嵌套量词（如 (a+)+）的正则会被跳过，防止灾难性回溯。
+"""
+import re
+from typing import List, Optional, Tuple
+
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent
+
+
+class KeywordGuardMixin:
+    REGEX_MAX_LEN = 300
+    MATCH_TEXT_MAX = 8000
+    _NESTED_QUANTIFIER = re.compile(r"\([^()]*[+*][^()]*\)\s*[+*{]")
+
+    # ------------------------------------------------------------------
+    # 规则解析
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _rule_list(value) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = value.replace("\r", "\n").split("\n")
+        if not isinstance(value, (list, tuple)):
+            value = [value]
+        return [str(v).strip() for v in value if str(v).strip()]
+
+    def _compile_regex_rule(self, pattern: str) -> Optional["re.Pattern"]:
+        if not pattern or len(pattern) > self.REGEX_MAX_LEN:
+            logger.warning(f"[GroupMgr] 正则规则过长或为空，已跳过: {pattern[:40]}")
+            return None
+        if self._NESTED_QUANTIFIER.search(pattern):
+            logger.warning(f"[GroupMgr] 正则规则含嵌套量词（可能导致卡死），已跳过: {pattern}")
+            return None
+        try:
+            return re.compile(pattern, re.IGNORECASE)
+        except re.error as e:
+            logger.warning(f"[GroupMgr] 正则规则无效，已跳过: {pattern} ({e})")
+            return None
+
+    def _compiled_rules(self, config_key: str, regex_only: bool = False) -> list:
+        """[(kind, 原始规则, 匹配值)]，kind 为 contains / exact / regex。按规则内容缓存。"""
+        raw = tuple(self._rule_list(self.config.get(config_key, [])))
+        cache = getattr(self, "_keyword_rule_cache", None)
+        if cache is None:
+            cache = self._keyword_rule_cache = {}
+        hit = cache.get(config_key)
+        if hit and hit[0] == raw and hit[1] == regex_only:
+            return hit[2]
+        compiled = []
+        for rule in raw:
+            if regex_only or rule.lower().startswith("re:"):
+                pattern = rule[3:].strip() if rule.lower().startswith("re:") else rule
+                regex = self._compile_regex_rule(pattern)
+                if regex is not None:
+                    compiled.append(("regex", rule, regex))
+            elif rule.startswith("="):
+                exact = rule[1:].strip().casefold()
+                if exact:
+                    compiled.append(("exact", rule, exact))
+            else:
+                compiled.append(("contains", rule, rule.casefold()))
+        cache[config_key] = (raw, regex_only, compiled)
+        return compiled
+
+    def _match_rules(self, text: str, config_key: str, regex_only: bool = False) -> Optional[str]:
+        """返回第一条命中的规则原文；未命中返回 None。"""
+        if not text:
+            return None
+        text = str(text)[: self.MATCH_TEXT_MAX]
+        folded = text.casefold()
+        stripped = folded.strip()
+        for kind, rule, value in self._compiled_rules(config_key, regex_only):
+            if kind == "contains" and value in folded:
+                return rule
+            if kind == "exact" and stripped == value:
+                return rule
+            if kind == "regex" and value.search(text):
+                return rule
+        return None
+
+    # ------------------------------------------------------------------
+    # 命中处理
+    # ------------------------------------------------------------------
+    async def _execute_hit_action(self, event: AstrMessageEvent, group_id: str, user_id: str,
+                                  user_name: str, text: str, reason: str,
+                                  kind: str = "keyword", extra_text: str = "",
+                                  image_urls: list = None) -> Optional[str]:
+        """备份 → 撤回 →（可选）禁言 → 记日志。返回要发到群里的提示（未开启提示时为 None）。"""
+        backed_up = await self._backup_message(
+            event, group_id, user_id, user_name, reason, extra_text=extra_text, kind=kind,
+        )
+        msg_id = self._event_message_id(event)
+        recall_result = await self._recall_msg(event, msg_id) if msg_id else None
+        recalled = recall_result is True
+
+        muted = False
+        if self._cfg("hit_mute_enabled", False, group_id=group_id):
+            duration = self._cfg_int("moderation_ban_duration", 1800, group_id=group_id)
+            muted = await self._mute_member(event, duration)
+            if muted and hasattr(self, "_schedule_unban"):
+                self._schedule_unban(group_id, user_id, duration)
+
+        parts = ["撤回" if recalled else "命中（撤回失败）"]
+        if muted:
+            parts.append("禁言")
+        if backed_up:
+            parts.append("已备份")
+        action = "+".join(parts)
+        logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
+        log_text = text if not extra_text else f"{text}\n{extra_text}"
+        self._log_moderation(group_id, user_id, user_name, log_text, action, reason, image_urls or [])
+        event.stop_event()
+
+        if recalled and self._cfg("hit_notice_enabled", False, group_id=group_id):
+            template = self._cfg_str(
+                "hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id,
+            )
+            return (template.replace("{name}", user_name or user_id)
+                    .replace("{uid}", user_id).replace("{group}", group_id))
+        return None
+
+    # ------------------------------------------------------------------
+    # 流水线入口
+    # ------------------------------------------------------------------
+    async def _run_hit_guards(self, event: AstrMessageEvent, group_id: str, user_id: str,
+                              user_name: str, text: str, image_urls: list) -> Tuple[bool, Optional[str]]:
+        """依次执行关键词、葵花码、OCR 三道检查。返回 (是否已处理, 群内提示)。"""
+        if self._cfg("keyword_guard_enabled", True, group_id=group_id):
+            rule = self._match_rules(text, "keyword_rules")
+            if rule:
+                notice = await self._execute_hit_action(
+                    event, group_id, user_id, user_name, text, f"关键词: {rule}",
+                    kind="keyword", image_urls=image_urls,
+                )
+                return True, notice
+
+        if not image_urls:
+            return False, None
+
+        if self._cfg("wxcode_enabled", False, group_id=group_id):
+            texts = await self._recognize_images(image_urls, "wxcode")
+            joined = "\n".join(texts)
+            rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+            if rule:
+                notice = await self._execute_hit_action(
+                    event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
+                    kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
+                )
+                return True, notice
+
+        if self._cfg("keyword_guard_enabled", True, group_id=group_id) and \
+                self._cfg_str("local_ocr_driver", "off", group_id=group_id) != "off":
+            texts = await self._recognize_images(image_urls, "local_ocr")
+            joined = "\n".join(texts)
+            rule = self._match_rules(joined, "keyword_rules")
+            if rule:
+                notice = await self._execute_hit_action(
+                    event, group_id, user_id, user_name, text or "[图片]", f"图片文字关键词: {rule}",
+                    kind="keyword", extra_text=f"OCR 内容：\n{joined}", image_urls=image_urls,
+                )
+                return True, notice
+        return False, None
