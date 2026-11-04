@@ -81,6 +81,7 @@ keyword_guard = _load(f"{PKG}.keyword_guard", "keyword_guard.py")
 message_backup = _load(f"{PKG}.message_backup", "message_backup.py")
 group_directory = _load(f"{PKG}.group_directory", "group_directory.py")
 operation_log = _load(f"{PKG}.operation_log", "operation_log.py")
+duplicate_members = _load(f"{PKG}.duplicate_members", "duplicate_members.py")
 web_minimal = _load(f"{PKG}.web_minimal", "web_minimal.py", quart_stub=True)
 
 BOT = 999
@@ -171,6 +172,7 @@ class _Harness(
     keyword_guard.KeywordGuardMixin,
     message_backup.MessageBackupMixin,
     group_directory.GroupDirectoryMixin,
+    duplicate_members.DuplicateMemberMixin,
     operation_log.OperationLogMixin,
     onebot.OneBotMixin,
     utilities.UtilitiesMixin,
@@ -456,6 +458,79 @@ class OperationLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(split("/全群踢黑 111"), ("/全群踢黑 111", ""))
         event = types.SimpleNamespace(message_str="/全群踢黑 111 原因 发了 123456", get_messages=lambda: [])
         self.assertEqual(self.h._parse_kick_targets(event), ["111"])  # 原因里的数字不算目标
+
+
+class DuplicateMemberTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        groups = {
+            "10001": {"name": "一群", "members": {"30001": "member", "30002": "member", "20001": "admin",
+                                                  "10000": "member", str(BOT): "admin"}},
+            "10002": {"name": "二群", "members": {"30001": "member", "30002": "member", "20001": "member",
+                                                  "10000": "member", str(BOT): "admin"}},
+            "10003": {"name": "三群", "members": {"30001": "member", str(BOT): "admin"}},
+            "900000001": {"name": "备份群", "members": {"30002": "member", str(BOT): "admin"}},
+        }
+        self.client = _Client(groups)
+        self.h = _Harness(self.client, config={"backup_group_id": "900000001"})
+        await self.h._dir_groups(self.client)
+        for gid in groups:
+            await self.h._dir_members(self.client, gid)
+        # 30001 最早加入二群
+        self.h._dir()["members"]["10002"]["30001"]["join_time"] = 100
+        self.h._dir()["members"]["10001"]["30001"]["join_time"] = 200
+        self.h._dir()["members"]["10003"]["30001"]["join_time"] = 300
+
+    def found(self, **kw):
+        return {it["user_id"]: it for it in self.h._dup_find(**kw)["items"]}
+
+    def test_detects_members_in_multiple_groups_with_exclusions(self):
+        found = self.found()
+        self.assertEqual(sorted(found), ["30001", "30002"])  # 机器人、管理员 20001、插件管理员 10000 不列出
+        self.assertEqual(found["30001"]["count"], 3)
+        self.assertEqual(found["30002"]["count"], 2)  # 备份群不算
+        self.assertEqual(found["30001"]["keep_default"], "10002")  # 最早加入的群
+        self.assertEqual(sorted(self.found(include_exempt=True)), ["10000", "20001", "30001", "30002"])
+        self.assertEqual(list(self.found(min_groups=3)), ["30001"])
+        coverage = self.h._dup_find()["coverage"]
+        self.assertEqual((coverage["groups_total"], coverage["groups_cached"]), (3, 3))
+
+    def test_ignore_hides_member(self):
+        self.h._dup_set_ignored("30002", True, "工作人员")
+        self.assertNotIn("30002", self.found())
+        self.assertEqual(self.found(include_ignored=True)["30002"]["ignored"]["reason"], "工作人员")
+        self.h._dup_set_ignored("30002", False)
+        self.assertIn("30002", self.found())
+        self.assertEqual(len(self.h._op_list(action="忽略重复成员")[0]), 1)
+
+    async def test_keep_one_kicks_other_groups(self):
+        out = await self.h._dup_handle(self.client, ["30001"], "keep_one", "重复加群", block=True)
+        r = out["results"]["30001"]
+        self.assertEqual(r["kept"], "10002")
+        self.assertEqual(sorted(r["kicked"]), ["10001", "10003"])
+        kicks = self.client.actions("set_group_kick")
+        self.assertTrue(all(k["reject_add_request"] for k in kicks))
+        self.assertNotIn("30001", self.h._user_black_set)  # 保留一个群时不进插件黑名单
+        self.assertNotIn("30001", self.found())
+        records, _ = self.h._op_list(action="重复成员清理（保留一个群）")
+        self.assertEqual(len(records), 2)
+        self.assertIn("保留群 10002", records[0]["reason"])
+
+    async def test_keep_explicit_group_and_kick_all_with_blacklist(self):
+        out = await self.h._dup_handle(self.client, ["30001"], "keep_one", "r", keep={"30001": "10003"})
+        self.assertEqual(sorted(out["results"]["30001"]["kicked"]), ["10001", "10002"])
+        out = await self.h._dup_handle(self.client, ["30002"], "kick_all", "广告号", block=True)
+        self.assertEqual(sorted(out["results"]["30002"]["kicked"]), ["10001", "10002"])
+        self.assertIn("30002", self.h._user_black_set)
+        self.assertEqual(self.h._bl_entries()[0]["reason"], "广告号")
+
+    async def test_plugin_admin_is_never_handled_and_web_requires_reason(self):
+        out = await self.h._dup_handle(self.client, ["10000"], "kick_all", "r")
+        self.assertIn("插件管理员", out["results"]["10000"]["skipped"])
+        bad = await call(self.h._web_minimal_duplicates_handle, {"user_ids": ["30001"], "mode": "kick_all"})
+        self.assertIn("原因", bad["message"])
+        web_minimal.quart_request.args = {"min_groups": "2"}
+        listed = await call(self.h._web_minimal_duplicates)
+        self.assertEqual(sorted(i["user_id"] for i in listed["data"]["items"]), ["30001", "30002"])
 
 
 class DashboardWiringTests(unittest.TestCase):

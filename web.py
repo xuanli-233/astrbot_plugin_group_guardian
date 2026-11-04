@@ -848,6 +848,9 @@ class WebMixin:
                 ("/minimal/directory/refresh", self._web_minimal_directory_refresh, ["POST"], "刷新群成员缓存"),
                 ("/minimal/directory/find", self._web_minimal_directory_find, ["GET"], "查找某人所在的群"),
                 ("/minimal/oplog", self._web_minimal_oplog, ["GET"], "操作记录"),
+                ("/minimal/duplicates", self._web_minimal_duplicates, ["GET"], "重复群成员"),
+                ("/minimal/duplicates/handle", self._web_minimal_duplicates_handle, ["POST"], "处理重复群成员"),
+                ("/minimal/duplicates/ignore", self._web_minimal_duplicates_ignore, ["POST"], "忽略 / 取消忽略重复成员"),
                 ("/minimal/blacklist/add", self._web_minimal_blacklist_add, ["POST"], "加入黑名单（带原因）"),
                 ("/minimal/blacklist/remove", self._web_minimal_blacklist_remove, ["POST"], "移出黑名单"),
             ]

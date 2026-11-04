@@ -24,6 +24,9 @@ const info = JSON.parse(py.globals.get("boot")("/plugins"));
 console.log(`[mock] 插件已加载：${info.routes} 个 WebUI 接口，${info.commands} 条指令`);
 
 const dispatch = py.globals.get("dispatch");
+// 定时推进事件循环里的后台任务（真实 AstrBot 中事件循环一直在运行）
+const pump = py.globals.get("pump");
+setInterval(() => { try { pump(0.05); } catch (e) { console.error("[mock] pump", e); } }, 200);
 const sim = {
   state: py.globals.get("sim_state"),
   send: py.globals.get("sim_send"),

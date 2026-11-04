@@ -88,6 +88,17 @@ def run(coro):
     return LOOP.run_until_complete(coro)
 
 
+def pump(seconds: float = 0.05) -> None:
+    """让事件循环空转一小段时间，推进后台任务（如「全部刷新」成员缓存）。
+
+    真实 AstrBot 的事件循环一直在运行；模拟环境只在处理请求时运行循环，
+    所以由 server.mjs 定时调用本函数。没有待执行的任务时立即返回。
+    """
+    pending = [t for t in asyncio.all_tasks(LOOP) if not t.done()]
+    if pending:
+        run(asyncio.sleep(seconds))
+
+
 # ---------------------------------------------------------------------------
 # AstrBot / Quart 替身
 # ---------------------------------------------------------------------------

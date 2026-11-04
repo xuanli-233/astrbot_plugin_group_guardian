@@ -316,6 +316,56 @@ class MinimalWebMixin:
         }})
 
     # ------------------------------------------------------------------
+    # 重复群成员（duplicate_members.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_duplicates(self):
+        args = quart_request.args
+        flag = lambda name: str(args.get(name, "") or "").strip().lower() in ("1", "true", "yes", "on")
+        client = await self._get_client()
+        if client:
+            await self._dir_groups(client)  # 群列表过期时刷新（成员不在这里批量拉取）
+        data = self._dup_find(
+            min_groups=self._safe_int(args.get("min_groups", 2), 2),
+            include_exempt=flag("include_exempt"), include_ignored=flag("include_ignored"),
+            keyword=str(args.get("keyword", "") or ""),
+        )
+        return jsonify({"status": "success", "data": data})
+
+    async def _web_minimal_duplicates_handle(self):
+        ok, msg = self._cfg_check("kick_enabled", "踢人")
+        if not ok:
+            return self._minimal_error(msg)
+        data = await self._minimal_body()
+        user_ids = self._minimal_ids(data.get("user_ids"))
+        mode = str(data.get("mode") or "")
+        reason = str(data.get("reason") or "").strip()
+        if not user_ids:
+            return self._minimal_error("请选择要处理的成员")
+        if mode not in ("keep_one", "kick_all"):
+            return self._minimal_error("未知的处理方式")
+        if not reason:
+            return self._minimal_error("请填写处理原因（会写进操作记录）")
+        keep = data.get("keep") if isinstance(data.get("keep"), dict) else {}
+        client = await self._get_client()
+        if not client:
+            return self._minimal_error("无法获取QQ客户端")
+        result = await self._dup_handle(client, user_ids, mode, reason,
+                                        keep={str(k): str(v) for k, v in keep.items()},
+                                        block=bool(data.get("block")), **WEB_LOG)
+        return jsonify({"status": "success", "data": result})
+
+    async def _web_minimal_duplicates_ignore(self):
+        data = await self._minimal_body()
+        user_ids = self._minimal_ids(data.get("user_ids") or data.get("user_id"))
+        if not user_ids:
+            return self._minimal_error("请选择成员")
+        ignore = bool(data.get("ignore", True))
+        reason = str(data.get("reason") or "").strip()
+        for uid in user_ids:
+            self._dup_set_ignored(uid, ignore, reason, **WEB_LOG)
+        return jsonify({"status": "success", "data": {"count": len(user_ids), "ignore": ignore}})
+
+    # ------------------------------------------------------------------
     # 操作记录
     # ------------------------------------------------------------------
     async def _web_minimal_oplog(self):
