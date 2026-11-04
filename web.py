@@ -829,6 +829,18 @@ class WebMixin:
                 ("/lexicon_learn/reject", self._web_learn_reject, ["POST"], "拒绝学习候选词"),
                 ("/lexicon_learn/delete", self._web_learn_delete, ["POST"], "删除学习候选词"),
                 ("/lexicon_learn/run", self._web_learn_run_now, ["POST"], "立即执行一次学习挖掘"),
+                # 最小化插件新增功能（web_minimal.py）
+                ("/minimal/overview", self._web_minimal_overview, ["GET"], "新功能总览"),
+                ("/minimal/rules/save", self._web_minimal_rules_save, ["POST"], "保存关键词 / 葵花码规则"),
+                ("/minimal/rules/test", self._web_minimal_rules_test, ["POST"], "测试规则命中"),
+                ("/minimal/broadcast", self._web_minimal_broadcast, ["POST"], "批量发布群公告 / 待办公告"),
+                ("/minimal/todo_status", self._web_minimal_todo_status, ["GET"], "待办公告确认情况"),
+                ("/minimal/names", self._web_minimal_names, ["GET"], "群名任务总览"),
+                ("/minimal/names/suffix", self._web_minimal_names_suffix, ["POST"], "批量改群名后缀"),
+                ("/minimal/names/countdown", self._web_minimal_names_countdown, ["POST"], "设置群名倒计时"),
+                ("/minimal/names/stop", self._web_minimal_names_stop, ["POST"], "停止倒计时 / 取消定时"),
+                ("/minimal/names/refresh", self._web_minimal_names_refresh, ["POST"], "立即刷新倒计时"),
+                ("/minimal/kick", self._web_minimal_kick, ["POST"], "跨群踢人 / 踢出并拉黑"),
             ]
             registered = 0
             ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))

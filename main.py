@@ -23,6 +23,7 @@ from .group_name_task import GroupNameTaskMixin
 from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
 from .message_backup import MessageBackupMixin
+from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
 from .moderation import ModerationMixin
 from .moderation_review import ModerationReviewMixin
@@ -35,7 +36,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir", "QQ群智能守护者 - AI审核+群管工具集", PLUGIN_VERSION, "https://github.com/zcj-ui/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, GroupBroadcastMixin, GroupNameTaskMixin, KeywordGuardMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, GroupBroadcastMixin, GroupNameTaskMixin, KeywordGuardMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):

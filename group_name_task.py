@@ -215,27 +215,16 @@ class GroupNameTaskMixin:
         if not targets:
             yield event.plain_result(f"没有可操作的群{f'：{list_err}' if list_err else ''}")
             return
-        async with self._name_task_lock():
-            tasks = self._load_name_tasks()
-            if scheduled_at is not None:
-                if scheduled_at <= datetime.now():
-                    yield event.plain_result("定时时间必须晚于现在")
-                    return
-                at = scheduled_at.strftime("%Y-%m-%d %H:%M")
-                for gid in targets:
-                    record = tasks.setdefault(gid, {})
-                    record.setdefault("scheduled", []).append({"at": at, "suffix": suffix})
-                self._save_name_tasks(tasks)
+        if scheduled_at is not None:
+            err = await self._name_schedule_suffix(targets, suffix, scheduled_at)
+            if err:
+                yield event.plain_result(err)
+            else:
                 yield event.plain_result(
-                    f"已登记：{at} 把 {len(targets)} 个群的后缀改为「{suffix or '（清除）'}」")
-                return
-            yield event.plain_result(f"开始修改 {len(targets)} 个群的群名……")
-            done, failed = await self._apply_to_groups(client, targets, tasks, lambda _g: (suffix, ""))
-            for gid in targets:
-                # 手动改后缀会结束该群的倒计时，避免第二天被倒计时覆盖
-                if gid in tasks and tasks[gid].get("countdown"):
-                    tasks[gid]["countdown"] = None
-            self._save_name_tasks(tasks)
+                    f"已登记：{scheduled_at.strftime('%Y-%m-%d %H:%M')} 把 {len(targets)} 个群的后缀改为「{suffix or '（清除）'}」")
+            return
+        yield event.plain_result(f"开始修改 {len(targets)} 个群的群名……")
+        done, failed = await self._name_set_suffix(client, targets, suffix)
         msg = self._format_apply_result("群名后缀修改完成", done, failed)
         if denied:
             msg += f"\n不在管理范围内、已排除：{', '.join(denied)}"
@@ -270,9 +259,7 @@ class GroupNameTaskMixin:
         if "{days}" not in template:
             yield event.plain_result("模板里需要包含 {days}，例如 ｜距考试{days}天")
             return
-        today = date.today()
-        suffix = self._render_countdown(template, target, today)
-        if suffix is None:
+        if self._render_countdown(template, target, date.today()) is None:
             yield event.plain_result("目标日期已经过去了")
             return
         client = await self._get_client(event)
@@ -284,15 +271,7 @@ class GroupNameTaskMixin:
             yield event.plain_result(f"没有可操作的群{f'：{list_err}' if list_err else ''}")
             return
         yield event.plain_result(f"开始为 {len(targets)} 个群设置倒计时……")
-        async with self._name_task_lock():
-            tasks = self._load_name_tasks()
-            done, failed = await self._apply_to_groups(client, targets, tasks, lambda _g: (suffix, template))
-            for gid in targets:
-                if gid in tasks and gid not in failed:
-                    tasks[gid]["countdown"] = {
-                        "target": target.isoformat(), "template": template, "last_date": today.isoformat(),
-                    }
-            self._save_name_tasks(tasks)
+        done, failed = await self._name_set_countdown(client, targets, target, template)
         msg = self._format_apply_result(
             f"倒计时已设置（目标 {target.isoformat()}，每天 {self._countdown_update_time()} 更新）", done, failed)
         if denied:
@@ -316,26 +295,120 @@ class GroupNameTaskMixin:
         return "当前群名任务：\n" + "\n".join(lines) if lines else "当前没有群名倒计时或定时改名任务"
 
     async def _countdown_stop_or_refresh(self, event: AstrMessageEvent, sub: str, groups: Optional[List[str]]):
+        if sub == "停止":
+            stopped = await self._name_stop_countdown(groups)
+            if not stopped:
+                yield event.plain_result("没有符合条件的倒计时任务")
+            else:
+                yield event.plain_result(
+                    f"已停止 {len(stopped)} 个群的倒计时（群名保持现状，可用 /群名后缀 清除 去掉后缀）")
+            return
+        client = await self._get_client(event)
+        if not client:
+            yield event.plain_result("无法获取QQ客户端")
+            return
+        done, failed = await self._name_refresh_countdown(client, groups)
+        if not done and not failed:
+            yield event.plain_result("没有符合条件的倒计时任务")
+            return
+        yield event.plain_result(self._format_apply_result("倒计时已更新", done, failed))
+
+    # ------------------------------------------------------------------
+    # 核心操作（指令与 WebUI 共用）
+    # ------------------------------------------------------------------
+    async def _name_set_suffix(self, client, groups: List[str], suffix: str) -> Tuple[List[str], Dict[str, str]]:
+        """立即把这些群的后缀改为 suffix（空串 = 清除）。会结束这些群的倒计时，避免第二天被覆盖。"""
+        async with self._name_task_lock():
+            tasks = self._load_name_tasks()
+            done, failed = await self._apply_to_groups(client, groups, tasks, lambda _g: (suffix, ""))
+            for gid in groups:
+                if gid in tasks and tasks[gid].get("countdown"):
+                    tasks[gid]["countdown"] = None
+            self._save_name_tasks(tasks)
+        return done, failed
+
+    async def _name_schedule_suffix(self, groups: List[str], suffix: str, at: datetime) -> str:
+        """登记定时改后缀。返回错误说明，成功返回空串。"""
+        if at <= datetime.now():
+            return "定时时间必须晚于现在"
+        stamp = at.strftime("%Y-%m-%d %H:%M")
+        async with self._name_task_lock():
+            tasks = self._load_name_tasks()
+            for gid in groups:
+                tasks.setdefault(gid, {}).setdefault("scheduled", []).append({"at": stamp, "suffix": suffix})
+            self._save_name_tasks(tasks)
+        return ""
+
+    async def _name_cancel_scheduled(self, groups: Optional[List[str]] = None) -> int:
+        async with self._name_task_lock():
+            tasks = self._load_name_tasks()
+            count = 0
+            for gid in (groups or list(tasks)):
+                record = tasks.get(gid) or {}
+                count += len(record.get("scheduled") or [])
+                if gid in tasks:
+                    tasks[gid]["scheduled"] = []
+            self._save_name_tasks(tasks)
+        return count
+
+    async def _name_set_countdown(self, client, groups: List[str], target: date,
+                                  template: str) -> Tuple[List[str], Dict[str, str]]:
+        today = date.today()
+        suffix = self._render_countdown(template, target, today)
+        if suffix is None:
+            return [], {g: "目标日期已经过去了" for g in groups}
+        async with self._name_task_lock():
+            tasks = self._load_name_tasks()
+            done, failed = await self._apply_to_groups(client, groups, tasks, lambda _g: (suffix, template))
+            for gid in groups:
+                if gid in tasks and gid not in failed:
+                    tasks[gid]["countdown"] = {
+                        "target": target.isoformat(), "template": template, "last_date": today.isoformat(),
+                    }
+            self._save_name_tasks(tasks)
+        return done, failed
+
+    async def _name_stop_countdown(self, groups: Optional[List[str]] = None) -> List[str]:
+        async with self._name_task_lock():
+            tasks = self._load_name_tasks()
+            stopped = [g for g in (groups or list(tasks)) if (tasks.get(g) or {}).get("countdown")]
+            for gid in stopped:
+                tasks[gid]["countdown"] = None
+            self._save_name_tasks(tasks)
+        return stopped
+
+    async def _name_refresh_countdown(self, client, groups: Optional[List[str]] = None) -> Tuple[List[str], Dict[str, str]]:
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
             selected = [g for g in (groups or list(tasks)) if (tasks.get(g) or {}).get("countdown")]
-            if not selected:
-                yield event.plain_result("没有符合条件的倒计时任务")
-                return
-            if sub == "停止":
-                for gid in selected:
-                    tasks[gid]["countdown"] = None
-                self._save_name_tasks(tasks)
-                yield event.plain_result(
-                    f"已停止 {len(selected)} 个群的倒计时（群名保持现状，可用 /群名后缀 清除 去掉后缀）")
-                return
-            client = await self._get_client(event)
-            if not client:
-                yield event.plain_result("无法获取QQ客户端")
-                return
             done, failed = await self._run_countdowns(client, tasks, selected, force=True)
             self._save_name_tasks(tasks)
-        yield event.plain_result(self._format_apply_result("倒计时已更新", done, failed))
+        return done, failed
+
+    async def _name_overview(self, client, groups: List[str]) -> List[dict]:
+        """WebUI 用：各群当前群名、基础名、后缀、倒计时、定时任务。"""
+        tasks = self._load_name_tasks()
+        today = date.today()
+        out = []
+        for gid in groups:
+            record = tasks.get(gid) or {}
+            current = await self._get_group_name(client, gid)
+            cd = record.get("countdown")
+            days = None
+            if cd:
+                try:
+                    days = (datetime.strptime(cd["target"], "%Y-%m-%d").date() - today).days
+                except Exception:
+                    days = None
+            out.append({
+                "group_id": gid,
+                "name": current if current is not None else "",
+                "base": self._derive_base_name(current or "", record, (cd or {}).get("template", "")),
+                "suffix": record.get("suffix", ""),
+                "countdown": dict(cd, days_left=days) if cd else None,
+                "scheduled": record.get("scheduled") or [],
+            })
+        return out
 
     # ------------------------------------------------------------------
     # 定时执行

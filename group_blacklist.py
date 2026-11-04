@@ -239,34 +239,51 @@ class GroupBlacklistMixin:
             yield event.plain_result(f"单次最多处理 {self.KICK_TARGETS_MAX} 个 QQ 号，本次只处理前 {self.KICK_TARGETS_MAX} 个")
             targets = targets[: self.KICK_TARGETS_MAX]
         protected = [t for t in targets if self._is_blacklist_exempt(t)]
-        targets = [t for t in targets if t not in protected]
         if protected:
             yield event.plain_result(f"已跳过插件管理员/白名单用户：{', '.join(protected)}")
-        if not targets:
+        if len(protected) == len(targets):
             return
         client = await self._get_client(event)
         if not client:
             yield event.plain_result("无法获取QQ客户端")
             return
+        yield event.plain_result(f"开始处理 {len(targets) - len(protected)} 个 QQ 号，请稍候……")
+        result = await self._kick_users_across_groups(client, targets, block, reason=name)
+        if result["error"]:
+            yield event.plain_result(f"{name}失败：{result['error']}")
+            return
+        yield event.plain_result(self._format_kick_summary(name, result["per_group"], result["blacklisted"]))
 
-        blacklisted = -1
+    async def _kick_users_across_groups(self, client, targets: List[str], block: bool,
+                                        groups: Optional[List[str]] = None, reason: str = "") -> dict:
+        """在多个群踢出（并可拉黑）这些人。指令与 WebUI 共用。
+
+        groups 为 None 时作用于全部管理的群。返回
+        {"protected": [...], "blacklisted": int(未拉黑为 -1), "per_group": {...}, "error": str}
+        """
+        protected = [t for t in targets if self._is_blacklist_exempt(t)]
+        targets = [t for t in targets if t not in protected][: self.KICK_TARGETS_MAX]
+        result = {"protected": protected, "blacklisted": -1, "per_group": {}, "error": ""}
+        if not targets:
+            result["error"] = "没有可处理的 QQ 号（插件管理员 / 白名单用户不会被处理）"
+            return result
         if block:
             # 先进黑名单：即使有群踢失败，其后续加群申请/入群也会被拦截
-            blacklisted = sum(1 for t in targets if self._add_user_blacklist(t, name))
-
-        groups, err = await self._list_managed_groups(client)
-        if not groups:
-            yield event.plain_result(f"{name}失败：{err or '没有可管理的群'}")
-            return
-        yield event.plain_result(f"开始在 {len(groups)} 个群中处理 {len(targets)} 个 QQ 号，请稍候……")
-        per_group: Dict[str, dict] = {}
+            result["blacklisted"] = sum(1 for t in targets if self._add_user_blacklist(t, reason or "踢出并拉黑"))
+        if groups is None:
+            groups, err = await self._list_managed_groups(client)
+            if not groups:
+                result["error"] = err or "没有可管理的群"
+                return result
+        else:
+            groups = [g for g in groups if self._group_id_allowed(g)]
         for gid in groups:
             try:
-                per_group[gid] = await self._kick_targets_in_group(client, gid, targets, block)
+                result["per_group"][gid] = await self._kick_targets_in_group(client, gid, targets, block)
             except Exception as e:
-                logger.warning(f"[GroupMgr] {name} 处理群 {gid} 出错: {e}")
-                per_group[gid] = {"kicked": [], "failed": {}, "absent": 0, "skipped": f"出错: {e}"}
-        yield event.plain_result(self._format_kick_summary(name, per_group, blacklisted))
+                logger.warning(f"[GroupMgr] 踢人处理群 {gid} 出错: {e}")
+                result["per_group"][gid] = {"kicked": [], "failed": {}, "absent": 0, "skipped": f"出错: {e}"}
+        return result
 
     async def cmd_batch_kick_block(self, event: AstrMessageEvent):
         '''在当前群批量踢出并原生拉黑。用法: /批量踢黑 <QQ1> <QQ2> ...'''

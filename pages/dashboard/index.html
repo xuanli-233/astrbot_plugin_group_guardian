@@ -393,6 +393,40 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 [data-theme="dark"] .bar-col:hover::after,[data-theme="dark"] .bar-hrow:hover::after{background:rgba(240,240,240,.9);color:#333}
     /* AI 总闸关闭（后端 constants.AI_FEATURES_ENABLED = False）时隐藏所有 AI 区块 */
     body.ai-off [data-ai-feature] { display: none !important; }
+
+    /* ===== 最小化插件新增页面 ===== */
+    .nav-section{font-size:11px;color:var(--text-muted);padding:12px 12px 4px;letter-spacing:.2px}
+    @media(max-width:900px){.nav-section{display:none}}
+    .mn-intro{font-size:12px;color:var(--text-secondary);line-height:1.7;margin:-8px 0 16px}
+    .mn-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:1100px){.mn-grid{grid-template-columns:1fr}}
+    .mn-body{padding:14px 18px}
+    .mn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+    .mn-row label{font-size:12px;color:var(--text-secondary)}
+    .mn-hint{font-size:12px;color:var(--text-muted);line-height:1.6}
+    .mn-rule-list{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
+    .mn-rule{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px}
+    .mn-rule:last-child{border-bottom:none}
+    .mn-rule .mn-val{flex:1;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all}
+    .mn-rule.mn-bad{background:var(--danger-light)}
+    .mn-rule .mn-err{font-size:12px;color:var(--danger)}
+    .mn-type{font-size:11px;padding:1px 8px;border-radius:10px;white-space:nowrap;background:var(--info-light);color:var(--text-secondary)}
+    .mn-type.contains{background:var(--primary-light);color:var(--primary)}
+    .mn-type.exact{background:var(--success-light);color:var(--success)}
+    .mn-type.regex{background:var(--warning-light);color:var(--warning)}
+    .mn-empty{padding:16px;text-align:center;color:var(--text-muted);font-size:12px}
+    .mn-result{font-size:12px;border-radius:var(--radius);padding:8px 12px;margin-top:8px;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+    .mn-result.ok{background:var(--success-light);color:var(--success)}
+    .mn-result.no{background:var(--info-light);color:var(--text-secondary)}
+    .mn-result.err{background:var(--danger-light);color:var(--danger)}
+    .mn-groups{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:6px 8px}
+    .mn-groups label{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer}
+    .mn-groups .mn-tag{font-size:11px;color:var(--text-muted)}
+    .mn-table{width:100%;border-collapse:collapse;font-size:13px}
+    .mn-table th,.mn-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+    .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
+    .mn-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--primary-light);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)}
+    .mn-steps{margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.9}
   </style>
 </head>
 <body>
@@ -406,55 +440,103 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
       </div>
       <nav class="sidebar-nav">
+
         <a class="nav-item active" data-tab="overview">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
           <span>总览</span>
         </a>
-        <a class="nav-item" data-tab="groups">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          <span>群管理</span>
+
+        <div class="nav-section">常用功能</div>
+
+        <a class="nav-item" data-tab="guard">
+
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+
+          <span>关键词与识别</span>
+
         </a>
+
+        <a class="nav-item" data-tab="broadcast">
+
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
+
+          <span>批量公告</span>
+
+        </a>
+
+        <a class="nav-item" data-tab="names">
+
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+
+          <span>群名任务</span>
+
+        </a>
+
+        <a class="nav-item" data-tab="kick">
+
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 8c0-2.21-1.79-4-4-4S6 5.79 6 8s1.79 4 4 4 4-1.79 4-4zm3 2v2h6v-2h-6zM2 18v2h16v-2c0-2.66-5.33-4-8-4s-8 1.34-8 4z"/></svg>
+
+          <span>踢人与黑名单</span>
+
+        </a>
+
         <a class="nav-item" data-tab="records">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           <span>违规记录</span>
         </a>
-        <a class="nav-item" data-tab="flood">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-          <span>刷屏监控</span>
-        </a>
-        <a class="nav-item" data-tab="rules">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5a2 2 0 0 0-2-2zm-8 14H7v-2h4v2zm6-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-          <span>规则中心</span>
-        </a>
-        <a class="nav-item" data-tab="join">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z"/></svg>
-          <span>入群审核</span>
-        </a>
-        <a class="nav-item" data-tab="perms">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
-          <span>权限管理</span>
-        </a>
-        <a class="nav-item" data-tab="groupcfg">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm13 0h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
-          <span>多群配置</span>
-        </a>
-        <a class="nav-item" data-tab="tasks">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/></svg>
-          <span>申诉/解禁</span>
-        </a>
-        <a class="nav-item" data-tab="cardmon">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 11h6v2H6v-2zm0 4h4v2H6v-2z"/></svg>
-          <span>名片监控</span>
-        </a>
-        <a class="nav-item" data-tab="learn" data-ai-feature>
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
-          <span>词库学习</span>
-        </a>
+
         <a class="nav-item" data-tab="settings">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           <span>设置</span>
         </a>
-      </nav>
+
+        <div class="nav-section">更多（内置功能，默认关闭）</div>
+
+        <a class="nav-item" data-tab="groups">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          <span>群管理</span>
+        </a>
+
+        <a class="nav-item" data-tab="flood">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+          <span>刷屏监控</span>
+        </a>
+
+        <a class="nav-item" data-tab="rules">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5a2 2 0 0 0-2-2zm-8 14H7v-2h4v2zm6-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          <span>内置规则库</span>
+        </a>
+
+        <a class="nav-item" data-tab="join">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z"/></svg>
+          <span>入群审核</span>
+        </a>
+
+        <a class="nav-item" data-tab="perms">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          <span>权限管理</span>
+        </a>
+
+        <a class="nav-item" data-tab="groupcfg">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm13 0h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
+          <span>多群配置</span>
+        </a>
+
+        <a class="nav-item" data-tab="tasks">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/></svg>
+          <span>申诉/解禁</span>
+        </a>
+
+        <a class="nav-item" data-tab="cardmon">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 11h6v2H6v-2zm0 4h4v2H6v-2z"/></svg>
+          <span>名片监控</span>
+        </a>
+
+        <a class="nav-item" data-tab="learn" data-ai-feature>
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
+          <span>词库学习</span>
+        </a>
+        </nav>
       <div class="sidebar-footer">
         <div class="sidebar-footer-row">
           <div class="status-dot" id="statusDot"></div>
@@ -654,7 +736,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
       </div>
 
       <div class="tab-panel" id="tab-rules">
-        <div class="page-header"><h1>规则中心</h1></div>
+        <div class="page-header"><h1>内置规则库</h1></div>
+        <div class="mn-banner">
+          <span>这里是插件<strong>自带</strong>的规则库（脏话 / 广告正则与外置词库），默认全部关闭。要添加<strong>你自己的</strong>关键词，请到「关键词与识别」。</span>
+          <button class="btn btn-primary btn-sm" onclick="switchTab('guard')">去添加我的规则</button>
+        </div>
         <div class="card card-full"><div class="card-header"><h2>违禁词热更新</h2></div><div class="settings-list" id="rulesCenterPage"></div></div>
       </div>
 
@@ -805,6 +891,188 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
       </div>
 
+      <!-- ===== 最小化插件新增页面（数据来自 /minimal/* 接口） ===== -->
+      <div class="tab-panel" id="tab-guard">
+        <div class="page-header"><h1>关键词与识别</h1><button class="btn btn-ghost btn-sm" id="btnGuardRefresh">刷新</button></div>
+        <p class="mn-intro">群消息命中下面<strong>你自己的规则</strong>时：先把原消息备份到备份群，再撤回。插件自带的规则库（6.7 万词）默认关闭，在「更多 → 内置规则库」里，和这里互不影响。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>关键词规则</h2><span class="rules-subtle" id="kwCount"></span></div>
+            <div class="mn-body">
+              <div class="mn-row">
+                <select class="input-sm" id="kwType" style="width:130px">
+                  <option value="contains">包含（最常用）</option>
+                  <option value="exact">整条消息完全相同</option>
+                  <option value="regex">正则表达式</option>
+                </select>
+                <input class="input-sm" id="kwValue" style="flex:1;min-width:160px" placeholder="例如：加微信" />
+                <button class="btn btn-primary btn-sm" id="btnKwAdd">添加</button>
+              </div>
+              <p class="mn-hint" id="kwTypeHint"></p>
+              <div id="kwAddMsg"></div>
+              <div class="mn-rule-list" id="kwList"></div>
+              <div class="mn-row"><button class="btn btn-outline btn-sm" id="btnKwImport">批量导入（每行一条）</button></div>
+              <div class="mn-row" style="margin-top:14px"><label>测试：</label></div>
+              <textarea class="input-md" id="kwTestText" rows="2" placeholder="输入一段群消息，看看会命中哪条规则"></textarea>
+              <div class="mn-row" style="margin-top:8px"><button class="btn btn-outline btn-sm" id="btnKwTest">测试</button></div>
+              <div id="kwTestResult"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>命中后怎么处理</h2></div>
+            <div class="settings-list" id="guardSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:84px">备份群</label><select class="input-sm" id="guardBackupGroup" style="flex:1"></select></div>
+              <div class="mn-row"><label style="width:84px">群内提示</label><input class="input-sm" id="guardNoticeTpl" style="flex:1" /></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnGuardSave">保存</button><span class="mn-hint">提示模板可用 {name} 昵称、{uid} QQ号、{group} 群号</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>葵花码识别</h2><span class="rules-subtle">图片中的葵花码交给识别模块，识别内容按下面的正则过滤</span></div>
+            <div class="settings-list" id="wxSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:84px">接入方式</label>
+                <select class="input-sm" id="wxDriver"><option value="http">本地 HTTP 服务</option><option value="python">插件目录里的 Python 文件</option></select></div>
+              <div class="mn-row" id="wxUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="wxUrl" style="flex:1" placeholder="http://127.0.0.1:8090/recognize" /></div>
+              <div class="mn-row" id="wxModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="wxModule" style="flex:1" placeholder="wxcode.py（放在插件数据目录 extensions/ 下）" /></div>
+              <div class="mn-row"><label style="width:84px">转发到</label><select class="input-sm" id="wxForward" style="flex:1"></select></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnWxSave">保存</button><span class="mn-hint">接入方法见插件目录 examples/wxcode_recognizer_example.py</span></div>
+              <div class="mn-row" style="margin-top:6px"><label>葵花码正则规则</label><span class="rules-subtle" id="wxCount"></span></div>
+              <div class="mn-row">
+                <input class="input-sm" id="wxValue" style="flex:1;min-width:160px" placeholder="例如：pages/.*invite" />
+                <button class="btn btn-primary btn-sm" id="btnWxAdd">添加</button>
+              </div>
+              <div id="wxAddMsg"></div>
+              <div class="mn-rule-list" id="wxList"></div>
+              <div class="mn-row"><input class="input-sm" id="wxTestText" style="flex:1" placeholder="输入一段识别内容测试，例如 pages/invite?code=1" /><button class="btn btn-outline btn-sm" id="btnWxTest">测试</button></div>
+              <div id="wxTestResult"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>图片文字识别（OCR）</h2><span class="rules-subtle">识别出的文字按「关键词规则」过滤</span></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:84px">接入方式</label>
+                <select class="input-sm" id="ocrDriver">
+                  <option value="off">关闭</option>
+                  <option value="llbot">LuckyLilliaBot 自带 OCR</option>
+                  <option value="http">本地 HTTP 服务</option>
+                  <option value="python">插件目录里的 Python 文件</option>
+                </select></div>
+              <div class="mn-row" id="ocrUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="ocrUrl" style="flex:1" /></div>
+              <div class="mn-row" id="ocrModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="ocrModule" style="flex:1" /></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnOcrSave">保存</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-broadcast">
+        <div class="page-header"><h1>批量公告</h1><button class="btn btn-ghost btn-sm" id="btnBcRefresh">刷新</button></div>
+        <p class="mn-intro">一次给多个群发布群公告。「待办公告」= 置顶 + 需要群成员确认 + 弹窗提示（LuckyLilliaBot 没有群待办接口，用它替代），发布后可以查看各群确认人数。也可以在群里用 /全群公告、/全群待办 指令。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>发布</h2></div>
+            <div class="mn-body">
+              <div class="mn-row">
+                <label><input type="radio" name="bcMode" value="notice" checked /> 群公告</label>
+                <label><input type="radio" name="bcMode" value="todo" /> 待办公告</label>
+              </div>
+              <div class="mn-row" id="bcOptions">
+                <label><input type="checkbox" id="bcPinned" /> 置顶</label>
+                <label><input type="checkbox" id="bcConfirm" /> 需群成员确认</label>
+                <label><input type="checkbox" id="bcTip" /> 弹窗提示</label>
+                <label><input type="checkbox" id="bcNew" /> 发给新成员</label>
+              </div>
+              <textarea class="input-md" id="bcContent" rows="6" placeholder="公告内容"></textarea>
+              <div class="mn-row" style="margin-top:8px"><input class="input-sm" id="bcImage" style="flex:1" placeholder="配图地址（可选，图片链接）" /></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBcSend">发布</button><span class="mn-hint" id="bcTargetsHint"></span></div>
+              <div id="bcResult"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>发到哪些群</h2>
+              <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnBcAll">全选</button><button class="btn btn-ghost btn-sm" id="btnBcNone">全不选</button></div></div>
+            <div class="mn-body"><div class="mn-groups" id="bcGroups"></div><p class="mn-hint" style="margin-top:8px">备份群默认不勾选；机器人不是管理员的群会发布失败。</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>最近一次待办公告的确认情况</h2><button class="btn btn-ghost btn-sm" id="btnTodoStatus">查询</button></div>
+          <div class="mn-body" id="todoStatus"><p class="mn-hint">点「查询」获取各群已确认 / 未确认人数</p></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-names">
+        <div class="page-header"><h1>群名任务</h1><button class="btn btn-ghost btn-sm" id="btnNamesRefresh">刷新</button></div>
+        <p class="mn-intro">群名 = 基础名 + 后缀。改后缀时总是在基础名后面拼接，后缀不会越加越长；有人手动改了群名，会以新名字为基础名。每次改群名 QQ 都会在群里显示一条系统提示，这是 QQ 的行为，无法屏蔽。</p>
+        <div class="card">
+          <div class="card-header"><h2>各群群名</h2>
+            <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnNamesAll">全选</button><button class="btn btn-ghost btn-sm" id="btnNamesNone">全不选</button></div></div>
+          <div class="log-container" id="namesTable"><p class="empty">加载中...</p></div>
+        </div>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>改后缀</h2></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:70px">后缀</label><input class="input-sm" id="nmSuffix" style="flex:1" placeholder="例如：｜周末活动（留空 = 清除后缀）" /></div>
+              <div class="mn-row"><label style="width:70px">执行时间</label>
+                <label><input type="radio" name="nmWhen" value="now" checked /> 立即</label>
+                <label><input type="radio" name="nmWhen" value="at" /> 定时</label>
+                <input type="datetime-local" class="input-sm" id="nmAt" /></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnNmSuffix">应用到选中的群</button></div>
+              <div id="nmSuffixResult"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>倒计时</h2><span class="rules-subtle" id="nmUpdateTime"></span></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:70px">目标日期</label><input type="date" class="input-sm" id="nmTarget" /></div>
+              <div class="mn-row"><label style="width:70px">模板</label><input class="input-sm" id="nmTemplate" style="flex:1" value="｜距考试{days}天" /></div>
+              <p class="mn-hint" id="nmPreview"></p>
+              <div class="mn-row">
+                <button class="btn btn-primary btn-sm" id="btnNmCountdown">为选中的群设置倒计时</button>
+                <button class="btn btn-outline btn-sm" id="btnNmRefresh">立即更新天数</button>
+                <button class="btn btn-danger btn-sm" id="btnNmStop">停止选中群的倒计时 / 定时</button>
+              </div>
+              <p class="mn-hint">模板里用 {days} 表示剩余天数、{date} 表示目标日期；到期当天「{days}天」显示为「今天」，过期后自动去掉后缀。</p>
+              <div id="nmCountdownResult"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-kick">
+        <div class="page-header"><h1>踢人与黑名单</h1><button class="btn btn-ghost btn-sm" id="btnKickRefresh">刷新</button></div>
+        <p class="mn-intro">「踢出并拉黑」= 踢人时勾选 QQ 的「拒绝此人再次加群」，同时加入插件用户黑名单（所有群通用）。QQ 群黑名单只能在 QQ 群设置里手动解除；插件黑名单可以在下方移除。插件管理员和用户白名单不会被处理。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>批量踢人</h2></div>
+            <div class="mn-body">
+              <textarea class="input-md" id="kickIds" rows="4" placeholder="QQ 号，可用空格、逗号或换行分隔"></textarea>
+              <div class="mn-row" style="margin-top:8px">
+                <label><input type="radio" name="kickMode" value="block" checked /> 踢出并拉黑</label>
+                <label><input type="radio" name="kickMode" value="kick" /> 仅踢出</label>
+              </div>
+              <div class="mn-row"><label>范围</label><select class="input-sm" id="kickScope" style="flex:1"></select></div>
+              <div class="mn-row"><button class="btn btn-danger btn-sm" id="btnKick">执行</button></div>
+              <div id="kickResult"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>自动拉黑与拦截</h2></div>
+            <div class="settings-list" id="kickSwitches"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
+          <div class="mn-body">
+            <div class="mn-row"><input class="input-sm" id="ubAdd" placeholder="QQ 号" /><button class="btn btn-primary btn-sm" id="btnUbAdd">加入黑名单</button></div>
+            <div class="mn-rule-list" id="ubList"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="tab-panel" id="tab-settings">
         <div class="page-header"><h1>设置</h1><button class="btn btn-primary btn-sm" id="btnSaveSettings">保存更改</button></div>
         <div class="card" style="margin-bottom:12px">
@@ -902,55 +1170,99 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
   <div class="toast-container" id="toastContainer"></div>
 
   <nav class="mobile-nav" id="mobileNav">
+
     <a class="mobile-nav-item active" data-tab="overview">
       <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
       <span>总览</span>
     </a>
-    <a class="mobile-nav-item" data-tab="groups">
-      <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-      <span>群管理</span>
+
+    <a class="mobile-nav-item" data-tab="guard">
+
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+
+      <span>关键词与识别</span>
+
     </a>
+
+    <a class="mobile-nav-item" data-tab="broadcast">
+
+      <svg viewBox="0 0 24 24"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
+
+      <span>批量公告</span>
+
+    </a>
+
+    <a class="mobile-nav-item" data-tab="names">
+
+      <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+
+      <span>群名任务</span>
+
+    </a>
+
+    <a class="mobile-nav-item" data-tab="kick">
+
+      <svg viewBox="0 0 24 24"><path d="M14 8c0-2.21-1.79-4-4-4S6 5.79 6 8s1.79 4 4 4 4-1.79 4-4zm3 2v2h6v-2h-6zM2 18v2h16v-2c0-2.66-5.33-4-8-4s-8 1.34-8 4z"/></svg>
+
+      <span>踢人与黑名单</span>
+
+    </a>
+
     <a class="mobile-nav-item" data-tab="records">
       <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
       <span>违规</span>
     </a>
-    <a class="mobile-nav-item" data-tab="flood">
-      <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-      <span>刷屏</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="rules">
-      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5a2 2 0 0 0-2-2zm-8 14H7v-2h4v2zm6-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-      <span>规则</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="join">
-      <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm3 11h-3v3h-2v-3H7v-2h3V8h2v3h3v2z"/></svg>
-      <span>入群</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="perms">
-      <svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.4-8 4v2h16v-2c0-2.6-5.3-4-8-4zm7-5V7h-2V5h2V3h2v2h2v2h-2v2h-2z"/></svg>
-      <span>权限</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="groupcfg">
-      <svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4zm0 6h10v4H4v-4zm0 6h16v4H4v-4zm12-6h4v4h-4v-4z"/></svg>
-      <span>多群</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="tasks">
-      <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V9h14v10zm-7-2 5-5-1.4-1.4-3.6 3.6-1.6-1.6L9 14l3 3z"/></svg>
-      <span>任务</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="cardmon">
-      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
-      <span>名片</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="learn" data-ai-feature>
-      <svg viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
-      <span>学习</span>
-    </a>
+
     <a class="mobile-nav-item" data-tab="settings">
       <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
       <span>设置</span>
     </a>
-  </nav>
+
+    <a class="mobile-nav-item" data-tab="groups">
+      <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      <span>群管理</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="flood">
+      <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+      <span>刷屏</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="rules">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5a2 2 0 0 0-2-2zm-8 14H7v-2h4v2zm6-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+      <span>规则</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="join">
+      <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm3 11h-3v3h-2v-3H7v-2h3V8h2v3h3v2z"/></svg>
+      <span>入群</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="perms">
+      <svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.4-8 4v2h16v-2c0-2.6-5.3-4-8-4zm7-5V7h-2V5h2V3h2v2h2v2h-2v2h-2z"/></svg>
+      <span>权限</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="groupcfg">
+      <svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4zm0 6h10v4H4v-4zm0 6h16v4H4v-4zm12-6h4v4h-4v-4z"/></svg>
+      <span>多群</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="tasks">
+      <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V9h14v10zm-7-2 5-5-1.4-1.4-3.6 3.6-1.6-1.6L9 14l3 3z"/></svg>
+      <span>任务</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="cardmon">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
+      <span>名片</span>
+    </a>
+
+    <a class="mobile-nav-item" data-tab="learn" data-ai-feature>
+      <svg viewBox="0 0 24 24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
+      <span>学习</span>
+    </a>
+    </nav>
 
   <script>
 var bridge = null;
@@ -1515,6 +1827,10 @@ function switchTab(tabName) {
   if (tabName === 'tasks') { if (!aiDisabled()) loadAppeals(); loadUnbans(); }
   if (tabName === 'cardmon') loadCardMonitor();
   if (tabName === 'learn') loadLexiconLearn();
+  if (tabName === 'guard') loadGuard();
+  if (tabName === 'broadcast') loadBroadcast();
+  if (tabName === 'names') loadNames();
+  if (tabName === 'kick') loadKick();
   if (tabName === 'settings') loadSettings();
 }
 
@@ -2548,10 +2864,6 @@ var FEATURE_TOGGLES = [
   { key: 'ban_enabled', label: '禁言功能' },
   { key: 'unban_enabled', label: '解禁功能' },
   { key: 'kick_enabled', label: '踢人功能' },
-  { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '主动退群的成员加入用户黑名单，所有群通用' },
-  { key: 'blacklist_reject_join_enabled', label: '黑名单申请自动拒绝', desc: '未开启入群审核的群也拒绝黑名单用户的加群申请' },
-  { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
-  { key: 'blacklist_native_block_enabled', label: '踢黑名单时QQ拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' },
   { key: 'recall_enabled', label: '撤回消息' },
   { key: 'whole_ban_enabled', label: '全体禁言' },
   { key: 'set_admin_enabled', label: '设置管理员' },
@@ -2667,10 +2979,28 @@ var MANUAL_SETTING_KEYS = {
   ban_enabled: true,
   unban_enabled: true,
   kick_enabled: true,
+  // 以下由「常用功能」里的新页面管理，不在全量配置里重复显示
+  // （列表类规则若在全量配置里按逗号拆分保存，会把正则里的逗号拆坏）
   leave_auto_blacklist_enabled: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
   blacklist_native_block_enabled: true,
+  keyword_guard_enabled: true,
+  keyword_rules: true,
+  backup_enabled: true,
+  backup_group_id: true,
+  hit_mute_enabled: true,
+  hit_notice_enabled: true,
+  hit_notice_template: true,
+  wxcode_enabled: true,
+  wxcode_driver: true,
+  wxcode_service_url: true,
+  wxcode_python_module: true,
+  wxcode_regex_rules: true,
+  wxcode_forward_group_id: true,
+  local_ocr_driver: true,
+  local_ocr_service_url: true,
+  local_ocr_python_module: true,
   recall_enabled: true,
   whole_ban_enabled: true,
   set_admin_enabled: true,
@@ -4298,8 +4628,448 @@ function renderGroupCfgItems(items) {
   });
 }
 
+/* ===== 最小化插件新增页面：关键词与识别 / 批量公告 / 群名任务 / 踢人与黑名单 ===== */
+var MN = { overview: null, kw: [], wx: [], kwErrors: {}, wxErrors: {}, names: [] };
+var MN_SWITCHES = {
+  guardSwitches: [
+    { key: 'keyword_guard_enabled', label: '关键词撤回', desc: '消息命中关键词规则时撤回' },
+    { key: 'backup_enabled', label: '撤回前先备份', desc: '把原消息以合并转发的形式发到备份群' },
+    { key: 'hit_mute_enabled', label: '同时禁言', desc: '时长取「自动审核禁言时长」，默认 30 分钟' },
+    { key: 'hit_notice_enabled', label: '群内提示', desc: '撤回后在群里发一条提示' }
+  ],
+  wxSwitches: [
+    { key: 'wxcode_enabled', label: '启用葵花码识别', desc: '需要先接入识别模块' }
+  ],
+  kickSwitches: [
+    { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '成员主动退群后加入插件黑名单，所有群通用' },
+    { key: 'blacklist_reject_join_enabled', label: '黑名单申请自动拒绝', desc: '黑名单用户的加群申请自动拒绝（不需要开入群审核）' },
+    { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
+    { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
+  ]
+};
+var MN_TYPES = {
+  contains: { label: '包含', hint: '消息里包含这段文字就命中，不区分大小写。例如「加微信」能命中「快来加微信领福利」。', placeholder: '例如：加微信' },
+  exact: { label: '完全相同', hint: '整条消息（去掉首尾空格）和它完全一样才命中，适合拦截「1」「111」这类刷屏。', placeholder: '例如：1' },
+  regex: { label: '正则', hint: '按正则表达式匹配，不区分大小写。例如 v[x信]\\s*\\d{5,} 能命中「vx 123456」「v信12345」。', placeholder: '例如：v[x信]\\s*\\d{5,}' }
+};
+
+function mnData(res) {
+  return (res && typeof res === 'object' && !Array.isArray(res) && res.status === 'success' && res.data !== undefined) ? res.data : res;
+}
+function mnErr(res, fallback) { return responseMessage(res, fallback || '请求失败'); }
+function mnRuleParse(raw) {
+  raw = String(raw || '');
+  if (/^re:/i.test(raw)) return { type: 'regex', value: raw.slice(3).trim() };
+  if (raw.charAt(0) === '=') return { type: 'exact', value: raw.slice(1).trim() };
+  return { type: 'contains', value: raw };
+}
+function mnRuleBuild(type, value) {
+  value = String(value || '').trim();
+  if (!value) return '';
+  if (type === 'regex') return 're:' + value;
+  if (type === 'exact') return '=' + value;
+  return value;
+}
+function mnCfg(key) { var c = (MN.overview && MN.overview.config) || {}; return c[key]; }
+function mnGroups() { return (MN.overview && MN.overview.groups) || []; }
+function mnGroupLabel(g) { return (g.group_name || '未命名群') + '（' + g.group_id + '）'; }
+
+async function mnLoadOverview() {
+  var res = await safeGet('minimal/overview');
+  if (isApiError(res)) { toast('加载失败：' + mnErr(res), 'error'); return null; }
+  MN.overview = mnData(res);
+  return MN.overview;
+}
+
+async function mnSaveConfig(values, okText) {
+  var res = await safePost('config', values);
+  if (isApiError(res)) { toast('保存失败：' + mnErr(res), 'error'); return false; }
+  CONFIG_PROMISE = null;
+  Object.keys(values).forEach(function(k) { if (MN.overview && MN.overview.config) MN.overview.config[k] = values[k]; });
+  if (okText) toast(okText, 'success');
+  return true;
+}
+
+function mnRenderSwitches(containerId) {
+  var c = $('#' + containerId);
+  if (!c) return;
+  c.innerHTML = MN_SWITCHES[containerId].map(function(s) {
+    return '<div class="setting-item"><div class="setting-info"><div class="setting-label">' + esc(s.label) + '</div><div class="setting-desc">' + esc(s.desc) + '</div></div>' +
+      '<label class="toggle"><input type="checkbox" data-mn-key="' + escAttr(s.key) + '" ' + (mnCfg(s.key) ? 'checked' : '') + ' /><span class="slider"></span></label></div>';
+  }).join('');
+  $$('[data-mn-key]', c).forEach(function(cb) {
+    cb.addEventListener('change', async function() {
+      var values = {}; values[cb.getAttribute('data-mn-key')] = cb.checked;
+      if (!await mnSaveConfig(values, '已' + (cb.checked ? '开启' : '关闭'))) cb.checked = !cb.checked;
+    });
+  });
+}
+
+function mnGroupOptions(selected, emptyLabel) {
+  var html = '<option value="">' + esc(emptyLabel) + '</option>';
+  var found = !selected;
+  mnGroups().forEach(function(g) {
+    if (String(g.group_id) === String(selected)) found = true;
+    html += '<option value="' + escAttr(g.group_id) + '"' + (String(g.group_id) === String(selected) ? ' selected' : '') + '>' + esc(mnGroupLabel(g)) + '</option>';
+  });
+  if (!found) html += '<option value="' + escAttr(selected) + '" selected>' + esc(selected) + '（机器人不在该群？）</option>';
+  return html;
+}
+
+/* ---- 规则列表 ---- */
+function mnRenderRules(kind) {
+  var isKw = kind === 'kw';
+  var list = isKw ? MN.kw : MN.wx;
+  var errors = isKw ? MN.kwErrors : MN.wxErrors;
+  var box = $(isKw ? '#kwList' : '#wxList');
+  $(isKw ? '#kwCount' : '#wxCount').textContent = list.length ? '共 ' + list.length + ' 条' : '';
+  if (!list.length) {
+    box.innerHTML = '<div class="mn-empty">' + (isKw ? '还没有关键词规则。在上面选择类型、输入内容后点「添加」。' : '还没有葵花码规则。') + '</div>';
+    return;
+  }
+  box.innerHTML = list.map(function(raw, i) {
+    var p = isKw ? mnRuleParse(raw) : { type: 'regex', value: raw };
+    var err = errors[raw];
+    return '<div class="mn-rule' + (err ? ' mn-bad' : '') + '"><span class="mn-type ' + p.type + '">' + esc(MN_TYPES[p.type].label) + '</span>' +
+      '<span class="mn-val">' + esc(p.value) + (err ? '<div class="mn-err">' + esc(err) + '</div>' : '') + '</span>' +
+      '<button class="btn btn-ghost btn-sm" data-mn-del="' + i + '">删除</button></div>';
+  }).join('');
+  $$('[data-mn-del]', box).forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var next = list.slice(); next.splice(Number(btn.getAttribute('data-mn-del')), 1);
+      mnSaveRules(kind, next);
+    });
+  });
+}
+
+async function mnSaveRules(kind, rules) {
+  var isKw = kind === 'kw';
+  var msg = $(isKw ? '#kwAddMsg' : '#wxAddMsg');
+  var res = await safePost('minimal/rules/save', { key: isKw ? 'keyword_rules' : 'wxcode_regex_rules', rules: rules });
+  if (isApiError(res)) {
+    var errs = {};
+    (res.errors || []).forEach(function(e) { errs[e.rule] = e.error; });
+    if (isKw) MN.kwErrors = errs; else MN.wxErrors = errs;
+    // 错误原因（后端已写进 message）直接显示在输入框下方，不只是短暂弹出
+    msg.innerHTML = '<div class="mn-result err">没有保存。' + esc(mnErr(res, '保存失败')) + '</div>';
+    return false;
+  }
+  var data = mnData(res);
+  if (isKw) { MN.kw = data.rules || []; MN.kwErrors = {}; } else { MN.wx = data.rules || []; MN.wxErrors = {}; }
+  msg.innerHTML = '';
+  mnRenderRules(kind);
+  toast('规则已保存', 'success');
+  return true;
+}
+
+async function mnTestRules(kind) {
+  var isKw = kind === 'kw';
+  var text = $(isKw ? '#kwTestText' : '#wxTestText').value;
+  var out = $(isKw ? '#kwTestResult' : '#wxTestResult');
+  if (!text.trim()) { out.innerHTML = '<div class="mn-result no">请先输入要测试的内容</div>'; return; }
+  var res = await safePost('minimal/rules/test', { key: isKw ? 'keyword_rules' : 'wxcode_regex_rules', text: text });
+  if (isApiError(res)) { out.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var hits = (mnData(res).hits) || [];
+  out.innerHTML = hits.length
+    ? '<div class="mn-result ok">会被撤回：命中 ' + hits.map(function(r) { return '「' + esc(isKw ? mnRuleParse(r).value : r) + '」'; }).join('、') + '</div>'
+    : '<div class="mn-result no">不会命中任何规则</div>';
+}
+
+function mnUpdateTypeHint() {
+  var t = MN_TYPES[$('#kwType').value];
+  $('#kwTypeHint').textContent = t.hint;
+  $('#kwValue').placeholder = t.placeholder;
+}
+
+function mnToggleDriverRows() {
+  var wx = $('#wxDriver').value;
+  $('#wxUrlRow').style.display = wx === 'http' ? '' : 'none';
+  $('#wxModRow').style.display = wx === 'python' ? '' : 'none';
+  var ocr = $('#ocrDriver').value;
+  $('#ocrUrlRow').style.display = ocr === 'http' ? '' : 'none';
+  $('#ocrModRow').style.display = ocr === 'python' ? '' : 'none';
+}
+
+async function loadGuard() {
+  if (!await mnLoadOverview()) return;
+  MN.kw = (mnCfg('keyword_rules') || []).slice();
+  MN.wx = (mnCfg('wxcode_regex_rules') || []).slice();
+  mnRenderSwitches('guardSwitches');
+  mnRenderSwitches('wxSwitches');
+  mnRenderRules('kw');
+  mnRenderRules('wx');
+  mnUpdateTypeHint();
+  $('#guardBackupGroup').innerHTML = mnGroupOptions(mnCfg('backup_group_id') || '', '不备份');
+  $('#guardNoticeTpl').value = mnCfg('hit_notice_template') || '';
+  $('#wxDriver').value = mnCfg('wxcode_driver') || 'http';
+  $('#wxUrl').value = mnCfg('wxcode_service_url') || '';
+  $('#wxModule').value = mnCfg('wxcode_python_module') || '';
+  $('#wxForward').innerHTML = mnGroupOptions(mnCfg('wxcode_forward_group_id') || '', '与备份群相同');
+  $('#ocrDriver').value = mnCfg('local_ocr_driver') || 'off';
+  $('#ocrUrl').value = mnCfg('local_ocr_service_url') || '';
+  $('#ocrModule').value = mnCfg('local_ocr_python_module') || '';
+  mnToggleDriverRows();
+}
+
+async function mnAddRule(kind) {
+  var isKw = kind === 'kw';
+  var input = $(isKw ? '#kwValue' : '#wxValue');
+  var rule = isKw ? mnRuleBuild($('#kwType').value, input.value) : input.value.trim();
+  if (!rule) { toast('请输入规则内容', 'warning'); return; }
+  var list = isKw ? MN.kw : MN.wx;
+  if (list.indexOf(rule) >= 0) { toast('这条规则已经存在', 'warning'); return; }
+  if (await mnSaveRules(kind, list.concat([rule]))) input.value = '';
+}
+
+function mnImportRules() {
+  showModal('批量导入关键词', '<p class="mn-hint" style="margin-bottom:8px">每行一条。普通文字 = 包含；以 = 开头 = 完全相同；以 re: 开头 = 正则。</p><textarea class="input-md" id="kwImportText" rows="10" placeholder="加微信&#10;=1&#10;re:v[x信]\\s*\\d{5,}"></textarea>',
+    '<button class="btn btn-ghost btn-sm" id="kwImportCancel">取消</button><button class="btn btn-primary btn-sm" id="kwImportOk">导入</button>');
+  bindIfExists('kwImportCancel', closeModal);
+  bindIfExists('kwImportOk', async function() {
+    var lines = $('#kwImportText').value.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(Boolean);
+    var merged = MN.kw.slice();
+    lines.forEach(function(l) { if (merged.indexOf(l) < 0) merged.push(l); });
+    if (await mnSaveRules('kw', merged)) closeModal();
+  });
+}
+
+/* ---- 批量公告 ---- */
+function mnSelectedGroups(containerSel) {
+  return $$(containerSel + ' input[type=checkbox]:checked').map(function(cb) { return cb.value; });
+}
+function mnRenderGroupPicker(containerSel, defaultChecked) {
+  var box = $(containerSel);
+  var groups = mnGroups().filter(function(g) { return g.managed; });
+  if (!groups.length) { box.innerHTML = '<div class="mn-empty">没有可管理的群（机器人未连接或群白名单为空）</div>'; return; }
+  box.innerHTML = groups.map(function(g) {
+    var checked = defaultChecked && !g.backup;
+    return '<label><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (checked ? ' checked' : '') + ' /> ' + esc(mnGroupLabel(g)) +
+      (g.backup ? ' <span class="mn-tag">备份群</span>' : '') + '</label>';
+  }).join('');
+}
+function mnBroadcastMode() { var r = $('input[name=bcMode]:checked'); return r ? r.value : 'notice'; }
+function mnSyncBroadcastMode() {
+  var todo = mnBroadcastMode() === 'todo';
+  ['bcPinned', 'bcConfirm', 'bcTip'].forEach(function(id) { var el = $('#' + id); el.disabled = todo; if (todo) el.checked = true; });
+  $('#bcNew').disabled = todo; if (todo) $('#bcNew').checked = false;
+}
+async function loadBroadcast() {
+  if (!await mnLoadOverview()) return;
+  mnRenderGroupPicker('#bcGroups', true);
+  mnSyncBroadcastMode();
+}
+async function mnSendBroadcast() {
+  var groups = mnSelectedGroups('#bcGroups');
+  var content = $('#bcContent').value.trim();
+  if (!content) { toast('请输入公告内容', 'warning'); return; }
+  if (!groups.length) { toast('请至少选择一个群', 'warning'); return; }
+  var todo = mnBroadcastMode() === 'todo';
+  if (!confirm('确定把这条' + (todo ? '待办公告' : '群公告') + '发布到 ' + groups.length + ' 个群吗？')) return;
+  var btn = $('#btnBcSend'); btn.disabled = true;
+  $('#bcResult').innerHTML = '<div class="mn-result no">正在发布，群多时需要一些时间……</div>';
+  var res = await safePost('minimal/broadcast', {
+    groups: groups, content: content, todo: todo, image: $('#bcImage').value.trim(),
+    pinned: $('#bcPinned').checked, confirm_required: $('#bcConfirm').checked,
+    tip_window: $('#bcTip').checked, send_new_member: $('#bcNew').checked
+  }, 120000);
+  btn.disabled = false;
+  if (isApiError(res)) { $('#bcResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res);
+  var failed = Object.keys(d.failed || {});
+  $('#bcResult').innerHTML = '<div class="mn-result ' + (failed.length ? 'err' : 'ok') + '">成功 ' + (d.ok_groups || []).length + ' 个群，失败 ' + failed.length + ' 个群' +
+    failed.map(function(g) { return '\n· ' + esc(g) + '：' + esc(d.failed[g]); }).join('') + '</div>';
+}
+async function mnTodoStatus() {
+  var box = $('#todoStatus');
+  box.innerHTML = '<p class="mn-hint">查询中……</p>';
+  var res = await safeGet('minimal/todo_status');
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res);
+  if (!d.groups || !d.groups.length) { box.innerHTML = '<p class="mn-hint">还没有发布过待办公告</p>'; return; }
+  var names = {}; mnGroups().forEach(function(g) { names[g.group_id] = g.group_name; });
+  box.innerHTML = '<p class="mn-hint" style="margin-bottom:8px">内容：' + esc(d.content) + '</p><table class="mn-table"><thead><tr><th>群</th><th>已确认</th><th>未确认</th></tr></thead><tbody>' +
+    d.groups.map(function(g) {
+      return '<tr><td>' + esc((names[g.group_id] || '') + '（' + g.group_id + '）') + '</td>' +
+        (g.error ? '<td colspan="2" style="color:var(--danger)">' + esc(g.error) + '</td>' : '<td>' + esc(g.acked) + ' 人</td><td>' + esc(g.unacked) + ' 人</td>') + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+/* ---- 群名任务 ---- */
+function mnPad(n) { return String(n).padStart(2, '0'); }
+function mnUpdateCountdownPreview() {
+  var target = $('#nmTarget').value, tpl = $('#nmTemplate').value;
+  if (!target || tpl.indexOf('{days}') < 0) { $('#nmPreview').textContent = tpl.indexOf('{days}') < 0 ? '模板里需要包含 {days}' : ''; return; }
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var days = Math.round((new Date(target + 'T00:00:00') - today) / 86400000);
+  if (days < 0) { $('#nmPreview').textContent = '目标日期已经过去了'; return; }
+  var text = tpl.replace('{date}', target);
+  text = days === 0 ? (text.indexOf('{days}天') >= 0 ? text.replace('{days}天', '今天') : text.replace('{days}', '0')) : text.replace('{days}', String(days));
+  $('#nmPreview').textContent = '今天显示为：基础名' + text;
+}
+async function loadNames() {
+  if (!MN.overview) await mnLoadOverview();
+  var box = $('#namesTable');
+  var res = await safeGet('minimal/names');
+  if (isApiError(res)) { box.innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res);
+  MN.names = d.groups || [];
+  $('#nmUpdateTime').textContent = '每天 ' + d.update_time + ' 自动更新 · 群名最长 ' + d.max_length + ' 字';
+  if (!$('#nmTarget').value) { var t = new Date(); t.setDate(t.getDate() + 30); $('#nmTarget').value = t.getFullYear() + '-' + mnPad(t.getMonth() + 1) + '-' + mnPad(t.getDate()); }
+  mnUpdateCountdownPreview();
+  var checked = {}; $$('#namesTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
+  var backups = {}; mnGroups().forEach(function(g) { if (g.backup) backups[g.group_id] = true; });
+  if (!MN.names.length) { box.innerHTML = '<p class="empty">没有可管理的群</p>'; return; }
+  box.innerHTML = '<table class="mn-table"><thead><tr><th></th><th>群号</th><th>当前群名</th><th>后缀</th><th>倒计时</th><th>定时改名</th></tr></thead><tbody>' +
+    MN.names.map(function(g) {
+      var cd = g.countdown ? (g.countdown.target + '（剩 ' + g.countdown.days_left + ' 天）<br><span class="mn-hint">' + esc(g.countdown.template) + '</span>') : '<span class="mn-hint">—</span>';
+      var sched = (g.scheduled || []).map(function(s) { return esc(s.at) + ' →「' + esc(s.suffix || '清除') + '」'; }).join('<br>') || '<span class="mn-hint">—</span>';
+      var isChecked = Object.keys(checked).length ? checked[g.group_id] : !backups[g.group_id];
+      return '<tr><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (isChecked ? ' checked' : '') + ' /></td><td>' + esc(g.group_id) +
+        (backups[g.group_id] ? ' <span class="mn-tag">备份群</span>' : '') + '</td><td>' + esc(g.name) + '</td><td>' + (esc(g.suffix) || '<span class="mn-hint">—</span>') + '</td><td>' + cd + '</td><td>' + sched + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function mnRenderApply(boxSel, res) {
+  var box = $(boxSel);
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return false; }
+  var d = mnData(res);
+  if (d.scheduled) { box.innerHTML = '<div class="mn-result ok">已登记：' + esc(d.scheduled) + ' 修改 ' + d.groups.length + ' 个群</div>'; return true; }
+  var failed = Object.keys(d.failed || {});
+  var lines = (d.done || []).map(function(x) { return '· ' + esc(x); }).concat(failed.map(function(g) { return '· ' + esc(g) + ' 失败：' + esc(d.failed[g]); }));
+  if (d.stopped) lines = ['已停止 ' + d.stopped.length + ' 个群的倒计时' + (d.cancelled ? '，取消 ' + d.cancelled + ' 个定时任务' : '')];
+  box.innerHTML = '<div class="mn-result ' + (failed.length ? 'err' : 'ok') + '">' + (lines.join('\n') || '没有需要处理的群') + '</div>';
+  return true;
+}
+async function mnNamesAction(url, body, boxSel, confirmText) {
+  var groups = mnSelectedGroups('#namesTable');
+  if (!groups.length) { toast('请先在表格里勾选群', 'warning'); return; }
+  if (confirmText && !confirm(confirmText.replace('{n}', groups.length))) return;
+  body.groups = groups;
+  $(boxSel).innerHTML = '<div class="mn-result no">处理中……</div>';
+  var res = await safePost(url, body, 120000);
+  if (mnRenderApply(boxSel, res)) loadNames();
+}
+
+/* ---- 踢人与黑名单 ---- */
+function mnRenderBlacklist() {
+  var list = (MN.overview && MN.overview.user_blacklist) || [];
+  $('#ubCount').textContent = list.length ? '共 ' + list.length + ' 人' : '';
+  $('#ubList').innerHTML = list.length ? list.map(function(u) {
+    return '<div class="mn-rule"><span class="mn-val">' + esc(u) + '</span><button class="btn btn-ghost btn-sm" data-ub-del="' + escAttr(u) + '">移出黑名单</button></div>';
+  }).join('') : '<div class="mn-empty">黑名单为空</div>';
+  $$('[data-ub-del]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var res = await safePost('user_blacklist/remove', { user_id: btn.getAttribute('data-ub-del') });
+      if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+      toast('已移出插件黑名单（QQ 群黑名单需在 QQ 里手动解除）', 'success');
+      loadKick();
+    });
+  });
+}
+async function loadKick() {
+  if (!await mnLoadOverview()) return;
+  mnRenderSwitches('kickSwitches');
+  var scope = $('#kickScope'), prev = scope.value;
+  scope.innerHTML = '<option value="">所有管理的群</option>' + mnGroups().filter(function(g) { return g.managed; })
+    .map(function(g) { return '<option value="' + escAttr(g.group_id) + '">仅 ' + esc(mnGroupLabel(g)) + '</option>'; }).join('');
+  scope.value = prev;
+  mnRenderBlacklist();
+}
+async function mnKick() {
+  var ids = $('#kickIds').value.trim();
+  if (!ids) { toast('请填写 QQ 号', 'warning'); return; }
+  var block = ($('input[name=kickMode]:checked') || {}).value === 'block';
+  var scope = $('#kickScope').value;
+  if (!confirm('确定' + (block ? '踢出并拉黑' : '踢出') + '这些人吗？范围：' + (scope ? '群 ' + scope : '所有管理的群'))) return;
+  var btn = $('#btnKick'); btn.disabled = true;
+  $('#kickResult').innerHTML = '<div class="mn-result no">处理中……</div>';
+  var res = await safePost('minimal/kick', { user_ids: ids, block: block, groups: scope ? [scope] : [] }, 120000);
+  btn.disabled = false;
+  if (isApiError(res)) {
+    $('#kickResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return;
+  }
+  var d = mnData(res);
+  var lines = ['共踢出 ' + d.kicked_total + ' 人次' + (d.blacklisted >= 0 ? '，新加入插件黑名单 ' + d.blacklisted + ' 人' : '')];
+  if ((d.protected || []).length) lines.push('已跳过插件管理员 / 白名单：' + d.protected.join(', '));
+  Object.keys(d.per_group || {}).forEach(function(gid) {
+    var r = d.per_group[gid];
+    if (r.skipped) lines.push('· 群 ' + gid + '：跳过（' + r.skipped + '）');
+    else if (r.kicked.length || Object.keys(r.failed).length) {
+      lines.push('· 群 ' + gid + '：踢出 ' + (r.kicked.join(', ') || '无') +
+        Object.keys(r.failed).map(function(u) { return '；' + u + ' 失败（' + r.failed[u] + '）'; }).join(''));
+    }
+  });
+  $('#kickResult').innerHTML = '<div class="mn-result ok">' + esc(lines.join('\n')) + '</div>';
+  loadKick();
+}
+
+function initMinimalPages() {
+  bindIfExists('btnGuardRefresh', loadGuard);
+  bindIfExists('kwType', mnUpdateTypeHint, 'change');
+  bindIfExists('btnKwAdd', function() { mnAddRule('kw'); });
+  bindIfExists('kwValue', function(e) { if (e.key === 'Enter') mnAddRule('kw'); }, 'keydown');
+  bindIfExists('btnKwImport', mnImportRules);
+  bindIfExists('btnKwTest', function() { mnTestRules('kw'); });
+  bindIfExists('btnWxAdd', function() { mnAddRule('wx'); });
+  bindIfExists('wxValue', function(e) { if (e.key === 'Enter') mnAddRule('wx'); }, 'keydown');
+  bindIfExists('btnWxTest', function() { mnTestRules('wx'); });
+  bindIfExists('wxDriver', mnToggleDriverRows, 'change');
+  bindIfExists('ocrDriver', mnToggleDriverRows, 'change');
+  bindIfExists('btnGuardSave', function() {
+    mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value, hit_notice_template: $('#guardNoticeTpl').value }, '已保存').then(loadGuard);
+  });
+  bindIfExists('btnWxSave', function() {
+    mnSaveConfig({ wxcode_driver: $('#wxDriver').value, wxcode_service_url: $('#wxUrl').value.trim(),
+      wxcode_python_module: $('#wxModule').value.trim(), wxcode_forward_group_id: $('#wxForward').value }, '已保存');
+  });
+  bindIfExists('btnOcrSave', function() {
+    mnSaveConfig({ local_ocr_driver: $('#ocrDriver').value, local_ocr_service_url: $('#ocrUrl').value.trim(),
+      local_ocr_python_module: $('#ocrModule').value.trim() }, '已保存');
+  });
+
+  bindIfExists('btnBcRefresh', loadBroadcast);
+  $$('input[name=bcMode]').forEach(function(r) { r.addEventListener('change', mnSyncBroadcastMode); });
+  bindIfExists('btnBcAll', function() { $$('#bcGroups input[type=checkbox]').forEach(function(cb) { cb.checked = true; }); });
+  bindIfExists('btnBcNone', function() { $$('#bcGroups input[type=checkbox]').forEach(function(cb) { cb.checked = false; }); });
+  bindIfExists('btnBcSend', mnSendBroadcast);
+  bindIfExists('btnTodoStatus', mnTodoStatus);
+
+  bindIfExists('btnNamesRefresh', loadNames);
+  bindIfExists('btnNamesAll', function() { $$('#namesTable input[type=checkbox]').forEach(function(cb) { cb.checked = true; }); });
+  bindIfExists('btnNamesNone', function() { $$('#namesTable input[type=checkbox]').forEach(function(cb) { cb.checked = false; }); });
+  bindIfExists('nmTarget', mnUpdateCountdownPreview, 'input');
+  bindIfExists('nmTemplate', mnUpdateCountdownPreview, 'input');
+  bindIfExists('btnNmSuffix', function() {
+    var at = (($('input[name=nmWhen]:checked') || {}).value === 'at') ? $('#nmAt').value : '';
+    if ((($('input[name=nmWhen]:checked') || {}).value === 'at') && !at) { toast('请选择定时时间', 'warning'); return; }
+    var suffix = $('#nmSuffix').value;
+    mnNamesAction('minimal/names/suffix', { suffix: suffix, at: at }, '#nmSuffixResult',
+      (at ? '在 ' + at.replace('T', ' ') + ' ' : '') + '把选中的 {n} 个群' + (suffix ? '的后缀改为「' + suffix + '」' : '的后缀清除') + '？');
+  });
+  bindIfExists('btnNmCountdown', function() {
+    mnNamesAction('minimal/names/countdown', { target: $('#nmTarget').value, template: $('#nmTemplate').value }, '#nmCountdownResult',
+      '为选中的 {n} 个群设置倒计时？群名会立即修改。');
+  });
+  bindIfExists('btnNmRefresh', function() { mnNamesAction('minimal/names/refresh', {}, '#nmCountdownResult'); });
+  bindIfExists('btnNmStop', function() {
+    mnNamesAction('minimal/names/stop', { scheduled: true }, '#nmCountdownResult', '停止选中的 {n} 个群的倒计时，并取消它们的定时改名？群名保持现状。');
+  });
+
+  bindIfExists('btnKickRefresh', loadKick);
+  bindIfExists('btnKick', mnKick);
+  bindIfExists('btnUbAdd', async function() {
+    var uid = $('#ubAdd').value.trim();
+    if (!/^\d+$/.test(uid)) { toast('请输入 QQ 号', 'warning'); return; }
+    var res = await safePost('user_blacklist/add', { user_id: uid });
+    if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+    $('#ubAdd').value = '';
+    toast('已加入插件黑名单', 'success');
+    loadKick();
+  });
+}
+
 async function init() {
   initTabs();
+  initMinimalPages();
   // 尽早拉取配置，以便按 AI 总闸隐藏导航和页面中的 AI 区块
   loadConfigCached(false);
   if (!REBUILD_STATUS_TIMER) {

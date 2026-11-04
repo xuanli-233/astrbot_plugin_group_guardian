@@ -194,18 +194,48 @@ class GroupBroadcastMixin:
         yield event.plain_result(f"开始发布到 {len(task['groups'])} 个群，请稍候……")
         ok_groups, failed = await self._publish_notice_to_groups(client, task)
         if task["todo"] and ok_groups:
-            try:
-                self._storage.set_meta(self.LAST_TODO_META_KEY, json.dumps({
-                    "content": task["content"], "groups": ok_groups, "time": int(time.time()),
-                }, ensure_ascii=False))
-            except Exception as e:
-                logger.warning(f"[GroupMgr] 保存待办公告记录失败: {e}")
+            self._record_todo(task["content"], ok_groups)
         msg = f"发布完成：成功 {len(ok_groups)} 个群，失败 {len(failed)} 个群"
         if failed:
             msg += "\n" + "\n".join(f"· {g}：{why}" for g, why in list(failed.items())[:20])
         if task["todo"] and ok_groups:
             msg += "\n可发送 /待办确认情况 查看各群确认人数"
         yield event.plain_result(msg)
+
+    def _record_todo(self, content: str, groups: List[str]) -> None:
+        try:
+            self._storage.set_meta(self.LAST_TODO_META_KEY, json.dumps({
+                "content": content, "groups": groups, "time": int(time.time()),
+            }, ensure_ascii=False))
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 保存待办公告记录失败: {e}")
+
+    def _last_todo(self) -> dict:
+        try:
+            record = json.loads(self._storage.get_meta(self.LAST_TODO_META_KEY, "") or "{}")
+            return record if isinstance(record, dict) else {}
+        except Exception:
+            return {}
+
+    async def _todo_ack_report(self, client) -> dict:
+        """最近一次待办公告的确认情况。指令与 WebUI 共用。
+
+        返回 {"content", "time", "groups": [{"group_id", "acked", "unacked", "error"}]}；没有记录时 groups 为空。
+        """
+        record = self._last_todo()
+        report = {"content": record.get("content", ""), "time": record.get("time", 0), "groups": []}
+        for gid in record.get("groups") or []:
+            item = {"group_id": gid, "acked": None, "unacked": None, "error": ""}
+            notice_id = await self._find_notice_id(client, gid, record.get("content", ""))
+            if not notice_id:
+                item["error"] = "未找到该公告（可能已被删除）"
+            else:
+                item["acked"] = await self._count_notice_ack(client, gid, notice_id, "ack")
+                item["unacked"] = await self._count_notice_ack(client, gid, notice_id, "unack")
+                if item["acked"] is None and item["unacked"] is None:
+                    item["error"] = "查询失败"
+            report["groups"].append(item)
+        return report
 
     async def _publish_notice_to_groups(self, client, task: dict) -> Tuple[List[str], Dict[str, str]]:
         options = task.get("options") or {}
@@ -266,29 +296,21 @@ class GroupBroadcastMixin:
         if err:
             yield event.plain_result(err)
             return
-        try:
-            record = json.loads(self._storage.get_meta(self.LAST_TODO_META_KEY, "") or "{}")
-        except Exception:
-            record = {}
-        if not record.get("groups"):
+        if not self._last_todo().get("groups"):
             yield event.plain_result("还没有发布过待办公告")
             return
         client = await self._get_client(event)
         if not client:
             yield event.plain_result("无法获取QQ客户端")
             return
-        published = time.strftime("%Y-%m-%d %H:%M", time.localtime(record.get("time", 0)))
-        lines = [f"待办公告（{published}）：{record['content'][:60]}"]
-        for gid in record["groups"]:
-            notice_id = await self._find_notice_id(client, gid, record["content"])
-            if not notice_id:
-                lines.append(f"· {gid}：未找到该公告（可能已被删除）")
-                continue
-            acked = await self._count_notice_ack(client, gid, notice_id, "ack")
-            unacked = await self._count_notice_ack(client, gid, notice_id, "unack")
-            if acked is None and unacked is None:
-                lines.append(f"· {gid}：查询失败")
+        report = await self._todo_ack_report(client)
+        published = time.strftime("%Y-%m-%d %H:%M", time.localtime(report["time"]))
+        lines = [f"待办公告（{published}）：{report['content'][:60]}"]
+        for item in report["groups"]:
+            if item["error"]:
+                lines.append(f"· {item['group_id']}：{item['error']}")
             else:
-                lines.append(f"· {gid}：已确认 {acked if acked is not None else '?'} 人，"
-                             f"未确认 {unacked if unacked is not None else '?'} 人")
+                acked = item["acked"] if item["acked"] is not None else "?"
+                unacked = item["unacked"] if item["unacked"] is not None else "?"
+                lines.append(f"· {item['group_id']}：已确认 {acked} 人，未确认 {unacked} 人")
         yield event.plain_result("\n".join(lines))

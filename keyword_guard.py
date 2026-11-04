@@ -77,6 +77,52 @@ class KeywordGuardMixin:
         cache[config_key] = (raw, regex_only, compiled)
         return compiled
 
+    def _validate_rule(self, rule: str, regex_only: bool = False) -> str:
+        """校验单条规则，返回错误说明；合法返回空串。WebUI 保存规则前调用。"""
+        rule = str(rule or "").strip()
+        if not rule:
+            return "规则为空"
+        if regex_only or rule.lower().startswith("re:"):
+            pattern = rule[3:].strip() if rule.lower().startswith("re:") else rule
+            if not pattern:
+                return "正则为空"
+            if len(pattern) > self.REGEX_MAX_LEN:
+                return f"正则过长（上限 {self.REGEX_MAX_LEN} 字符）"
+            if self._NESTED_QUANTIFIER.search(pattern):
+                return "含嵌套量词（如 (a+)+），可能导致卡死，请改写"
+            try:
+                re.compile(pattern, re.IGNORECASE)
+            except re.error as e:
+                return f"正则写法有误：{e}"
+            return ""
+        if rule.startswith("=") and not rule[1:].strip():
+            return "精确匹配的内容为空"
+        return ""
+
+    def _match_all_rules(self, text: str, config_key: str, regex_only: bool = False,
+                         rules: Optional[List[str]] = None) -> List[str]:
+        """返回所有命中的规则原文（WebUI 测试用）。rules 不为空时测试这组规则而不读配置。"""
+        if not text:
+            return []
+        if rules is not None:
+            # 用临时键测试未保存的规则，不改动真实配置
+            temp_key = f"__rule_test__{config_key}"
+            self.config[temp_key] = list(rules)
+            try:
+                return self._match_all_rules(text, temp_key, regex_only)
+            finally:
+                self.config.pop(temp_key, None)
+        text = str(text)[: self.MATCH_TEXT_MAX]
+        folded = text.casefold()
+        stripped = folded.strip()
+        hits = []
+        for kind, rule, value in self._compiled_rules(config_key, regex_only):
+            if ((kind == "contains" and value in folded)
+                    or (kind == "exact" and stripped == value)
+                    or (kind == "regex" and value.search(text))):
+                hits.append(rule)
+        return hits
+
     def _match_rules(self, text: str, config_key: str, regex_only: bool = False) -> Optional[str]:
         """返回第一条命中的规则原文；未命中返回 None。"""
         if not text:
