@@ -553,6 +553,48 @@ PLUGIN = None
 CONTEXT = None
 COMMANDS = {}
 
+# 模拟的二维码 / 葵花码两阶段服务：mock://wxcode/<内容> 生成一张真实图片，
+# 假定位服务返回一个葵花码框，假解码服务返回 <内容>；内容为 NOCODE 时模拟「解不出」。
+MOCK_CODE_IMAGES = {}   # 图片 sha1 → 内容
+MOCK_CODE_PENDING = []  # 已定位、等待解码的内容（两个服务串行调用，按顺序取）
+
+
+def _mock_code_png(content: str) -> bytes:
+    import hashlib
+    import io
+    from PIL import Image
+    digest = hashlib.sha1(content.encode("utf-8")).digest()
+    image = Image.new("RGB", (400, 300), (240, 240 - digest[0] % 40, 240 - digest[1] % 40))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    data = buf.getvalue()
+    MOCK_CODE_IMAGES[hashlib.sha1(data).hexdigest()] = content
+    return data
+
+
+async def _mock_code_http_post(self, url, field, data, filename, headers, timeout):
+    import hashlib
+    ACTIONS.append({"time": time.strftime("%H:%M:%S"), "action": "HTTP " + url.split("/", 3)[-1],
+                    "params": {"bytes": len(data)}})
+    if url.endswith("/v1/detect"):
+        if headers.get("X-API-Key") != "mock-key":
+            return 401, {"detail": "Invalid X-API-Key"}, {}
+        content = MOCK_CODE_IMAGES.get(hashlib.sha1(data).hexdigest())
+        if content is None:
+            return 200, {"has_code": False, "has_kuihua": False, "detections": []}, {}
+        MOCK_CODE_PENDING.append(content)
+        return 200, {"has_code": True, "has_kuihua": True, "detections": [
+            {"class_id": 2, "class_name": "kuihua", "score": 0.91, "bbox": [120, 70, 280, 230]}]}, {}
+    content = MOCK_CODE_PENDING.pop(0) if MOCK_CODE_PENDING else "NOCODE"
+    if content == "NOCODE":
+        return 422, {"error": {"code": "NO_CODE", "message": "未能解出支持的二维码或葵花码"}}, {}
+    return 200, {"success": True, "result": {"code_type": "WX_CODE", "charset": "UTF-8",
+                                              "payload_base64": "", "payload_length": len(content), "text": content}}, {}
+
+
+async def _mock_code_http_get(self, url, timeout=5.0):
+    return 200, {"status": "ok", "ready": True}
+
 
 def _initial_config(schema):
     config = AstrBotConfig({k: v.get("default") for k, v in schema.items()})
@@ -561,8 +603,9 @@ def _initial_config(schema):
         "backup_group_id": "900000001",
         "keyword_rules": ["加微信", "代刷", "=1", r"re:v[x信]\s*[:：]?\s*\w{5,}"],
         "wxcode_enabled": True,
-        "wxcode_driver": "python",
+        "wxcode_driver": "two_stage",
         "wxcode_python_module": "wxcode_mock.py",
+        "code_detect_api_key": "mock-key",
         "wxcode_regex_rules": ["invite", r"pages/.*share"],
         "local_ocr_driver": "python",
         "local_ocr_python_module": "ocr_mock.py",
@@ -587,8 +630,12 @@ def boot(plugin_parent: str):
     schema = json.loads((Path(plugin_parent) / PLUGIN_NAME / "_conf_schema.json").read_text(encoding="utf-8"))
 
     async def fake_download(self, url, *a, **k):
+        if url.startswith("mock://wxcode/"):
+            return _mock_code_png(urllib.parse.unquote(url[len("mock://wxcode/"):]))
         return f"mock-image:{url}".encode()
     Main._download_bytes = fake_download
+    Main._code_http_post = _mock_code_http_post
+    Main._code_http_get = _mock_code_http_get
 
     CONTEXT = Context()
 

@@ -14,7 +14,7 @@ const PORT = Number(process.env.PORT || 8765);
 
 console.log("[mock] 正在启动 Pyodide ……");
 const py = await loadPyodide();
-await py.loadPackage(["sqlite3"]);
+await py.loadPackage(["sqlite3", "Pillow"]);
 py.FS.mkdirTree(`/plugins/${PLUGIN_NAME}`);
 py.FS.mount(py.FS.filesystems.NODEFS, { root: PLUGIN_DIR }, `/plugins/${PLUGIN_NAME}`);
 py.FS.mkdirTree("/data");

@@ -942,16 +942,37 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
         <div class="mn-grid">
           <div class="card">
-            <div class="card-header"><h2>葵花码识别</h2><span class="rules-subtle">图片中的葵花码交给识别模块，识别内容按下面的正则过滤</span></div>
+            <div class="card-header"><h2>二维码 / 葵花码识别</h2><span class="rules-subtle">图片中的码先定位、再解码，码内容按下面的正则过滤</span></div>
             <div class="settings-list" id="wxSwitches"></div>
             <div class="mn-body">
               <div class="mn-row"><label style="width:84px">接入方式</label>
-                <select class="input-sm" id="wxDriver"><option value="http">本地 HTTP 服务</option><option value="python">插件目录里的 Python 文件</option></select></div>
+                <select class="input-sm" id="wxDriver">
+                  <option value="two_stage">定位服务 + 解码服务（两阶段）</option>
+                  <option value="http">单个本地 HTTP 服务</option>
+                  <option value="python">插件目录里的 Python 文件</option>
+                </select></div>
+              <div id="wxTwoStage">
+                <div class="mn-row"><label style="width:84px">定位服务</label><input class="input-sm" id="codeDetectUrl" style="flex:1" placeholder="http://127.0.0.1:8100" /></div>
+                <div class="mn-row"><label style="width:84px">API Key</label><input type="password" class="input-sm" id="codeDetectKey" style="flex:1" autocomplete="new-password" /></div>
+                <div class="mn-row"><label style="width:84px">解码服务</label><input class="input-sm" id="codeDecodeUrl" style="flex:1" placeholder="http://127.0.0.1:8000" /></div>
+                <div class="mn-row"><label style="width:84px">解码哪些码</label>
+                  <label><input type="checkbox" id="codeKuihua" /> 葵花码 / 小程序码</label>
+                  <label><input type="checkbox" id="codeQrcode" /> 普通二维码</label></div>
+                <div class="mn-row"><label style="width:84px">框扩大</label><input type="number" class="input-sm" id="codeExpand" min="0" max="100" style="width:80px" /><span class="mn-hint">%（向四周各扩大，至少 16 像素）</span>
+                  <label style="margin-left:12px">每张图最多</label><input type="number" class="input-sm" id="codeMax" min="1" max="10" style="width:64px" /><span class="mn-hint">个码</span></div>
+                <div class="mn-row"><label style="width:84px">解不出时</label>
+                  <select class="input-sm" id="codeUndecoded"><option value="pass">放行</option><option value="recall">当作可疑广告码，撤回并转发</option></select></div>
+                <div class="mn-row"><button class="btn btn-outline btn-sm" id="btnCodeHealth">测试连接</button>
+                  <label class="btn btn-outline btn-sm" style="cursor:pointer">上传测试图片<input type="file" id="codeTestFile" accept="image/png,image/jpeg,image/webp,image/bmp" style="display:none" /></label>
+                  <span class="mn-hint">测试图片会走完整流程，但不会撤回或转发</span></div>
+                <div id="codeTestResult"></div>
+              </div>
               <div class="mn-row" id="wxUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="wxUrl" style="flex:1" placeholder="http://127.0.0.1:8090/recognize" /></div>
               <div class="mn-row" id="wxModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="wxModule" style="flex:1" placeholder="wxcode.py（放在插件数据目录 extensions/ 下）" /></div>
               <div class="mn-row"><label style="width:84px">转发到</label><select class="input-sm" id="wxForward" style="flex:1"></select></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnWxSave">保存</button><span class="mn-hint">接入方法见插件目录 examples/wxcode_recognizer_example.py</span></div>
-              <div class="mn-row" style="margin-top:6px"><label>葵花码正则规则</label><span class="rules-subtle" id="wxCount"></span></div>
+              <div class="mn-row" style="margin-top:6px"><label>码内容正则规则</label><span class="rules-subtle" id="wxCount"></span></div>
+              <p class="mn-hint" style="margin-bottom:8px">对解码出的内容（二维码和葵花码都适用）逐条做正则匹配，不区分大小写。</p>
               <div class="mn-row">
                 <input class="input-sm" id="wxValue" style="flex:1;min-width:160px" placeholder="例如：pages/.*invite" />
                 <button class="btn btn-primary btn-sm" id="btnWxAdd">添加</button>
@@ -3128,6 +3149,14 @@ var MANUAL_SETTING_KEYS = {
   directory_member_ttl: true,
   directory_min_interval_ms: true,
   directory_background_refresh_enabled: true,
+  code_detect_url: true,
+  code_detect_api_key: true,
+  code_decode_url: true,
+  code_decode_kuihua: true,
+  code_decode_qrcode: true,
+  code_box_expand_ratio: true,
+  code_max_per_image: true,
+  code_undecoded_action: true,
   recall_enabled: true,
   whole_ban_enabled: true,
   set_admin_enabled: true,
@@ -4910,11 +4939,49 @@ function mnUpdateTypeHint() {
 
 function mnToggleDriverRows() {
   var wx = $('#wxDriver').value;
+  $('#wxTwoStage').style.display = wx === 'two_stage' ? '' : 'none';
   $('#wxUrlRow').style.display = wx === 'http' ? '' : 'none';
   $('#wxModRow').style.display = wx === 'python' ? '' : 'none';
   var ocr = $('#ocrDriver').value;
   $('#ocrUrlRow').style.display = ocr === 'http' ? '' : 'none';
   $('#ocrModRow').style.display = ocr === 'python' ? '' : 'none';
+}
+
+async function mnCodeHealth() {
+  var box = $('#codeTestResult');
+  box.innerHTML = '<div class="mn-result no">正在测试定位服务……</div>';
+  var res = await safeGet('minimal/code/health');
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res), det = d.detect || {};
+  var lines = ['定位服务 ' + det.url + '：' + (det.ok ? '正常（模型已就绪）' : '不可用' + (det.error ? '（' + det.error + '）' : det.status ? '（HTTP ' + det.status + '）' : '')),
+    'API Key：' + (det.api_key_set ? '已设置' : '未设置（检测请求会返回 401）'),
+    '解码服务 ' + d.decode.url + '：' + d.decode.note];
+  box.innerHTML = '<div class="mn-result ' + (det.ok && det.api_key_set ? 'ok' : 'err') + '">' + esc(lines.join('\n')) + '</div>';
+}
+function mnCodeTestFile() {
+  var input = $('#codeTestFile'), file = input.files && input.files[0];
+  if (!file) return;
+  var box = $('#codeTestResult');
+  if (file.size > 20 * 1024 * 1024) { box.innerHTML = '<div class="mn-result err">测试图片不能超过 20 MiB</div>'; return; }
+  var reader = new FileReader();
+  reader.onload = async function() {
+    box.innerHTML = '<div class="mn-result no">识别中……解码服务较慢，可能需要几十秒</div>';
+    var res = await safePost('minimal/code/test', { image_base64: reader.result }, 300000);
+    input.value = '';
+    if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+    var d = mnData(res), scan = d.scan || {};
+    var lines = [];
+    if (scan.error) lines.push('识别失败：' + scan.error);
+    else if (!(scan.codes || []).length) lines.push(scan.has_code ? '定位到码，但不是要解码的类别（当前解码：' + (d.classes || []).map(function(c) { return c === 2 ? '葵花码' : '二维码'; }).join('、') + '）' : '没有定位到码');
+    (scan.codes || []).forEach(function(c, i) {
+      lines.push('#' + (i + 1) + ' ' + c.label + ' 置信 ' + Number(c.score || 0).toFixed(2) + ' 框 [' + c.bbox.join(', ') + ']' + (c.crop_box ? ' → 裁剪 [' + c.crop_box.join(', ') + ']' : '（未裁剪，整图解码）'));
+      lines.push('   ' + (c.decoded ? c.decoded.code_type + '：' + (c.decoded.text != null ? c.decoded.text : '[非文本，base64 ' + c.decoded.payload_base64.slice(0, 80) + ']') : (c.error || '未能解出')));
+    });
+    lines.push(d.hits && d.hits.length ? '命中规则：' + d.hits.join('、') : '没有命中码内容规则');
+    lines.push(d.would_recall ? '结论：群里发这张图会被撤回并转发' : '结论：群里发这张图会放行');
+    box.innerHTML = '<div class="mn-result ' + (d.would_recall ? 'err' : 'ok') + '">' + esc(lines.join('\n')) + '</div>';
+  };
+  reader.readAsDataURL(file);
 }
 
 async function loadGuard() {
@@ -4928,7 +4995,16 @@ async function loadGuard() {
   mnUpdateTypeHint();
   $('#guardBackupGroup').innerHTML = mnGroupOptions(mnCfg('backup_group_id') || '', '不备份');
   $('#guardNoticeTpl').value = mnCfg('hit_notice_template') || '';
-  $('#wxDriver').value = mnCfg('wxcode_driver') || 'http';
+  $('#wxDriver').value = mnCfg('wxcode_driver') || 'two_stage';
+  $('#codeDetectUrl').value = mnCfg('code_detect_url') || '';
+  $('#codeDetectKey').value = '';
+  $('#codeDetectKey').placeholder = mnCfg('code_detect_api_key_set') ? '已设置（不修改请留空）' : '未设置，请填写定位服务的 X-API-Key';
+  $('#codeDecodeUrl').value = mnCfg('code_decode_url') || '';
+  $('#codeKuihua').checked = mnCfg('code_decode_kuihua') !== false;
+  $('#codeQrcode').checked = mnCfg('code_decode_qrcode') !== false;
+  $('#codeExpand').value = mnCfg('code_box_expand_ratio') != null ? mnCfg('code_box_expand_ratio') : 20;
+  $('#codeMax').value = mnCfg('code_max_per_image') || 3;
+  $('#codeUndecoded').value = mnCfg('code_undecoded_action') || 'pass';
   $('#wxUrl').value = mnCfg('wxcode_service_url') || '';
   $('#wxModule').value = mnCfg('wxcode_python_module') || '';
   $('#wxForward').innerHTML = mnGroupOptions(mnCfg('wxcode_forward_group_id') || '', '与备份群相同');
@@ -5330,9 +5406,18 @@ function initMinimalPages() {
     mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value, hit_notice_template: $('#guardNoticeTpl').value }, '已保存').then(loadGuard);
   });
   bindIfExists('btnWxSave', function() {
-    mnSaveConfig({ wxcode_driver: $('#wxDriver').value, wxcode_service_url: $('#wxUrl').value.trim(),
-      wxcode_python_module: $('#wxModule').value.trim(), wxcode_forward_group_id: $('#wxForward').value }, '已保存');
+    var values = { wxcode_driver: $('#wxDriver').value, wxcode_service_url: $('#wxUrl').value.trim(),
+      wxcode_python_module: $('#wxModule').value.trim(), wxcode_forward_group_id: $('#wxForward').value,
+      code_detect_url: $('#codeDetectUrl').value.trim(), code_decode_url: $('#codeDecodeUrl').value.trim(),
+      code_decode_kuihua: $('#codeKuihua').checked, code_decode_qrcode: $('#codeQrcode').checked,
+      code_box_expand_ratio: Number($('#codeExpand').value), code_max_per_image: Number($('#codeMax').value),
+      code_undecoded_action: $('#codeUndecoded').value };
+    var key = $('#codeDetectKey').value.trim();
+    if (key) values.code_detect_api_key = key;  // 留空表示不修改
+    mnSaveConfig(values, '已保存').then(loadGuard);
   });
+  bindIfExists('btnCodeHealth', mnCodeHealth);
+  bindIfExists('codeTestFile', mnCodeTestFile, 'change');
   bindIfExists('btnOcrSave', function() {
     mnSaveConfig({ local_ocr_driver: $('#ocrDriver').value, local_ocr_service_url: $('#ocrUrl').value.trim(),
       local_ocr_python_module: $('#ocrModule').value.trim() }, '已保存');

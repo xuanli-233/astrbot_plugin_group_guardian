@@ -1,4 +1,6 @@
 pyahocorasick>=2.1.0
+# 二维码 / 葵花码两阶段识别裁剪定位框所需（AstrBot 本身已依赖 Pillow）
+Pillow>=9.0.0
 # 二维码解码审核 (qrcode_decode_enabled) 所需，默认安装以免用户不会配置。
 # headless 版无 GUI/系统依赖，纯 pip 跨平台安装，体积较小。
 opencv-python-headless>=4.5.0

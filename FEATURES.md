@@ -74,6 +74,17 @@
 
 插件原有的「更多 → 群管理」页面和名片监控仍有各自的短时缓存，没有接入这套缓存。
 
+### 二维码 / 葵花码两阶段识别（`code_pipeline.py`）
+
+接入方式 `wxcode_driver = two_stage`（默认）：
+
+1. 下载图片，送**定位服务**：`POST {code_detect_url}/v1/detect`，字段 `file`，请求头 `X-API-Key`（`code_detect_api_key`）。超出 10 MiB / 1200 万像素 / 最长边 12000 时先缩小，坐标换算回原图。
+2. 取类别为葵花码（class 2，`code_decode_kuihua`）和普通二维码（class 3，`code_decode_qrcode`）的框，每张图最多 `code_max_per_image` 个，按 `code_box_expand_ratio`（默认 20%，至少 16 像素）向四周扩大，先做 EXIF 方向纠正再裁剪成 PNG。
+3. 裁剪图送**解码服务**：`POST {code_decode_url}/api/decode`，字段 `image`。`422 NO_CODE` 视为「解不出」。
+4. 解出的 `text`（无法转文本时用 `payload_base64`）按「码内容正则规则」`wxcode_regex_rules` 匹配，命中则撤回并转发；定位到但解不出时按 `code_undecoded_action`（默认放行，可选撤回）。
+
+两个服务地址只写 `http://IP:端口` 即可。两个服务都是串行处理，插件对每个服务同时只发一个请求；定位 `503` 按 `Retry-After` 最多重试 3 次，解码 `503 BUSY` 最多重试 2 次。同一图片内容 10 分钟内不重复识别。服务不可用时放行并写日志。没有 Pillow 时不裁剪，整图交给解码服务。管理页面「关键词与识别」里可以测试连接、上传测试图片查看每一步的结果（不会撤回）。API Key 只存在插件配置里，管理页面不回显，操作记录里只记「已设置」。
+
 ### 重复成员检测
 
 同一个 QQ 号同时在 2 个及以上「管理的群」里即为重复成员。只读本地成员缓存，不额外调用接口；页面会显示多少个群已缓存成员，没缓存的群不参与统计，可一键「刷新所有群的成员缓存」（后台逐个限速）。备份群 / 转发群、机器人自己不参与统计；插件管理员、用户白名单、在任一群是群主 / 管理员的人默认不列出，且插件管理员和白名单用户永远不会被处理。忽略名单存在 SQLite meta 表（键 `duplicate_member_ignore`）。
@@ -98,6 +109,7 @@
 | `group_directory.py` | 群 / 群成员本地缓存、限流、通知事件实时更新 |
 | `operation_log.py` | 操作记录、黑名单原因 |
 | `duplicate_members.py` | 重复群成员检测（只读本地成员缓存）与处理、忽略名单 |
+| `code_pipeline.py` | 二维码 / 葵花码两阶段识别：定位服务 → 扩大框裁剪 → 解码服务 |
 | `web_minimal.py` | 以上新功能的 WebUI 接口（`/minimal/*`） |
 
 ---

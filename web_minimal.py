@@ -43,6 +43,9 @@ MINIMAL_CONFIG_KEYS = (
     "auto_moderate_enabled",
     "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
     "directory_background_refresh_enabled",
+    "code_detect_url", "code_detect_api_key", "code_decode_url", "code_decode_kuihua", "code_decode_qrcode",
+    "code_box_expand_ratio", "code_max_per_image", "code_undecoded_action",
+    "code_detect_timeout", "code_decode_timeout",
 )
 
 
@@ -100,10 +103,13 @@ class MinimalWebMixin:
                     "managed": self._group_id_allowed(gid),
                     "backup": self._is_backup_group(gid),
                 })
+        config = {k: self._minimal_config_value(k) for k in MINIMAL_CONFIG_KEYS}
+        # 密钥不回传给页面，只告诉页面是否已设置
+        config["code_detect_api_key_set"] = bool(config.pop("code_detect_api_key", ""))
         return jsonify({"status": "success", "data": {
             "client_ok": bool(client),
             "groups": groups,
-            "config": {k: self._minimal_config_value(k) for k in MINIMAL_CONFIG_KEYS},
+            "config": config,
             "user_blacklist": list(getattr(self, "user_black_list", []) or []),
             "blacklist": self._bl_entries(),
         }})
@@ -313,6 +319,49 @@ class MinimalWebMixin:
             "user_id": uid, "groups": self._dir_find_user(uid),
             "blacklisted": uid in (getattr(self, "_user_black_set", None) or set()),
             "blacklist_reason": (meta or {}).get("reason", ""),
+        }})
+
+    # ------------------------------------------------------------------
+    # 二维码 / 葵花码两阶段识别（code_pipeline.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_code_health(self):
+        out = {}
+        detect = self._code_endpoint(self.config.get("code_detect_url", ""), "/health")
+        try:
+            status, body = await self._code_http_get(detect)
+            out["detect"] = {"ok": status == 200 and bool(body.get("ready")), "status": status, "body": body}
+        except Exception as e:
+            out["detect"] = {"ok": False, "error": str(e)}
+        out["detect"]["url"] = detect
+        out["detect"]["api_key_set"] = bool(self.config.get("code_detect_api_key"))
+        out["decode"] = {"url": self._code_endpoint(self.config.get("code_decode_url", ""), "/api/decode"),
+                         "note": "解码服务没有探活接口，请用「上传测试图片」验证"}
+        return jsonify({"status": "success", "data": out})
+
+    async def _web_minimal_code_test(self):
+        import base64 as _b64
+        data = await self._minimal_body()
+        raw = str(data.get("image_base64") or "")
+        if raw.startswith("data:") and "," in raw:
+            raw = raw.split(",", 1)[1]
+        try:
+            image = _b64.b64decode(raw) if raw else b""
+        except Exception:
+            return self._minimal_error("图片数据无效")
+        if not image and data.get("image_url"):
+            image = await self._download_bytes(str(data["image_url"])) or b""
+        if not image:
+            return self._minimal_error("请上传一张图片或填写图片地址")
+        if len(image) > 20 * 1024 * 1024:
+            return self._minimal_error("测试图片不能超过 20 MiB")
+        scan = await self._code_scan_bytes(image)
+        texts = self._code_texts([scan])
+        hits = self._match_all_rules("\n".join(texts), "wxcode_regex_rules", regex_only=True) if texts else []
+        undecoded = self._code_undecoded([scan])
+        would_recall = bool(hits) or (bool(undecoded) and self._cfg_str("code_undecoded_action", "pass") == "recall")
+        return jsonify({"status": "success", "data": {
+            "scan": scan, "summary": self._code_describe([scan]), "hits": hits,
+            "would_recall": would_recall, "classes": self._code_classes(),
         }})
 
     # ------------------------------------------------------------------

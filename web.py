@@ -217,6 +217,10 @@ class WebMixin:
             "directory_group_ttl": (60, 86400),
             "directory_member_ttl": (300, 604800),
             "directory_min_interval_ms": (200, 10000),
+            "code_box_expand_ratio": (0, 100),
+            "code_max_per_image": (1, 10),
+            "code_detect_timeout": (5, 120),
+            "code_decode_timeout": (10, 300),
         }
 
     def _normalize_int_config_value(self, key: str, value) -> int:
@@ -848,6 +852,8 @@ class WebMixin:
                 ("/minimal/directory/refresh", self._web_minimal_directory_refresh, ["POST"], "刷新群成员缓存"),
                 ("/minimal/directory/find", self._web_minimal_directory_find, ["GET"], "查找某人所在的群"),
                 ("/minimal/oplog", self._web_minimal_oplog, ["GET"], "操作记录"),
+                ("/minimal/code/health", self._web_minimal_code_health, ["GET"], "二维码 / 葵花码服务探活"),
+                ("/minimal/code/test", self._web_minimal_code_test, ["POST"], "二维码 / 葵花码识别测试"),
                 ("/minimal/duplicates", self._web_minimal_duplicates, ["GET"], "重复群成员"),
                 ("/minimal/duplicates/handle", self._web_minimal_duplicates_handle, ["POST"], "处理重复群成员"),
                 ("/minimal/duplicates/ignore", self._web_minimal_duplicates_ignore, ["POST"], "忽略 / 取消忽略重复成员"),
@@ -1059,10 +1065,15 @@ class WebMixin:
                 })
             changed = [k for k in updated if old_values.get(k, missing) != self.config.get(k)]
             if changed:
-                def show(value):
-                    return "（未设置）" if value is missing else str(value)[:60]
+                def show(key, value):
+                    if value is missing:
+                        return "（未设置）"
+                    if "api_key" in key or "token" in key or "secret" in key:
+                        return "（已设置）" if value else "（空）"  # 密钥不写进操作记录
+                    return str(value)[:60]
                 self._record_op("修改配置", source="WebUI", detail="；".join(
-                    f"{k}: {show(old_values.get(k, missing))} → {show(self.config.get(k))}" for k in changed[:20]))
+                    f"{k}: {show(k, old_values.get(k, missing))} → {show(k, self.config.get(k))}"
+                    for k in changed[:20]))
             if "auto_moderate_enabled" in updated:
                 self.auto_moderate_enabled = self._parse_bool(self.config.get("auto_moderate_enabled", True), True)
             # 仅在 lexicon_* 开关值实际变更时按分类增量重建，并后台做一次全量校验重建
@@ -2554,6 +2565,9 @@ class WebMixin:
         "broadcast_interval_seconds", "group_name_max_length", "countdown_update_time",
         "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
         "directory_background_refresh_enabled",
+        "code_detect_url", "code_detect_api_key", "code_decode_url", "code_decode_kuihua", "code_decode_qrcode",
+        "code_box_expand_ratio", "code_max_per_image", "code_undecoded_action",
+        "code_detect_timeout", "code_decode_timeout",
     }
 
     # ==================== AI 特殊检测（特殊数字）风险确认门禁 ====================

@@ -205,15 +205,34 @@ class KeywordGuardMixin:
             return False, None
 
         if self._cfg("wxcode_enabled", False, group_id=group_id):
-            texts = await self._recognize_images(image_urls, "wxcode")
-            joined = "\n".join(texts)
-            rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
-            if rule:
-                notice = await self._execute_hit_action(
-                    event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
-                    kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
-                )
-                return True, notice
+            driver = self._cfg_str("wxcode_driver", "two_stage").strip().lower()
+            if driver == "two_stage" and callable(getattr(self, "_code_scan_images", None)):
+                # 两阶段：定位服务 → 扩大框裁剪 → 解码服务（code_pipeline.py）
+                scans = await self._code_scan_images(image_urls)
+                joined = "\n".join(self._code_texts(scans))
+                summary = self._code_describe(scans)
+                rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                reason = f"码内容规则: {rule}" if rule else ""
+                if not rule and self._code_undecoded(scans) and \
+                        self._cfg_str("code_undecoded_action", "pass", group_id=group_id) == "recall":
+                    labels = "、".join(sorted({c["label"] for c in self._code_undecoded(scans)}))
+                    reason = f"检测到{labels}但无法解码"
+                if reason:
+                    notice = await self._execute_hit_action(
+                        event, group_id, user_id, user_name, text or "[图片]", reason,
+                        kind="wxcode", extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
+                    )
+                    return True, notice
+            else:
+                texts = await self._recognize_images(image_urls, "wxcode")
+                joined = "\n".join(texts)
+                rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                if rule:
+                    notice = await self._execute_hit_action(
+                        event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
+                        kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
+                    )
+                    return True, notice
 
         if self._cfg("keyword_guard_enabled", True, group_id=group_id) and \
                 self._cfg_str("local_ocr_driver", "off", group_id=group_id) != "off":

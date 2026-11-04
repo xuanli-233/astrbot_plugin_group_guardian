@@ -358,20 +358,21 @@
         "hint": "支持变量：{name} 昵称、{uid} QQ号、{group} 群号"
     },
     "wxcode_enabled": {
-        "description": "葵花码识别过滤开关",
+        "description": "二维码 / 葵花码识别过滤开关",
         "type": "bool",
         "default": false,
-        "hint": "把消息中的图片交给葵花码识别模块，识别内容命中「葵花码正则规则」时撤回并转发到指定群"
+        "hint": "把消息中的图片交给识别模块，识别出的码内容命中「码内容正则规则」时撤回并转发到指定群"
     },
     "wxcode_driver": {
-        "description": "葵花码识别模块接入方式",
+        "description": "二维码 / 葵花码识别接入方式",
         "type": "string",
-        "default": "http",
+        "default": "two_stage",
         "options": [
+            "two_stage",
             "http",
             "python"
         ],
-        "hint": "http=本地 HTTP 服务；python=插件数据目录 extensions/ 下的 Python 文件（需提供 recognize(image_bytes, image_url) 函数）"
+        "hint": "two_stage=定位服务 + 解码服务（先定位、扩大框裁剪后再解码）；http=单个本地 HTTP 服务；python=插件数据目录 extensions/ 下的 Python 文件"
     },
     "wxcode_service_url": {
         "description": "葵花码识别服务地址",
@@ -392,7 +393,7 @@
         "hint": "单张图片识别超时，范围 1-60"
     },
     "wxcode_regex_rules": {
-        "description": "葵花码正则规则",
+        "description": "码内容正则规则",
         "type": "list",
         "default": [],
         "hint": "每行一条正则（不区分大小写），匹配识别出的内容，例如 pages/.*invite 或 ^wx[0-9a-f]{16}"
@@ -402,6 +403,70 @@
         "type": "string",
         "default": "",
         "hint": "命中后把原消息和识别内容转发到这个群；留空则使用备份群"
+    },
+    "code_detect_url": {
+        "description": "定位服务地址",
+        "type": "string",
+        "default": "http://127.0.0.1:8100",
+        "hint": "YuNet 广告码检测服务，写 http://IP:端口 即可（自动拼接 /v1/detect）"
+    },
+    "code_detect_api_key": {
+        "description": "定位服务 API Key",
+        "type": "string",
+        "default": "",
+        "hint": "请求头 X-API-Key。属于敏感信息，只保存在插件配置里，不要写进代码或发到群里"
+    },
+    "code_decode_url": {
+        "description": "解码服务地址",
+        "type": "string",
+        "default": "http://127.0.0.1:8000",
+        "hint": "二维码 / 葵花码解码服务，写 http://IP:端口 即可（自动拼接 /api/decode）"
+    },
+    "code_decode_kuihua": {
+        "description": "解码葵花码",
+        "type": "bool",
+        "default": true,
+        "hint": "定位结果中的葵花码 / 小程序码（class 2）送去解码"
+    },
+    "code_decode_qrcode": {
+        "description": "解码普通二维码",
+        "type": "bool",
+        "default": true,
+        "hint": "定位结果中的普通二维码（class 3）送去解码"
+    },
+    "code_box_expand_ratio": {
+        "description": "定位框扩大比例（%）",
+        "type": "int",
+        "default": 20,
+        "hint": "裁剪前把定位框按宽 / 高向四周各扩大这么多（至少 16 像素），给解码留出边距，范围 0-100"
+    },
+    "code_max_per_image": {
+        "description": "每张图最多解码的码数",
+        "type": "int",
+        "default": 3,
+        "hint": "解码服务较慢，范围 1-10"
+    },
+    "code_undecoded_action": {
+        "description": "定位到码但解不出时",
+        "type": "string",
+        "default": "pass",
+        "options": [
+            "pass",
+            "recall"
+        ],
+        "hint": "pass=放行；recall=当作可疑广告码，撤回并转发"
+    },
+    "code_detect_timeout": {
+        "description": "定位服务超时（秒）",
+        "type": "int",
+        "default": 30,
+        "hint": "范围 5-120"
+    },
+    "code_decode_timeout": {
+        "description": "解码服务超时（秒）",
+        "type": "int",
+        "default": 120,
+        "hint": "解码服务内部最长 90 秒，范围 10-300"
     },
     "local_ocr_driver": {
         "description": "图片文字识别（OCR）接入方式",
