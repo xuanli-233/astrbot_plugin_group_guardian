@@ -4977,6 +4977,7 @@ function mnCodeTestFile() {
       lines.push('#' + (i + 1) + ' ' + c.label + ' 置信 ' + Number(c.score || 0).toFixed(2) + ' 框 [' + c.bbox.join(', ') + ']' + (c.crop_box ? ' → 裁剪 [' + c.crop_box.join(', ') + ']' : '（未裁剪，整图解码）'));
       lines.push('   ' + (c.decoded ? c.decoded.code_type + '：' + (c.decoded.text != null ? c.decoded.text : '[非文本，base64 ' + c.decoded.payload_base64.slice(0, 80) + ']') : (c.error || '未能解出')));
     });
+    if (scan.stopped_early) lines.push('（已命中规则，剩下的码不再解码——群消息处理也是这样，以便尽快撤回）');
     lines.push(d.hits && d.hits.length ? '命中规则：' + d.hits.join('、') : '没有命中码内容规则');
     lines.push(d.would_recall ? '结论：群里发这张图会被撤回并转发' : '结论：群里发这张图会放行');
     box.innerHTML = '<div class="mn-result ' + (d.would_recall ? 'err' : 'ok') + '">' + esc(lines.join('\n')) + '</div>';

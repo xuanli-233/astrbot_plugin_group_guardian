@@ -354,7 +354,9 @@ class MinimalWebMixin:
             return self._minimal_error("请上传一张图片或填写图片地址")
         if len(image) > 20 * 1024 * 1024:
             return self._minimal_error("测试图片不能超过 20 MiB")
-        scan = await self._code_scan_bytes(image)
+        # 与群消息处理一致：命中即停
+        scan = await self._code_scan_bytes(
+            image, stop_when=lambda t: bool(self._match_rules(t, "wxcode_regex_rules", regex_only=True)))
         texts = self._code_texts([scan])
         hits = self._match_all_rules("\n".join(texts), "wxcode_regex_rules", regex_only=True) if texts else []
         undecoded = self._code_undecoded([scan])

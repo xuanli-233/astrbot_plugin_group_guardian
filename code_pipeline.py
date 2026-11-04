@@ -221,13 +221,17 @@ class CodePipelineMixin:
     # ------------------------------------------------------------------
     # 识别一张图
     # ------------------------------------------------------------------
-    async def _code_scan_bytes(self, data: bytes) -> dict:
-        """返回 {"has_code", "codes": [...], "error"}。
+    STOPPED_EARLY = "已命中规则，未继续解码"
+
+    async def _code_scan_bytes(self, data: bytes, stop_when=None) -> dict:
+        """返回 {"has_code", "codes": [...], "error", "stopped_early"}。
 
         codes 每项：{class_id, label, score, bbox, crop_box, decoded: {code_type, text, payload_base64} | None,
                     error}
+        stop_when(text) -> bool：每解出一个码就调用；返回 True（命中规则）时不再解码剩下的码，
+        剩下的码 error 记为 STOPPED_EARLY。解码服务慢，命中即停可以尽快撤回。
         """
-        out = {"has_code": False, "codes": [], "error": ""}
+        out = {"has_code": False, "codes": [], "error": "", "stopped_early": False}
         try:
             image = self._code_open_image(data)
         except Exception as e:
@@ -254,6 +258,10 @@ class CodePipelineMixin:
             item = {"class_id": cid, "label": CODE_CLASS_LABELS.get(cid, str(cid)),
                     "score": det.get("score"), "bbox": [int(round(v)) for v in bbox],
                     "crop_box": None, "decoded": None, "error": ""}
+            if out["stopped_early"]:
+                item["error"] = self.STOPPED_EARLY
+                out["codes"].append(item)
+                continue
             try:
                 if image is not None:
                     box = self._code_expand_box(bbox, image.size[0], image.size[1], ratio)
@@ -275,16 +283,37 @@ class CodePipelineMixin:
             except Exception as e:
                 item["error"] = f"解码失败：{e}"
             out["codes"].append(item)
+            if stop_when is not None and item["decoded"]:
+                text = self._code_item_text(item)
+                try:
+                    hit = bool(text) and bool(stop_when(text))
+                except Exception:
+                    hit = False
+                out["stopped_early"] = hit
         return out
 
-    async def _code_scan_images(self, image_urls: list) -> List[dict]:
-        """识别消息里的图片（最多 RECOGNIZE_MAX_IMAGES 张），同一图片内容 CODE_CACHE_TTL 秒内只识别一次。"""
+    @staticmethod
+    def _code_item_text(item: dict) -> str:
+        """解出的文本；无法转成文本时用 payload_base64 参与匹配。"""
+        d = item.get("decoded") or {}
+        if d.get("text"):
+            return str(d["text"])
+        return str(d.get("payload_base64") or "")
+
+    async def _code_scan_images(self, image_urls: list, stop_when=None) -> List[dict]:
+        """识别消息里的图片（最多 RECOGNIZE_MAX_IMAGES 张），同一图片内容 CODE_CACHE_TTL 秒内只识别一次。
+
+        stop_when 见 _code_scan_bytes：某张图里有码命中后，后面的图也不再识别。
+        缓存里「命中即停」的结果没有解完所有码：如果按现在的规则已不再命中（规则改过），重新完整识别。
+        """
         cache = getattr(self, "_code_cache", None)
         if cache is None:
             cache = self._code_cache = {}
         results = []
         seen = set()
         for url in image_urls or []:
+            if results and results[-1].get("stopped_early"):
+                break
             if not url or url in seen:
                 continue
             seen.add(url)
@@ -301,9 +330,13 @@ class CodePipelineMixin:
             key = hashlib.sha1(data).hexdigest()
             hit = cache.get(key)
             if hit and time.time() - hit[0] < self.CODE_CACHE_TTL:
-                results.append(dict(hit[1], url=url, cached=True))
-                continue
-            scanned = await self._code_scan_bytes(data)
+                cached = hit[1]
+                still_hits = stop_when is not None and any(
+                    self._safe_stop(stop_when, self._code_item_text(c)) for c in cached["codes"] if c.get("decoded"))
+                if not cached.get("stopped_early") or still_hits:
+                    results.append(dict(cached, url=url, cached=True, stopped_early=still_hits))
+                    continue
+            scanned = await self._code_scan_bytes(data, stop_when=stop_when)
             if scanned["error"]:
                 logger.warning(f"[GroupMgr] 二维码 / 葵花码识别失败（放行）：{scanned['error']}")
             else:
@@ -312,6 +345,13 @@ class CodePipelineMixin:
                 cache[key] = (time.time(), scanned)
             results.append(dict(scanned, url=url))
         return results
+
+    @staticmethod
+    def _safe_stop(stop_when, text: str) -> bool:
+        try:
+            return bool(text) and bool(stop_when(text))
+        except Exception:
+            return False
 
     @staticmethod
     def _code_describe(scans: List[dict]) -> str:

@@ -216,6 +216,71 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipIf(Image is None, "需要 Pillow")
+class StopOnHitTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.s = _Services()
+        self.h = _Harness(self.s)
+        self.stop = lambda t: "invite" in t
+        self.three = _detections((2, 0.9, (10, 10, 100, 100)), (2, 0.8, (120, 10, 200, 100)),
+                                 (3, 0.7, (220, 10, 300, 100)))
+
+    async def test_first_hit_stops_remaining_decodes(self):
+        self.s.detect_responses = [self.three]
+        self.s.decode_responses = [_decoded("WX_CODE", "pages/invite?1")]
+        scan = await self.h._code_scan_bytes(_png(), stop_when=self.stop)
+        self.assertTrue(scan["stopped_early"])
+        self.assertEqual(self.s.count("/api/decode"), 1)
+        self.assertEqual([c["error"] for c in scan["codes"][1:]], [self.h.STOPPED_EARLY] * 2)
+        self.assertEqual(self.h._code_undecoded([scan]), [])  # 未继续解码的码不算「解不出」
+
+    async def test_keeps_decoding_until_a_hit(self):
+        self.s.detect_responses = [self.three]
+        self.s.decode_responses = [_decoded("QR_CODE", "https://ok"), _decoded("WX_CODE", "invite")]
+        scan = await self.h._code_scan_bytes(_png(), stop_when=self.stop)
+        self.assertEqual(self.s.count("/api/decode"), 2)
+        self.assertEqual(scan["codes"][2]["error"], self.h.STOPPED_EARLY)
+
+    async def test_without_stop_when_all_codes_are_decoded(self):
+        self.s.detect_responses = [self.three]
+        self.s.decode_responses = [_decoded("WX_CODE", "invite")] * 3
+        scan = await self.h._code_scan_bytes(_png())
+        self.assertEqual(self.s.count("/api/decode"), 3)
+        self.assertFalse(scan["stopped_early"])
+
+    async def test_later_images_are_skipped_after_a_hit(self):
+        self.h.images = {"u1": _png(400, 300), "u2": _png(300, 300)}
+        self.s.detect_responses = [_detections((2, 0.9, (10, 10, 100, 100)))]
+        self.s.decode_responses = [_decoded("WX_CODE", "invite")]
+        scans = await self.h._code_scan_images(["u1", "u2"], stop_when=self.stop)
+        self.assertEqual(len(scans), 1)
+        self.assertEqual(self.s.count("/v1/detect"), 1)
+
+    async def test_partial_cache_is_rescanned_when_rules_no_longer_hit(self):
+        self.h.images = {"u": _png()}
+        self.s.detect_responses = [self.three, self.three]
+        self.s.decode_responses = [_decoded("WX_CODE", "invite"),
+                                   _decoded("WX_CODE", "a"), _decoded("WX_CODE", "b"), _decoded("QR_CODE", "c")]
+        await self.h._code_scan_images(["u"], stop_when=self.stop)
+        again = await self.h._code_scan_images(["u"], stop_when=self.stop)  # 规则未变：用缓存
+        self.assertTrue(again[0]["cached"])
+        self.assertEqual(self.s.count("/v1/detect"), 1)
+        changed = await self.h._code_scan_images(["u"], stop_when=lambda t: "zzz" in t)  # 规则改了：重新完整识别
+        self.assertFalse(changed[0].get("cached", False))
+        self.assertEqual(self.s.count("/v1/detect"), 2)
+        self.assertEqual([c["decoded"]["text"] for c in changed[0]["codes"]], ["a", "b", "c"])
+
+    async def test_guard_recalls_after_first_hit(self):
+        self.h.cfg_values["keyword_guard_enabled"] = False
+        self.h.images = {"u": _png()}
+        self.s.detect_responses = [self.three]
+        self.s.decode_responses = [_decoded("WX_CODE", "pages/invite?x")]
+        handled, _ = await self.h._run_hit_guards(None, "1", "456", "", "", ["u"])
+        self.assertTrue(handled)
+        self.assertEqual(self.s.count("/api/decode"), 1)
+        self.assertIn(self.h.STOPPED_EARLY, self.h.hits[0]["extra_text"])
+
+
+@unittest.skipIf(Image is None, "需要 Pillow")
 class GuardIntegrationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.s = _Services()

@@ -208,7 +208,11 @@ class KeywordGuardMixin:
             driver = self._cfg_str("wxcode_driver", "two_stage").strip().lower()
             if driver == "two_stage" and callable(getattr(self, "_code_scan_images", None)):
                 # 两阶段：定位服务 → 扩大框裁剪 → 解码服务（code_pipeline.py）
-                scans = await self._code_scan_images(image_urls)
+                # 命中即停：解出一个码就匹配规则，命中后不再解码剩下的码 / 图，尽快撤回
+                scans = await self._code_scan_images(
+                    image_urls,
+                    stop_when=lambda t: bool(self._match_rules(t, "wxcode_regex_rules", regex_only=True)),
+                )
                 joined = "\n".join(self._code_texts(scans))
                 summary = self._code_describe(scans)
                 rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
