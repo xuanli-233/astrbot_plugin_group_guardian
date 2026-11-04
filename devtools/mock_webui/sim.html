@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模拟群聊</title>
+<style>
+  :root {
+    --bg:#f5f6f8; --surface:#fff; --surface2:#f0f2f5; --text:#1f2329; --muted:#6b7280; --border:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#e8f0fe; --danger:#dc2626; --ok:#16a34a; --bot:#eef6ee; --sys:#8a8f98;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --surface:#1b1e24; --surface2:#242830; --text:#e8eaed; --muted:#9aa0a6; --border:#2c3038;
+      --accent:#60a5fa; --accent-soft:#1e2a3d; --danger:#f87171; --ok:#4ade80; --bot:#1d2a20; --sys:#7d838c; }
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:13px/1.5 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  .app { display:grid; grid-template-columns:220px 1fr 340px; height:100%; }
+  aside, section, .side { min-height:0; }
+  aside { border-right:1px solid var(--border); background:var(--surface); overflow:auto; }
+  aside h3, .side h3 { margin:0; padding:12px 14px 6px; font-size:12px; color:var(--muted); font-weight:600; }
+  .group { padding:10px 14px; cursor:pointer; border-left:3px solid transparent; }
+  .group:hover { background:var(--surface2); }
+  .group.active { background:var(--accent-soft); border-left-color:var(--accent); }
+  .group .name { font-weight:600; word-break:break-all; }
+  .group .meta { color:var(--muted); font-size:12px; }
+  .badge { display:inline-block; font-size:11px; padding:0 6px; border-radius:6px; background:var(--surface2); color:var(--muted); margin-left:4px; }
+  .badge.warn { color:var(--danger); }
+  section { display:flex; flex-direction:column; }
+  .title { padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface); }
+  .title .name { font-size:15px; font-weight:600; }
+  .title .sub { color:var(--muted); font-size:12px; }
+  .chat { flex:1; overflow:auto; padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
+  .msg { max-width:78%; }
+  .msg .who { font-size:12px; color:var(--muted); margin-bottom:2px; }
+  .bubble { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:7px 10px; white-space:pre-wrap; word-break:break-word; }
+  .msg.bot .bubble { background:var(--bot); }
+  .msg.recalled .bubble { opacity:.55; text-decoration:line-through; }
+  .msg .recall-tag { color:var(--danger); font-size:12px; margin-top:2px; }
+  .sys { align-self:center; color:var(--sys); font-size:12px; text-align:center; max-width:90%; }
+  .img { display:inline-block; padding:2px 8px; margin:2px 0; border-radius:6px; background:var(--surface2); border:1px dashed var(--border); font-size:12px; }
+  .forward { border:1px solid var(--border); border-radius:10px; background:var(--surface); padding:8px 10px; }
+  .forward .head { font-weight:600; margin-bottom:4px; }
+  .forward .node { border-top:1px dashed var(--border); padding:6px 0 2px; }
+  .forward .node .n { color:var(--muted); font-size:12px; }
+  .composer { border-top:1px solid var(--border); background:var(--surface); padding:10px 16px; display:grid; gap:8px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  select, input, textarea, button { font:inherit; color:var(--text); }
+  select, input, textarea { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:6px 8px; }
+  textarea { width:100%; resize:vertical; min-height:56px; }
+  input.flex { flex:1; min-width:120px; }
+  button { border:1px solid var(--border); background:var(--surface); border-radius:8px; padding:6px 12px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:12px; padding:3px 8px; border-radius:999px; }
+  .side { border-left:1px solid var(--border); background:var(--surface); overflow:auto; }
+  .card { padding:0 14px 12px; }
+  .card p { margin:4px 0; color:var(--muted); font-size:12px; }
+  .list { font-size:12px; max-height:220px; overflow:auto; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:6px 8px; }
+  .list div { padding:2px 0; border-bottom:1px dashed var(--border); word-break:break-all; }
+  .list div:last-child { border-bottom:0; }
+  .lv-WARN, .lv-ERROR, .lv-EXCEPTION { color:var(--danger); }
+  code { background:var(--surface2); padding:0 4px; border-radius:4px; }
+  .hint { color:var(--muted); font-size:12px; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns:1fr; grid-template-rows:auto 1fr auto; }
+    aside { max-height:160px; }
+    .side { max-height:300px; border-left:0; border-top:1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h3>群聊</h3>
+    <div id="groups"></div>
+    <h3>插件用户黑名单</h3>
+    <div class="card"><div class="list" id="blacklist"></div></div>
+  </aside>
+
+  <section>
+    <div class="title"><div class="name" id="gname"></div><div class="sub" id="gsub"></div></div>
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <div class="row">
+        <label>发送者</label>
+        <select id="sender"></select>
+        <span class="hint" id="senderHint"></span>
+      </div>
+      <textarea id="text" placeholder="输入消息或指令，例如：加微信领福利 / /全群公告 今晚维护（Ctrl+Enter 发送）"></textarea>
+      <div class="row">
+        <input class="flex" id="wxcode" placeholder="附带一张“葵花码”图片，识别内容为（可留空）例如 pages/invite?code=1">
+        <input class="flex" id="ocr" placeholder="附带一张图片，图中文字为（可留空）例如 专业代刷">
+        <button class="primary" id="btnSend">发送</button>
+      </div>
+      <div class="chips" id="quick"></div>
+    </div>
+  </section>
+
+  <div class="side">
+    <h3>成员进出（当前群）</h3>
+    <div class="card">
+      <div class="row">
+        <select id="leaveUser"></select>
+        <button id="btnLeave">主动退群</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <input id="joinUid" placeholder="QQ号" style="width:100px">
+        <input id="joinNick" placeholder="昵称" style="width:90px">
+        <button id="btnRequest">申请入群</button>
+        <button id="btnInvite">被邀请入群</button>
+      </div>
+      <p>“退群自动拉黑”默认关闭，可在管理页面 → 设置 → 功能开关里打开。</p>
+    </div>
+
+    <h3>时间推进（群名倒计时 / 定时改名）</h3>
+    <div class="card">
+      <div class="row">
+        <input id="tickWhen" style="width:170px">
+        <button id="btnTick">执行一次定时任务</button>
+      </div>
+      <p>模拟时间到达该时刻，运行一次群名定时任务（倒计时每天 00:05 后刷新）。</p>
+    </div>
+
+    <h3>当前规则</h3>
+    <div class="card" id="rules"></div>
+
+    <h3>机器人调用的 QQ 接口</h3>
+    <div class="card"><div class="list" id="actions"></div></div>
+
+    <h3>插件日志</h3>
+    <div class="card"><div class="list" id="logs"></div></div>
+  </div>
+</div>
+
+<script>
+var STATE = null, CUR = null;
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+
+async function api(path, body) {
+  var resp = await fetch('/sim-api/' + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  return resp.json();
+}
+
+function segHtml(segs) {
+  return (segs || []).map(function (s) {
+    var d = s.data || {};
+    if (s.type === 'text') return esc(d.text);
+    if (s.type === 'image') {
+      var url = String(d.url || '');
+      var label = url.indexOf('mock://wxcode/') === 0 ? '葵花码图片：' + decodeURIComponent(url.slice(14))
+        : url.indexOf('mock://ocr/') === 0 ? '图片（文字：' + decodeURIComponent(url.slice(11)) + '）' : '图片';
+      return '<span class="img">🖼 ' + esc(label) + '</span>';
+    }
+    return '<span class="img">[' + esc(s.type) + ']</span>';
+  }).join('');
+}
+
+function renderChat(g) {
+  var html = g.chat.map(function (m) {
+    if (m.kind === 'system') return '<div class="sys">' + esc(m.time) + ' · ' + esc(m.text) + '</div>';
+    var cls = 'msg ' + (m.kind === 'bot' ? 'bot' : '') + (m.recalled ? ' recalled' : '');
+    var body;
+    if (m.forward) {
+      body = '<div class="forward"><div class="head">合并转发（' + m.forward.length + ' 条）</div>' +
+        m.forward.map(function (n) { return '<div class="node"><div class="n">' + esc(n.name) + '（' + esc(n.uin) + '）</div><div class="bubble" style="border:0;padding:0;background:none">' + segHtml(n.segments) + '</div></div>'; }).join('') + '</div>';
+    } else {
+      body = '<div class="bubble">' + segHtml(m.segments) + '</div>';
+    }
+    return '<div class="' + cls + '"><div class="who">' + esc(m.nickname) + '（' + esc(m.user_id) + '）· ' + esc(m.time) + '</div>' + body +
+      (m.recalled ? '<div class="recall-tag">已被机器人撤回</div>' : '') + '</div>';
+  }).join('');
+  var box = $('chat');
+  var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = html || '<div class="sys">暂无消息</div>';
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+function render() {
+  if (!STATE) return;
+  if (!CUR || !STATE.groups.some(function (g) { return g.group_id === CUR; })) CUR = STATE.groups[0].group_id;
+  $('groups').innerHTML = STATE.groups.map(function (g) {
+    var role = g.bot_role === 'member' ? '<span class="badge warn">机器人非管理</span>' : '';
+    var backup = String(g.group_id) === String(STATE.backup_group_id) ? '<span class="badge">备份群</span>' : '';
+    return '<div class="group' + (g.group_id === CUR ? ' active' : '') + '" data-gid="' + g.group_id + '"><div class="name">' + esc(g.name) + '</div><div class="meta">' + g.group_id + ' · ' + g.members.length + ' 人' + role + backup + '</div></div>';
+  }).join('');
+  document.querySelectorAll('.group').forEach(function (el) {
+    el.onclick = function () { CUR = Number(el.dataset.gid); render(); };
+  });
+  var g = STATE.groups.find(function (x) { return x.group_id === CUR; });
+  $('gname').textContent = g.name;
+  $('gsub').textContent = g.group_id + ' · 机器人身份：' + ({owner:'群主',admin:'管理员',member:'普通成员'}[g.bot_role] || g.bot_role) +
+    (g.blocked.length ? ' · QQ 群黑名单：' + g.blocked.join(', ') : '') +
+    (g.notices.length ? ' · 公告 ' + g.notices.length + ' 条' : '');
+  renderChat(g);
+
+  var prevSender = $('sender').value;
+  var opts = g.members.map(function (m) {
+    var tag = m.user_id === STATE.admin_uin ? '（插件管理员）' : m.role === 'owner' ? '（群主）' : m.role === 'admin' ? '（管理员）' : '';
+    return '<option value="' + m.user_id + '">' + esc(m.nickname) + ' ' + m.user_id + tag + (m.muted ? ' [禁言中]' : '') + '</option>';
+  }).join('');
+  $('sender').innerHTML = opts;
+  if (prevSender && g.members.some(function (m) { return String(m.user_id) === prevSender; })) $('sender').value = prevSender;
+  $('leaveUser').innerHTML = g.members.filter(function (m) { return m.user_id !== STATE.admin_uin; })
+    .map(function (m) { return '<option value="' + m.user_id + '">' + esc(m.nickname) + ' ' + m.user_id + '</option>'; }).join('');
+  $('senderHint').textContent = String($('sender').value) === String(STATE.admin_uin) ? '可以使用管理指令' : '普通成员';
+
+  $('blacklist').innerHTML = STATE.user_blacklist.length ? STATE.user_blacklist.map(function (u) { return '<div>' + esc(u) + '</div>'; }).join('') : '<div class="hint">空</div>';
+  $('rules').innerHTML = '<p>关键词：' + STATE.keyword_rules.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join(' ') + '</p>' +
+    '<p>葵花码正则：' + STATE.wxcode_rules.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join(' ') + '</p>' +
+    '<p>备份群：<code>' + esc(STATE.backup_group_id) + '</code>（可在管理页面 → 设置 → 全量配置里修改）</p>';
+  $('actions').innerHTML = STATE.actions.slice().reverse().filter(function (a) { return !/^get_|ocr_image/.test(a.action); })
+    .map(function (a) { return '<div>' + esc(a.time) + ' <b>' + esc(a.action) + '</b> ' + esc(JSON.stringify(a.params)) + '</div>'; }).join('') || '<div class="hint">暂无</div>';
+  $('logs').innerHTML = STATE.logs.slice().reverse().map(function (l) { return '<div class="lv-' + l.level + '">' + esc(l.time) + ' ' + esc(l.text) + '</div>'; }).join('') || '<div class="hint">暂无</div>';
+}
+
+async function refresh() { STATE = await api('state'); render(); }
+
+async function sendMsg() {
+  var text = $('text').value, wx = $('wxcode').value.trim(), ocr = $('ocr').value.trim();
+  if (!text.trim() && !wx && !ocr) return;
+  $('btnSend').disabled = true;
+  try {
+    var r = await api('send', { group_id: CUR, user_id: Number($('sender').value), text: text, wxcode: wx, ocr: ocr });
+    if (!r.ok) alert(r.message);
+    $('text').value = ''; $('wxcode').value = ''; $('ocr').value = '';
+  } finally { $('btnSend').disabled = false; }
+  await refresh();
+}
+
+async function member(action) {
+  var body = { group_id: CUR, action: action };
+  if (action === 'leave') body.user_id = Number($('leaveUser').value);
+  else { body.user_id = Number($('joinUid').value); body.nickname = $('joinNick').value; }
+  if (!body.user_id) { alert('请填写 QQ 号'); return; }
+  var r = await api('member', body);
+  if (!r.ok) alert(r.message);
+  await refresh();
+}
+
+function nextDay(offset, hm) {
+  var d = new Date(); d.setDate(d.getDate() + offset);
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + hm;
+}
+
+var QUICK = [
+  ['关键词消息', '加微信领福利', false],
+  ['精确匹配“1”', '1', false],
+  ['/全群公告', '/全群公告 -置顶 今晚 22:00 机器人维护，期间暂停服务', true],
+  ['/全群待办', '/全群待办 周五前在群文件提交报名表', true],
+  ['/确认发布', '/确认发布', true],
+  ['/待办确认情况', '/待办确认情况', true],
+  ['/群名后缀', '/群名后缀 ｜周末活动', true],
+  ['/群名倒计时', '/群名倒计时 ' + nextDay(30, '').trim() + ' ｜距考试{days}天', true],
+  ['/群名倒计时 列表', '/群名倒计时 列表', true],
+  ['/全群踢黑', '/全群踢黑 30001', true],
+  ['/批量踢黑', '/批量踢黑 30002', true],
+];
+
+function initQuick() {
+  $('quick').innerHTML = QUICK.map(function (q, i) { return '<button class="chip" data-i="' + i + '">' + esc(q[0]) + '</button>'; }).join('');
+  document.querySelectorAll('#quick .chip').forEach(function (b) {
+    b.onclick = function () {
+      var q = QUICK[Number(b.dataset.i)];
+      $('text').value = q[1];
+      if (q[2] && STATE) $('sender').value = String(STATE.admin_uin);
+      $('text').focus();
+    };
+  });
+}
+
+$('btnSend').onclick = sendMsg;
+$('text').addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMsg(); });
+$('sender').onchange = render;
+$('btnLeave').onclick = function () { member('leave'); };
+$('btnRequest').onclick = function () { member('request'); };
+$('btnInvite').onclick = function () { member('invite'); };
+$('tickWhen').value = nextDay(1, '00:06');
+$('btnTick').onclick = async function () {
+  var r = await api('tick', { when: $('tickWhen').value.trim() });
+  if (!r.ok) alert(r.message || '执行失败');
+  await refresh();
+};
+initQuick();
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

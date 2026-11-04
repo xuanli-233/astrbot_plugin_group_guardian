@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>群守护者 · 本地模拟</title>
+<style>
+  :root { --bg:#f5f6f8; --surface:#fff; --text:#1f2329; --muted:#6b7280; --border:#e5e7eb; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111317; --surface:#1b1e24; --text:#e8eaed; --muted:#9aa0a6; --border:#2c3038; --accent:#60a5fa; } }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px/1.5 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  header { height:48px; display:flex; align-items:center; gap:16px; padding:0 16px; background:var(--surface); border-bottom:1px solid var(--border); }
+  header strong { font-size:15px; }
+  header .tag { font-size:12px; color:var(--muted); }
+  nav { display:flex; gap:4px; margin-left:auto; }
+  nav button { border:1px solid var(--border); background:transparent; color:var(--text); padding:6px 14px; border-radius:8px; cursor:pointer; font:inherit; }
+  nav button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  iframe { display:block; width:100%; height:calc(100% - 48px); border:0; background:var(--bg); }
+  iframe[hidden] { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <strong>群守护者 · 本地模拟</strong>
+  <span class="tag">真实插件代码 + 模拟 AstrBot / QQ，数据在内存中，重启即重置</span>
+  <nav>
+    <button data-view="dashboard" class="active">管理页面</button>
+    <button data-view="sim">模拟群聊</button>
+  </nav>
+</header>
+<iframe id="dashboard" src="/dashboard" title="管理页面"></iframe>
+<iframe id="sim" src="about:blank" title="模拟群聊" hidden></iframe>
+<script>
+  document.querySelectorAll('nav button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var view = btn.dataset.view;
+      document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      document.querySelectorAll('iframe').forEach(function (f) { f.hidden = f.id !== view; });
+      var frame = document.getElementById(view);
+      if (frame.src === 'about:blank' || frame.getAttribute('src') === 'about:blank') frame.src = '/' + view;
+      else if (view === 'dashboard') frame.contentWindow.location.reload();
+    });
+  });
+</script>
+</body>
+</html>

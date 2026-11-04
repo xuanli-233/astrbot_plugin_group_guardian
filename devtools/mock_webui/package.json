@@ -1,0 +1,12 @@
+{
+  "name": "group-guardian-mock-webui",
+  "private": true,
+  "type": "module",
+  "description": "本地模拟环境：在 Pyodide 中运行插件，预览管理页面与模拟群聊",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "pyodide": "0.27.7"
+  }
+}
