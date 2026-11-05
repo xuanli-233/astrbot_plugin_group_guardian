@@ -539,6 +539,14 @@ class WiringTests(unittest.TestCase):
         self.assertFalse(schema["wxcode_enabled"]["default"])
         self.assertEqual(schema["local_ocr_driver"]["default"], "off")
 
+    def test_dashboard_uses_no_native_dialogs(self):
+        """插件页面在 AstrBot 的沙箱 iframe 里，原生 confirm/alert/prompt 会被忽略（按钮看起来没反应）。"""
+        import re
+        html = (ROOT / "pages" / "dashboard" / "index.html").read_text(encoding="utf-8")
+        code = "\n".join(line for line in html.splitlines() if not line.strip().startswith("//"))
+        calls = re.findall(r"(?<![\w.$])(confirm|alert|prompt)\s*\(", code)
+        self.assertEqual(calls, [], "请改用 confirmModal / promptModal / toast")
+
     def test_native_group_commands_default_off_and_new_features_decoupled(self):
         schema = json.loads((ROOT / "_conf_schema.json").read_text(encoding="utf-8"))
         native = ("ban_enabled", "unban_enabled", "kick_enabled", "recall_enabled", "whole_ban_enabled",

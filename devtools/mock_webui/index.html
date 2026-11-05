@@ -28,7 +28,8 @@
     <button data-view="sim">模拟群聊</button>
   </nav>
 </header>
-<iframe id="dashboard" src="/dashboard" title="管理页面"></iframe>
+<!-- 与 AstrBot 插件页面一样放在沙箱 iframe 里：不给 allow-modals，原生 confirm()/alert()/prompt() 会被忽略 -->
+<iframe id="dashboard" src="/dashboard" title="管理页面" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups"></iframe>
 <iframe id="sim" src="about:blank" title="模拟群聊" hidden></iframe>
 <script>
   document.querySelectorAll('nav button').forEach(function (btn) {

@@ -1980,6 +1980,16 @@ function confirmModal(opts) {
   });
 }
 
+// 纯文本确认（换行保留）。插件页面运行在 AstrBot 的沙箱 iframe 里，浏览器原生 confirm()/alert()
+// 会被直接忽略并返回 false，按钮看起来「没反应」；新功能一律用页面内弹窗。
+function mnConfirm(text, opts) {
+  opts = opts || {};
+  return confirmModal({
+    title: opts.title || '请确认', okText: opts.okText || '确定', danger: !!opts.danger,
+    body: esc(String(text || '')).replace(/\n/g, '<br>')
+  });
+}
+
 // 通用输入弹窗：返回 Promise<string|null>（取消返回 null）。用于“添加 QQ 号/群号”等录入。
 // opts: { title, label, placeholder, value, okText, multiline }
 function promptModal(opts) {
@@ -5156,7 +5166,8 @@ async function mnSendBroadcast() {
   if (!content) { toast('请输入公告内容', 'warning'); return; }
   if (!groups.length) { toast('请至少选择一个群', 'warning'); return; }
   var todo = mnBroadcastMode() === 'todo';
-  if (!confirm('确定把这条' + (todo ? '待办公告' : '群公告') + '发布到 ' + groups.length + ' 个群吗？')) return;
+  if (!(await mnConfirm('确定把这条' + (todo ? '待办公告' : '群公告') + '发布到 ' + groups.length + ' 个群吗？',
+    { title: todo ? '发布待办公告' : '发布群公告', okText: '发布' }))) return;
   var btn = $('#btnBcSend'); btn.disabled = true;
   $('#bcResult').innerHTML = '<div class="mn-result no">正在发布，群多时需要一些时间……</div>';
   var res = await safePost('minimal/broadcast', {
@@ -5234,7 +5245,7 @@ function mnRenderApply(boxSel, res) {
 async function mnNamesAction(url, body, boxSel, confirmText) {
   var groups = mnSelectedGroups('#namesTable');
   if (!groups.length) { toast('请先在表格里勾选群', 'warning'); return; }
-  if (confirmText && !confirm(confirmText.replace('{n}', groups.length))) return;
+  if (confirmText && !(await mnConfirm(confirmText.replace('{n}', groups.length), { title: '群名任务' }))) return;
   body.groups = groups;
   $(boxSel).innerHTML = '<div class="mn-result no">处理中……</div>';
   var res = await safePost(url, body, 120000);
@@ -5261,7 +5272,7 @@ function mnRenderBlacklist() {
   $$('[data-ub-del]').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       var uid = btn.getAttribute('data-ub-del');
-      var reason = prompt('把 ' + uid + ' 移出插件黑名单？可以填写原因（会写进操作记录）：', '');
+      var reason = await promptModal({ title: '移出插件黑名单', label: '把 ' + uid + ' 移出插件黑名单？可以填写原因（会写进操作记录）', placeholder: '原因（可不填）', okText: '移出' });
       if (reason === null) return;
       var res = await safePost('minimal/blacklist/remove', { user_id: uid, reason: reason });
       if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
@@ -5290,7 +5301,8 @@ async function mnKick() {
   var scope = $('#kickScope').value;
   var reason = $('#kickReason').value.trim();
   if (block && !reason) { toast('踢出并拉黑需要填写原因', 'warning'); $('#kickReason').focus(); return; }
-  if (!confirm('确定' + (block ? '踢出并拉黑' : '踢出') + '这些人吗？\n范围：' + (scope ? '群 ' + scope : '所有管理的群') + (reason ? '\n原因：' + reason : ''))) return;
+  if (!(await mnConfirm('确定' + (block ? '踢出并拉黑' : '踢出') + '这些人吗？\n范围：' + (scope ? '群 ' + scope : '所有管理的群') + (reason ? '\n原因：' + reason : ''),
+    { title: block ? '踢出并拉黑' : '踢出', okText: '执行', danger: true }))) return;
   var btn = $('#btnKick'); btn.disabled = true;
   $('#kickResult').innerHTML = '<div class="mn-result no">处理中……' + ($('#kickRefresh').checked ? '（正在逐个刷新成员缓存，群多时需要一些时间）' : '') + '</div>';
   var res = await safePost('minimal/kick', { user_ids: ids, block: block, reason: reason, refresh: $('#kickRefresh').checked,
@@ -5381,7 +5393,8 @@ async function mnDupHandle(mode) {
   var desc = mode === 'keep_one'
     ? '只保留各自选中的一个群，从其余群踢出' + (block ? '，并在被踢的群里 QQ 拉黑' : '')
     : '从所有群踢出' + (block ? '，并加入插件黑名单' : '');
-  if (!confirm('确定处理选中的 ' + ids.length + ' 人？\n' + desc + '\n原因：' + reason)) return;
+  if (!(await mnConfirm('确定处理选中的 ' + ids.length + ' 人？\n' + desc + '\n原因：' + reason,
+    { title: '处理重复成员', okText: '执行', danger: true }))) return;
   $('#dupResult').innerHTML = '<div class="mn-result no">处理中……</div>';
   var res = await safePost('minimal/duplicates/handle', { user_ids: ids, mode: mode, reason: reason, keep: keep, block: block }, 300000);
   if (isApiError(res)) { $('#dupResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
@@ -5401,7 +5414,7 @@ async function mnDupHandle(mode) {
 async function mnDupIgnore() {
   var ids = mnDupSelected();
   if (!ids.length) { toast('请先勾选成员', 'warning'); return; }
-  var reason = prompt('忽略选中的 ' + ids.length + ' 人（以后不再列出）。可以填写原因，例如「工作人员」：', $('#dupReason').value.trim());
+  var reason = await promptModal({ title: '忽略重复成员', label: '忽略选中的 ' + ids.length + ' 人（以后不再列出）。可以填写原因，例如「工作人员」', value: $('#dupReason').value.trim(), placeholder: '原因（可不填）', okText: '忽略' });
   if (reason === null) return;
   var res = await safePost('minimal/duplicates/ignore', { user_ids: ids, ignore: true, reason: reason });
   if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
@@ -5683,7 +5696,7 @@ function initMinimalPages() {
   bindIfExists('btnDupKickAll', function() { mnDupHandle('kick_all'); });
   bindIfExists('btnDupIgnore', mnDupIgnore);
   bindIfExists('btnDupRefreshCache', async function() {
-    if (!confirm('逐个刷新所有群的成员缓存？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行，完成后点「重新检测」。')) return;
+    if (!(await mnConfirm('逐个刷新所有群的成员缓存？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行，完成后点「重新检测」。', { okText: '刷新' }))) return;
     var res = await safePost('minimal/directory/refresh', { all: true });
     if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
     toast('已开始在后台刷新，可在「群成员缓存」页面查看进度', 'success');
@@ -5734,8 +5747,8 @@ function initMinimalPages() {
     if (!count && !minutes) { toast('条数和分钟都为 0 时不会撤回任何消息', 'warning'); }
     mnSaveConfig({ leave_recall_count: count, leave_recall_minutes: minutes }, '已保存');
   });
-  bindIfExists('btnDirAll', function() {
-    if (!confirm('逐个刷新所有群的成员？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行。')) return;
+  bindIfExists('btnDirAll', async function() {
+    if (!(await mnConfirm('逐个刷新所有群的成员？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行。', { okText: '刷新' }))) return;
     mnDirRefresh({ all: true });
   });
   bindIfExists('btnDirSave', function() {
