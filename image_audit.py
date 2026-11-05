@@ -5,9 +5,12 @@ import asyncio
 import contextvars
 import importlib
 import ipaddress
+import os
+import re
 import socket
 import time
-from urllib.parse import urljoin, urlparse
+from pathlib import Path
+from urllib.parse import unquote, urljoin, urlparse
 
 from astrbot.api import logger
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
@@ -772,16 +775,105 @@ class ImageAuditMixin:
             self._image_http_session = session
             return session
 
+    # ------------------------------------------------------------------
+    # 本地图片：部分 AstrBot 版本 / 配置会先把图片存到 data/temp，消息组件里只剩本地路径
+    # ------------------------------------------------------------------
+    _WIN_ABS_PATH = re.compile(r"^[A-Za-z]:[\\/]")
+
+    def _local_image_roots(self) -> list:
+        """允许直接读取的目录：AstrBot 数据目录（data/）。"""
+        roots = []
+        try:
+            from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+            roots.append(Path(get_astrbot_data_path()))
+        except Exception:
+            pass
+        data_dir = getattr(self, "_data_dir", None)
+        if data_dir:
+            try:
+                p = Path(data_dir).resolve()
+                # StarTools.get_data_dir() = data/plugin_data/<插件名> → data
+                if p.parent.name == "plugin_data":
+                    roots.append(p.parent.parent)
+            except Exception:
+                pass
+        extra = getattr(self, "_extra_local_image_roots", None) or []
+        roots.extend(Path(x) for x in extra)
+        out = []
+        for r in roots:
+            try:
+                r = r.resolve()
+            except Exception:
+                continue
+            if r not in out:
+                out.append(r)
+        return out
+
+    def _resolve_local_image(self, url: str):
+        """本地路径 / file:// → Path；不是本地路径返回 None；在允许目录之外返回 False（原因写入 DOWNLOAD_ERROR）。"""
+        text = str(url or "").strip()
+        if text.lower().startswith("file://"):
+            path = unquote(urlparse(text).path or "")
+            if re.match(r"^/[A-Za-z]:[\\/]", path):  # file:///D:/x → D:/x
+                path = path[1:]
+        elif self._WIN_ABS_PATH.match(text) or text.startswith("/"):
+            path = text
+        else:
+            return None
+        try:
+            target = Path(path).resolve()
+        except Exception:
+            DOWNLOAD_ERROR.set(f"本地图片路径无法解析（{_url_brief(text)}）")
+            return False
+        for root in self._local_image_roots():
+            if target == root or root in target.parents:
+                return target
+        DOWNLOAD_ERROR.set(f"本地图片不在 AstrBot 数据目录内，出于安全考虑拒绝读取（{_url_brief(text)}）")
+        return False
+
+    @staticmethod
+    def _read_local_image(path: Path, max_bytes: int):
+        """在线程池里执行，返回 (数据, 错误说明)。线程里设置的 contextvar 传不回调用方，所以错误用返回值带回。"""
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return None, "本地图片文件不存在（可能已被 AstrBot 清理）"
+        if size <= 0:
+            return None, "本地图片文件为空"
+        if size > max_bytes:
+            return None, f"图片超过 {max_bytes // (1024 * 1024)} MB，未读取"
+        with open(path, "rb") as fh:
+            data = fh.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            return None, f"图片超过 {max_bytes // (1024 * 1024)} MB，未读取"
+        return data, ""
+
     async def _download_bytes(
         self,
         url: str,
         max_bytes: int = IMAGE_MAX_BYTES,
         timeout: float = IMAGE_DOWNLOAD_TIMEOUT,
     ):
-        """在共享 I/O 限额内下载图片，并逐跳校验重定向地址。"""
+        """在共享 I/O 限额内下载图片，并逐跳校验重定向地址。
+
+        AstrBot 已存到本地（data/ 目录内）的图片直接读取，不走网络。
+        """
         semaphore = getattr(self, "_image_io_semaphore", None)
         acquired = False
         DOWNLOAD_ERROR.set("")
+        local = self._resolve_local_image(url)
+        if local is False:
+            return None
+        if local is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                data, err = await loop.run_in_executor(None, self._read_local_image, local, max_bytes)
+            except Exception as exc:
+                DOWNLOAD_ERROR.set(f"读取本地图片出错：{type(exc).__name__}: {str(exc)[:120]}")
+                return None
+            if data is None:
+                DOWNLOAD_ERROR.set(err or "读取本地图片失败")
+            return data
         try:
             if semaphore is not None:
                 await asyncio.wait_for(
