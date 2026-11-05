@@ -10,12 +10,7 @@ from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.core.config.astrbot_config import AstrBotConfig
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
-from .anti_flood import AntiFloodMixin
-from .appeal import AppealMixin
-from .automaton import HybridMatcher
-from .card_monitor import CardMonitorMixin
 from .commands import CommandsMixin
-from .lexicon_learn import LexiconLearnMixin
 from .constants import PLUGIN_NAME, PLUGIN_VERSION
 from .group_blacklist import GroupBlacklistMixin
 from .group_broadcast import GroupBroadcastMixin
@@ -35,9 +30,7 @@ from .message_backup import MessageBackupMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
 from .moderation import ModerationMixin
-from .moderation_review import ModerationReviewMixin
 from .onebot import OneBotMixin
-from .remote import RemoteMixin
 from .scheduler import SchedulerMixin
 from .storage import SQLiteStorage
 from .utils import UtilitiesMixin
@@ -45,7 +38,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -69,12 +62,6 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         # 同步 AstrBot 全局管理员到插件 admin_list（写入 DB managed_lists + 内存）
         self._sync_astrbot_admins()
         self.auto_moderate_enabled = self.config.get("auto_moderate_enabled", True)
-        # 脏话/广告规则：AC 自动机优先，无法拆解的正则保留回退；合并配置中的自定义关键词
-        self._rebuild_rule_matcher("swear")
-        self._rebuild_rule_matcher("ad")
-        # 外置词库：每个分类编译为纯文本 AC 自动机，O(n) 单次扫描
-        self._lexicon = self._load_lexicon()
-        self._compiled_lexicon = self._compile_lexicon()
         # 审核日志环形缓存 + 自增ID：日志 500 条封顶，持久化到 SQLite
         self._moderation_logs = deque(self._load_logs(), maxlen=500)
         self._next_log_id = max(self._init_next_log_id(), self._storage.max_log_id() + 1)
@@ -91,46 +78,19 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         # WebUI 慢接口缓存：群列表/成员列表依赖 OneBot API，短 TTL 避免页面切换时反复阻塞。
         self._web_group_cache = {"ts": 0.0, "data": []}
         self._web_member_cache = {}
-        # WebUI 规则数量缓存（30s TTL），规则变更时置 None 失效
-        self._rule_count_cache = None
-        # 全量审核会为每条消息调用 LLM，使用可配置的高并发总闸门。OCR 再加一层
-        # 4 路上限，防止多图消息占满全部许可，给正文/入群/名片审核保留容量。
-        llm_concurrency = max(1, min(
-            self._cfg_int("llm_max_concurrency", 12), 32
-        ))
-        self._llm_semaphore = asyncio.Semaphore(llm_concurrency)
-        # 审核上下文独立于防刷屏队列，并负责合并/限流群历史请求。
-        self._init_moderation_context_resources(llm_concurrency)
-        self._init_image_audit_resources(llm_concurrency)
-        self._init_moderation_review()
-        # 防刷屏追踪数据结构
-        self._init_anti_flood()
-        # 自适应上下文学习：初始化按群缓冲/匹配器，并从 DB 载入已审批学习词
-        self._init_lexicon_learn()
-        self._load_learned_matchers()
-        # 热更新重建状态：前端可轮询显示当前是否在后台重建规则/词库
-        self._rebuild_lock = asyncio.Lock()
-        self._rebuild_task = None
-        self._rebuild_pending = False
-        self._rebuild_status = {"state": "idle", "target": "", "message": "空闲", "updated_at": 0}
+        # 图片下载（二维码 / 葵花码识别、OCR）的并发闸门与 HTTP 会话
+        self._init_image_audit_resources()
         # 注册 WebUI 面板所需的 Quart 路由
         self._register_web_apis()
-        # 后台调度器（F3 定时解禁 + F2 申诉超时清理）
+        # 后台任务：群名定时 / 倒计时、群成员缓存补齐、批量任务执行器
         self._init_scheduler()
         self._start_scheduler()
 
     async def terminate(self):
-        if self._rebuild_task and not self._rebuild_task.done():
-            self._rebuild_task.cancel()
-            try:
-                await self._rebuild_task
-            except asyncio.CancelledError:
-                logger.debug("[GroupMgr] 后台重建任务已取消")
         await self._stop_scheduler()
-        # WebUI 触发的一次性后台任务（立即学习挖掘、机器人角色补查）此前卸载时不取消，
-        # 热重载后会在旧实例上继续跑、写旧状态。这里统一取消并等待收尾。
+        # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_learn_adhoc_tasks", "_bot_role_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_aa_tasks", "_cb_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):
@@ -140,104 +100,8 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
                 task.cancel()
         if adhoc:
             await asyncio.gather(*adhoc, return_exceptions=True)
-        await self._close_moderation_context_resources()
         await self._close_image_audit_resources()
         logger.info("[GroupMgr] 插件卸载，SQLite 存储已自动持久化")
-
-    def _set_rebuild_status(self, state: str, target: str = "", message: str = "") -> None:
-        self._rebuild_status = {
-            "state": state,
-            "target": target,
-            "message": message or state,
-            "updated_at": self._safe_int(time.time(), 0),
-        }
-
-    def _rebuild_rule_matcher(self, category: str) -> None:
-        matcher = self._build_rule_matcher(category)
-        if category == "swear":
-            self._swear_matcher = matcher
-        elif category == "ad":
-            self._ad_matcher = matcher
-
-    def _build_rule_matcher(self, category: str) -> HybridMatcher:
-        """读取规则并构建匹配器，不修改实例状态，可在线程池中执行。"""
-        patterns = self._storage.load_moderation_rules(category)
-        # 合并配置中的用户自定义关键词（纯文本，直接进 AC 自动机）
-        custom_key = "custom_swear_keywords" if category == "swear" else "custom_ad_keywords"
-        custom_raw = self.config.get(custom_key, []) or []
-        if not isinstance(custom_raw, list):
-            custom_raw = [custom_raw]
-        custom = [str(x).strip() for x in custom_raw if str(x).strip()]
-        matcher = HybridMatcher()
-        matcher.add_regex_patterns(patterns)
-        matcher.add_literal_keywords(custom)
-        matcher.build()
-        return matcher
-
-    def _build_full_matchers(self):
-        """全量读取词库/规则并编译匹配器，返回新对象而不修改实例状态。
-
-        内置词库约 6.7 万词、2.4 万条规则，编译要数百毫秒（未装 pyahocorasick 时更久）；
-        放在线程池执行，避免整段阻塞 AstrBot 事件循环，完成后再一次性替换。
-        """
-        lexicon = self._storage.load_lexicon()
-        compiled = {}
-        for cat_name, cat_data in lexicon.items():
-            ac = self._build_category_automaton(cat_name, cat_data)
-            if ac.count:
-                compiled[cat_name] = ac
-        return lexicon, compiled, self._build_rule_matcher("swear"), self._build_rule_matcher("ad")
-
-    def _rebuild_lexicon_category(self, category: str) -> None:
-        cat = self._storage.load_lexicon_category(category)
-        if not cat:
-            self._lexicon.pop(category, None)
-            self._compiled_lexicon.pop(category, None)
-            return
-        self._lexicon[category] = {
-            "description": cat.get("description", ""),
-            "keywords": cat.get("keywords", []),
-        }
-        ac = self._compile_lexicon_category(category, self._lexicon[category])
-        if ac.count:
-            self._compiled_lexicon[category] = ac
-        else:
-            self._compiled_lexicon.pop(category, None)
-
-    async def _background_full_rebuild(self, reason: str = "") -> None:
-        failures = 0
-        while True:
-            self._rebuild_pending = False
-            self._set_rebuild_status("running", "full", reason or "后台重建全部规则")
-            try:
-                async with self._rebuild_lock:
-                    lexicon, compiled, swear, ad = await self._run_in_thread(self._build_full_matchers)
-                    self._lexicon = lexicon
-                    self._compiled_lexicon = compiled
-                    self._swear_matcher = swear
-                    self._ad_matcher = ad
-                self._set_rebuild_status("success", "full", "后台重建完成")
-                failures = 0
-            except asyncio.CancelledError:
-                self._set_rebuild_status("idle", "", "后台重建已取消")
-                raise
-            except Exception as e:
-                failures += 1
-                logger.warning(f"[GroupMgr] 后台重建失败({failures}/5): {e}")
-                self._set_rebuild_status("error", "full", str(e))
-                if failures >= 5:
-                    logger.error("[GroupMgr] 后台重建连续失败 5 次，放弃本轮，请检查数据库后手动触发")
-                    break
-                await asyncio.sleep(2 ** failures)
-                continue  # 退避后强制重试整个 try 块（否则会落到下方 break 直接退出）
-            if not self._rebuild_pending:
-                break
-
-    def _schedule_background_rebuild(self, reason: str = "") -> None:
-        self._rebuild_pending = True
-        if self._rebuild_task and not self._rebuild_task.done():
-            return
-        self._rebuild_task = asyncio.create_task(self._background_full_rebuild(reason))
 
     async def _search_keyword_in_messages(self, event: AstrMessageEvent, group_id: str, keyword: str, days: int, search_type: str = "all") -> Tuple[int, list]:
         return await CommandsMixin._search_keyword_in_messages(self, event, group_id, keyword, days, search_type)
@@ -402,24 +266,6 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         async for item in CommandsMixin.recall_all(self, event):
             yield item
 
-    @filter.command("添加违禁词")
-    async def cmd_add_rule_keyword(self, event: AstrMessageEvent):
-        '''添加自定义违禁词。用法: /添加违禁词 <脏话|广告> <关键词>'''
-        async for item in CommandsMixin.cmd_add_rule_keyword(self, event):
-            yield item
-
-    @filter.command("删除违禁词")
-    async def cmd_del_rule_keyword(self, event: AstrMessageEvent):
-        '''删除自定义违禁词。用法: /删除违禁词 <脏话|广告> <关键词或规则ID>'''
-        async for item in CommandsMixin.cmd_del_rule_keyword(self, event):
-            yield item
-
-    @filter.command("查看违禁词")
-    async def cmd_list_rule_keyword(self, event: AstrMessageEvent):
-        '''查看指令添加的自定义违禁词。用法: /查看违禁词 [脏话|广告]'''
-        async for item in CommandsMixin.cmd_list_rule_keyword(self, event):
-            yield item
-
     # 退群撤回：记录每条群消息的 ID 与时间（只记 ID，不存内容）。注册在审核入口之前，
     # 保证被审核撤回、stop_event 的消息也已记下。功能关闭时不记录。
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
@@ -481,70 +327,20 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         except Exception as e:
             logger.warning(f"[GroupMgr] 处理好友申请出错: {e}")
 
-    # 名片监控：监听 group_card（名片变更）通知事件（与其它 ALL 监听互不干扰）。
-    @filter.event_message_type(filter.EventMessageType.ALL)
-    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
-    async def _on_group_card_change(self, event: AiocqhttpMessageEvent):
-        if not self._is_group_card_notice(event):
-            return
-        try:
-            handled = await CardMonitorMixin._handle_group_card_change(self, event)
-            if handled:
-                event.stop_event()
-        except Exception as e:
-            logger.warning(f"[GroupMgr] 名片变更处理出错: {e}")
-
-    # 名片监控兼容入口：group_increase 是 OneBot v11 标准通知。
-    # 部分协议端不发送非标准 group_card，入群时查询一次成员名片，避免必须先发言。
-    @filter.event_message_type(filter.EventMessageType.ALL)
-    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
-    async def _on_group_increase_card_check(self, event: AiocqhttpMessageEvent):
-        if not self._is_group_increase_notice(event):
-            return
-        try:
-            await CardMonitorMixin._handle_group_increase(self, event)
-            # group_increase 是标准广播通知；名片被还原也不应阻断欢迎消息等
-            # 其他插件继续处理该入群事件。
-        except Exception as e:
-            logger.warning(f"[GroupMgr] 入群名片检查出错: {e}")
-
-    # 名片监控：监听 group_admin（管理员任免）通知事件。
+    # 管理员任免（group_admin 通知）：可能涉及机器人自己，立即失效该群的机器人 / 成员角色缓存，
+    # 让「机器人被设为管理员后恢复处理」不必等缓存过期。广播型通知，不 stop_event。
     @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     async def _on_group_admin_change(self, event: AiocqhttpMessageEvent):
-        if not self._is_group_admin_notice(event):
+        raw = self._get_raw_event(event)
+        if not (isinstance(raw, dict) and raw.get("post_type") == "notice"
+                and raw.get("notice_type") == "group_admin"):
             return
-        # Issue #89：群管理员变动可能涉及机器人自己，失效该群的机器人角色缓存，
-        # 让「机器人被设为管理员后恢复审核」立即生效而不必等 5 分钟 TTL。
-        # 放在名片监控之前：名片监控关闭时下方处理器会提前返回。
         try:
-            raw = self._get_raw_event(event) or {}
             self._invalidate_bot_role(raw.get("group_id"))
             self._invalidate_member_roles(raw.get("group_id"))
         except Exception as e:
             logger.debug(f"[GroupMgr] 失效机器人角色缓存失败: {e}")
-        try:
-            handled = await CardMonitorMixin._handle_group_admin_change(self, event)
-            if handled:
-                event.stop_event()
-        except Exception as e:
-            logger.warning(f"[GroupMgr] 管理员变动处理出错: {e}")
-
-    # Issue #93：成员被解除禁言（OneBot group_ban 通知，sub_type=lift_ban）时清除处罚冷却，
-    # 管理员提前解禁后该成员再违规可按正常流程处罚。广播型通知，不 stop_event。
-    @filter.event_message_type(filter.EventMessageType.ALL)
-    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
-    async def _on_group_ban_lift(self, event: AiocqhttpMessageEvent):
-        raw = self._get_raw_event(event)
-        if not (isinstance(raw, dict)
-                and raw.get("post_type") == "notice"
-                and raw.get("notice_type") == "group_ban"
-                and raw.get("sub_type") == "lift_ban"):
-            return
-        try:
-            self._on_member_unbanned(raw.get("group_id"), raw.get("user_id"))
-        except Exception as e:
-            logger.debug(f"[GroupMgr] 解禁通知处理出错: {e}")
 
     # 群成员缓存：入群 / 退群 / 被踢 / 管理员任免 / 改名片通知实时更新本地缓存。广播型通知，不 stop_event。
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -580,19 +376,6 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
             await GroupBlacklistMixin._handle_blacklisted_join(self, event)
         except Exception as e:
             logger.warning(f"[GroupMgr] 黑名单入群处理出错: {e}")
-
-    # F2 私聊申诉裁决：私聊消息且发送者有 waiting 申诉时进入。
-    @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE)
-    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
-    async def _on_private_appeal(self, event: AiocqhttpMessageEvent):
-        if not self._is_user_private_message_event(event):
-            return
-        user_id = self._try_get_sender_id(event)
-        if not self._has_waiting_appeal(user_id):
-            return
-        async for item in AppealMixin._handle_private_appeal(self, event):
-            yield item
-        event.stop_event()
 
     # F4 批量管理指令
     @filter.command("批量禁言")

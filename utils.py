@@ -9,14 +9,9 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 from astrbot.api import logger
-from .automaton import KeywordAutomaton
-from .constants import AI_FEATURES_ENABLED, ai_feature_blocked
 
 
 class UtilitiesMixin:
-    # AI 总闸，挂到实例上供不直接导入 constants 的模块（scheduler、web）读取
-    AI_FEATURES_ENABLED = AI_FEATURES_ENABLED
-
     def _record_op(self, action: str, **kwargs) -> None:
         """写一条操作记录（operation_log.OperationLogMixin）；未加载该模块时什么也不做。"""
         writer = getattr(self, "_op_log", None)
@@ -225,9 +220,6 @@ class UtilitiesMixin:
     def _cfg(self, key: str, default: bool = True, group_id: str = None) -> bool:
         # 读取布尔配置：传 group_id 时优先用该群的覆盖值，否则用全局（config / schema 默认）。
         # 群覆盖值以字符串存储（"true"/"false"），实现真正的多群独立配置。
-        # AI 总闸（constants.AI_FEATURES_ENABLED）关闭时，AI 相关开关一律为 False。
-        if ai_feature_blocked(key):
-            return False
         if group_id:
             gv = self._get_group_override(group_id, key)
             if gv is not None:
@@ -568,104 +560,6 @@ class UtilitiesMixin:
     def _get_plugin_dir(self) -> str:
         # 返回插件源代码目录的绝对路径，用于定位 lexicon.db 等内置资源文件。
         return os.path.dirname(os.path.abspath(__file__))
-
-    def _load_lexicon(self) -> Dict[str, Dict]:
-        try:
-            categories = self._storage.load_lexicon()
-            logger.info(f"[GroupMgr] 已从 SQLite 加载外置词库: {len(categories)} 个分类")
-            for cat_name, cat_data in categories.items():
-                keywords = cat_data.get("keywords", [])
-                logger.info(f"[GroupMgr]   - {cat_name}: {len(keywords)} 条关键词")
-            return categories
-        except Exception as e:
-            logger.error(f"[GroupMgr] 加载 SQLite 外置词库失败: {e}")
-            return {}
-
-    def _lexicon_switch_map(self, group_id: str = None) -> Dict[str, bool]:
-        """统一计算各词库分类的启用状态，供审核阶段过滤复用。
-
-        其中 supplement / livelihood / tencent_ban 跟随 other 开关，
-        swear / ad 分类跟随 scan_swear / scan_ad。传 group_id 时优先使用群覆盖。
-        """
-        enable_other = self._cfg("lexicon_other_enabled", True, group_id=group_id)
-        return {
-            "political": self._cfg("lexicon_political_enabled", True, group_id=group_id),
-            "porn": self._cfg("lexicon_porn_enabled", True, group_id=group_id),
-            "violent_terror": self._cfg("lexicon_violent_enabled", True, group_id=group_id),
-            "reactionary": self._cfg("lexicon_reactionary_enabled", True, group_id=group_id),
-            "weapons": self._cfg("lexicon_weapons_enabled", True, group_id=group_id),
-            "corruption": self._cfg("lexicon_corruption_enabled", True, group_id=group_id),
-            "illegal_url": self._cfg("lexicon_illegal_url_enabled", True, group_id=group_id),
-            "other": enable_other,
-            "supplement": enable_other,
-            "livelihood": enable_other,
-            "tencent_ban": enable_other,
-            # 词库中的脏话 / 广告分类跟随 scan_swear / scan_ad：
-            # 关闭内置脏话或广告检测时，词库里的同类词也不再触发（此前 ad 恒为 True、
-            # swear 缺省按启用处理，关掉开关也挡不住词库命中）。
-            "swear": self._cfg("scan_swear", True, group_id=group_id),
-            "ad": self._cfg("scan_ad", True, group_id=group_id),
-        }
-
-    @staticmethod
-    def _extract_lexicon_parts(cat_name: str, cat_data: Dict) -> List[str]:
-        """把一个分类的关键词拆解为待编译进 AC 自动机的纯文本片段。
-
-        illegal_url 最小长度 2、其它分类 3；含 '+' 的关键词按 '+' 拆成多个片段
-        （illegal_url 例外，网址本身可能含 '+'）。
-        """
-        keywords = (cat_data or {}).get("keywords", [])
-        min_len = 2 if cat_name == "illegal_url" else 3
-        raw_parts: List[str] = []
-        for kw in keywords:
-            kw = kw.strip()
-            if not kw:
-                continue
-            if "+" in kw and cat_name != "illegal_url":
-                raw_parts.extend(p for p in (s.strip() for s in kw.split("+")) if len(p) >= min_len)
-            elif len(kw) >= min_len:
-                raw_parts.append(kw)
-        return raw_parts
-
-    def _compile_lexicon(self) -> Dict[str, "KeywordAutomaton"]:
-        """全量编译所有分类的词库为 AC 自动机。
-
-        分类开关在审核阶段过滤，而不是编译阶段过滤；否则全局关闭的分类无法被单群覆盖重新启用。
-        """
-        compiled = {}
-        for cat_name, cat_data in self._lexicon.items():
-            ac = self._build_category_automaton(cat_name, cat_data)
-            if ac.count:
-                compiled[cat_name] = ac
-        return compiled
-
-    @classmethod
-    def _build_category_automaton(cls, cat_name: str, cat_data: Dict) -> "KeywordAutomaton":
-        """根据分类关键词构建并 build 一个 AC 自动机（无关键词时返回空自动机）。"""
-        ac = KeywordAutomaton()
-        raw_parts = cls._extract_lexicon_parts(cat_name, cat_data)
-        if raw_parts:
-            ac.add_keywords(raw_parts)
-            ac.build()
-        return ac
-
-    def _compile_lexicon_category(self, cat_name: str, cat_data: Dict) -> "KeywordAutomaton":
-        """按单个分类增量编译 AC 自动机。"""
-        return self._build_category_automaton(cat_name, cat_data)
-
-    def _check_lexicon(self, text: str) -> Dict[str, bool]:
-        # 用 AC 自动机逐类扫描文本，返回各分类是否命中的 dict。
-        result = {}
-        for cat_name, automaton in self._compiled_lexicon.items():
-            if not isinstance(automaton, KeywordAutomaton):
-                continue
-            match = automaton.first_match(text)
-            if match is not None:
-                logger.debug(f"[GroupMgr] 词库命中 [{cat_name}], 示例='{match[1]}'")
-                result[cat_name] = True
-            else:
-                result[cat_name] = False
-        return result
 
     def _truncate(self, text: str, max_chars: int = 2000) -> str:
         # 截断超长文本：超过 max_chars 时添加 "已截断" 提示。

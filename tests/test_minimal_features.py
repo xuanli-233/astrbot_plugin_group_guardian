@@ -569,9 +569,12 @@ class WiringTests(unittest.TestCase):
 
     def test_unneeded_audit_features_default_off(self):
         schema = json.loads((ROOT / "_conf_schema.json").read_text(encoding="utf-8"))
+        # 原版的防刷屏 / 正则 / 词库 / AI / 名片 / 申诉等功能已删除，配置项也不再保留
         for key in ("anti_flood_enabled", "scan_swear", "scan_ad", "lexicon_porn_enabled",
-                    "combine_detect_enabled", "base_decode_enabled", "recall_qq_favorite_enabled"):
-            self.assertFalse(schema[key]["default"], key)
+                    "combine_detect_enabled", "base_decode_enabled", "recall_qq_favorite_enabled",
+                    "llm_moderation_enabled", "ocr_enabled", "appeal_enabled", "card_monitor_enabled",
+                    "lexicon_learn_enabled", "ai_relay_mode_enabled", "kick_recall_enabled"):
+            self.assertNotIn(key, schema)
         for key in ("keyword_guard_enabled", "backup_enabled", "live_log_enabled", "strict_permission_enabled"):
             self.assertTrue(schema[key]["default"], key)
         self.assertFalse(schema["wxcode_enabled"]["default"])

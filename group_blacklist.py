@@ -213,11 +213,6 @@ class GroupBlacklistMixin:
             if not first:
                 await asyncio.sleep(self.KICK_INTERVAL)
             first = False
-            # 踢出前先撤回其近期消息（如开启 kick_recall_enabled），踢出后无法再拉取历史
-            try:
-                await self._maybe_recall_on_kick(client, gid, uid)
-            except Exception as e:
-                logger.debug(f"[GroupMgr] 踢人前撤回失败({gid}/{uid}): {e}")
             done, err = await self._call_group_api(
                 client, "set_group_kick", "踢出并拉黑" if block else "踢人",
                 group_id=gid, user_id=self._safe_int(uid, 0), reject_add_request=bool(block),

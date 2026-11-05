@@ -64,10 +64,7 @@ sys.modules[automaton.__name__] = automaton
 
 utilities = _load_module(f"{package.__name__}.utils", "utils.py")
 onebot = _load_module(f"{package.__name__}.onebot", "onebot.py")
-link_whitelist = _load_module(f"{package.__name__}.link_whitelist", "link_whitelist.py")
-moderation = _load_module(f"{package.__name__}.moderation", "moderation.py")
 web = _load_module(f"{package.__name__}.web", "web.py")
-card_monitor = _load_module(f"{package.__name__}.card_monitor", "card_monitor.py")
 
 
 class _RoleClient:
@@ -181,174 +178,8 @@ class BotRoleTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(harness.BOT_ROLE_FAIL_TTL, harness.BOT_ROLE_CACHE_TTL)
 
 
-class _Event:
-    def __init__(self, message_id="555"):
-        self.message_obj = types.SimpleNamespace(message_id=message_id)
-        self.stopped = False
-
-    def plain_result(self, text):
-        return text
-
-    def stop_event(self):
-        self.stopped = True
-
-
-class _PenaltyHarness(moderation.ModerationMixin):
-    def __init__(self, recall_result, mute_ok=False):
-        self.recall_result = recall_result
-        self.mute_ok = mute_ok
-        self.logs = []
-
-    async def _recall_msg(self, event, msg_id):
-        return self.recall_result
-
-    async def _recall_extra_messages(self, event, ids):
-        return None
-
-    @staticmethod
-    def _moderation_in_penalty_cooldown(_g, _u):
-        return False
-
-    @staticmethod
-    def _anti_flood_in_cooldown(_g, _u):
-        return False
-
-    def _mark_moderation_penalty(self, *_a):
-        return None
-
-    def _clear_moderation_penalty(self, *_a):
-        return None
-
-    def _schedule_unban(self, *_a):
-        return None
-
-    async def _mute_member(self, event, duration):
-        return self.mute_ok
-
-    def _log_moderation(self, *args):
-        self.logs.append(args)
-
-    @staticmethod
-    def _cfg(name, default=True, group_id=""):
-        return default
-
-    @staticmethod
-    def _cfg_int(name, default=0, group_id=""):
-        return default
-
-    @staticmethod
-    def _cfg_str(name, default="", group_id=""):
-        return default
-
-
 async def _drain(gen):
     return [item async for item in gen]
-
-
-class PenaltyNoticeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_llm_penalty_does_not_claim_recall_when_recall_rejected(self):
-        harness = _PenaltyHarness(recall_result=False)
-        event = _Event()
-        notices = await _drain(harness._execute_llm_penalty(
-            event, "1", "2", "tester", "text", "广告", "ad", [], []))
-        self.assertEqual(notices, [])
-        action = harness.logs[0][4]
-        self.assertNotIn("撤回", action)  # 统计把含「撤回」计为已拦截
-        self.assertTrue(event.stopped)
-
-    async def test_llm_penalty_announces_when_recall_succeeds(self):
-        harness = _PenaltyHarness(recall_result=True)
-        notices = await _drain(harness._execute_llm_penalty(
-            _Event(), "1", "2", "tester", "text", "广告", "ad", [], []))
-        self.assertEqual(len(notices), 1)
-        self.assertEqual(harness.logs[0][4], "LLM撤回")
-
-    async def test_llm_penalty_treats_unknown_recall_result_as_success(self):
-        # 旧测试桩与未返回结果的调用方返回 None，保持原行为
-        harness = _PenaltyHarness(recall_result=None)
-        notices = await _drain(harness._execute_llm_penalty(
-            _Event(), "1", "2", "tester", "text", "广告", "ad", [], []))
-        self.assertEqual(len(notices), 1)
-
-    async def test_rule_penalty_logs_failed_recall_without_recall_word(self):
-        harness = _PenaltyHarness(recall_result=False, mute_ok=False)
-        await _drain(harness._execute_rule_penalty(
-            _Event(), "1", "2", "tester", "text", {"ad": True}, [], []))
-        self.assertNotIn("撤回", harness.logs[0][4])
-
-
-class LinkWhitelistTests(unittest.TestCase):
-    def setUp(self):
-        self.wl = link_whitelist.normalize_whitelist(
-            ["github.com", "https://www.bilibili.com/video/", "*.qq.com", "no dot", "x"])
-
-    def test_normalization(self):
-        self.assertEqual(self.wl, ("github.com", "www.bilibili.com", "qq.com"))
-
-    def test_whitelisted_links_are_stripped(self):
-        strip = link_whitelist.strip_whitelisted_links
-        for text in ("看 https://github.com/a/b", "docs.github.com/x", "im.qq.com",
-                     "https://www.bilibili.com/video/BV1"):
-            with self.subTest(text=text):
-                out = strip(text, self.wl)
-                self.assertNotIn("github", out)
-                self.assertNotIn("bilibili", out)
-                self.assertNotIn("qq.com", out)
-
-    def test_bypass_attempts_are_not_whitelisted(self):
-        strip = link_whitelist.strip_whitelisted_links
-        for text in ("github.com.evil.com/x", "evilgithub.com",
-                     "https://evil.com/?r=github.com", "m.bilibili.com"):
-            with self.subTest(text=text):
-                self.assertEqual(strip(text, self.wl), text)
-
-    def test_userinfo_trick_keeps_real_host(self):
-        out = link_whitelist.strip_whitelisted_links("https://github.com@evil.com/x", self.wl)
-        self.assertIn("evil.com", out)
-
-    def test_other_content_is_preserved(self):
-        out = link_whitelist.strip_whitelisted_links("github.com 还有 taobao.com/abc", self.wl)
-        self.assertIn("taobao.com/abc", out)
-
-
-class _Matcher:
-    def __init__(self, needle):
-        self.needle = needle
-
-    def is_match(self, text):
-        return self.needle in text
-
-
-class _ScreeningHarness(moderation.ModerationMixin):
-    def __init__(self, whitelist):
-        self.config = {"link_whitelist": whitelist}
-        self._ad_matcher = _Matcher("github.com")
-        self._swear_matcher = _Matcher("\x00never")
-
-    @staticmethod
-    def _cfg(name, default=True, group_id=None):
-        return default
-
-    @staticmethod
-    def _lexicon_switch_map(group_id=None):
-        return {}
-
-    @staticmethod
-    def _check_lexicon(text):
-        return {}
-
-
-class ScreeningIntegrationTests(unittest.TestCase):
-    def test_whitelisted_link_no_longer_hits_ad_rule(self):
-        self.assertTrue(_ScreeningHarness([])._initial_screening("来 github.com/x", "1")["ad"])
-        self.assertFalse(
-            _ScreeningHarness(["github.com"])._initial_screening("来 github.com/x", "1")["ad"])
-
-    def test_whitelist_cache_follows_config_changes(self):
-        harness = _ScreeningHarness(["github.com"])
-        self.assertEqual(harness._link_whitelist(), ("github.com",))
-        harness.config["link_whitelist"] = ["gitee.com"]
-        self.assertEqual(harness._link_whitelist(), ("gitee.com",))
 
 
 class _HangClient:
@@ -385,19 +216,6 @@ class CheckedCallTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("超时", str(ctx.exception))
 
 
-class RegexProbeTests(unittest.TestCase):
-    """结构黑名单漏掉的分支重叠型回溯，由子进程限时探测拦截。"""
-
-    def test_alternation_backtracking_is_rejected(self):
-        self.assertFalse(web.WebMixin._is_redos_prone("(a|ab|b)+c"))  # 结构检查确实漏掉
-        self.assertFalse(web.WebMixin._regex_runtime_safe("(a|ab|b)+c"))
-
-    def test_legitimate_rules_pass(self):
-        for pattern in ("(微信|vx)+", r"\d{5,11}", "免费领.{0,6}皮肤", "代[练刷]|接单"):
-            with self.subTest(pattern=pattern):
-                self.assertTrue(web.WebMixin._regex_runtime_safe(pattern))
-
-
 class _ClampHarness(utilities.UtilitiesMixin):
     pass
 
@@ -409,18 +227,6 @@ class ClampTests(unittest.TestCase):
         self.assertEqual(clamp("-1", 200, 1, 1000), 1)
         self.assertEqual(clamp("abc", 30, 1, 365), 30)
         self.assertEqual(clamp("99999", 10, 1, 50), 50)
-
-
-class CardPendingTests(unittest.IsolatedAsyncioTestCase):
-    # 状态初始化会创建 asyncio.Lock，Python 3.8 要求在运行中的事件循环里创建
-    async def test_drop_pending_for_group_only_touches_that_group(self):
-        mixin = card_monitor.CardMonitorMixin()
-        mixin._mark_card_pending("1", "a")
-        mixin._mark_card_pending("1", "b")
-        mixin._mark_card_pending("2", "c")
-        mixin._drop_card_pending_for_group("1")
-        self.assertEqual(mixin._card_pending_members, {("2", "c")})
-        self.assertEqual(set(mixin._card_pending_misses), {("2", "c")})
 
 
 if __name__ == "__main__":

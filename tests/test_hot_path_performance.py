@@ -287,21 +287,5 @@ class PermissionCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(host._storage.calls, 2)
 
 
-class RebuildOffLoopTests(unittest.TestCase):
-    def test_full_rebuild_compiles_in_thread(self):
-        tree = ast.parse((ROOT / "main.py").read_text(encoding="utf-8"))
-        method = next(
-            node for node in ast.walk(tree)
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == "_background_full_rebuild"
-        )
-        called = {
-            node.func.attr for node in ast.walk(method)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-        }
-        self.assertIn("_run_in_thread", called)
-        self.assertNotIn("_compile_lexicon", called)
-        self.assertNotIn("load_lexicon", called)
-
-
 if __name__ == "__main__":
     unittest.main()

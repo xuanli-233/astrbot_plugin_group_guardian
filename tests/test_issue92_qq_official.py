@@ -243,14 +243,6 @@ class CommandDenialTests(unittest.TestCase):
             return [item async for item in agen]
         return _run(run())
 
-    def test_lexicon_command_denial_shows_openid(self):
-        host = _Host(admins=["3868975329"])
-        event = _Event(platform="qq_official", sender=OPENID, message_str="/添加违禁词 广告 x")
-        out = self._collect(commands.CommandsMixin.cmd_add_rule_keyword(host, event))
-        self.assertEqual(len(out), 1)
-        self.assertIn("仅插件管理员可以管理违禁词", out[0])
-        self.assertIn(OPENID, out[0])
-
     def test_no_bare_plugin_admin_denials_left(self):
         source = (ROOT / "commands.py").read_text(encoding="utf-8")
         self.assertNotIn('plain_result("仅插件管理员', source)

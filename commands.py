@@ -24,13 +24,13 @@ class CommandsMixin:
         # 拆分命令参数：/字数统计 <关键词> [天数] [类型]
         args = event.message_str.split()
         if len(args) < 2:
-            yield event.plain_result("用法: /字数统计 <关键词> [天数] [类型]\n类型: 脏话/广告/敏感词/黑名单\n示例: /字数统计 傻逼 7 脏话")
+            yield event.plain_result("用法: /字数统计 <关键词> [天数] [黑名单]\n加「黑名单」只统计插件黑名单用户发的消息\n示例: /字数统计 加微信 7")
             return
         keyword = args[1]
         days = 7
         search_type = "all"
         # 将中文类型名称映射为内部枚举值，便于 _search_keyword_in_messages 做专项匹配
-        type_map = {"脏话": "swear", "广告": "ad", "敏感词": "sensitive", "黑名单": "black"}
+        type_map = {"黑名单": "black"}
         # 第三个参数可能是天数也可能是类型名，用 int() 尝试解析来区分
         if len(args) >= 3:
             try:
@@ -95,15 +95,7 @@ class CommandsMixin:
                     # 如果指定了过滤类型，需要进一步按类型规则判断该消息是否真的属于该类别
                     if search_type != "all":
                         is_match = False
-                        if search_type == "swear":
-                            is_match = self._swear_matcher.is_match(text) if hasattr(self, '_swear_matcher') else False
-                        elif search_type == "ad":
-                            is_match = self._is_ad_pattern(text)
-                        elif search_type == "sensitive":
-                            # 用 AC 自动机扫描 political 分类词库
-                            ac = self._compiled_lexicon.get("political")
-                            is_match = ac.exists(text) if ac else False
-                        elif search_type == "black":
+                        if search_type == "black":
                             # 黑名单类型：检查消息发送者的 QQ 号是否在 _user_black_set 中
                             sender = msg.get('sender') or {}
                             uid = str(sender.get('user_id', ''))
@@ -282,16 +274,11 @@ class CommandsMixin:
             if not ok:
                 yield event.plain_result(err)
                 return
-            # 踢人前先撤回该成员近期消息（如开启），踢出后无法再拉取其历史
-            recalled = await self._maybe_recall_on_kick(client, gid, user_id)
             ok, err = await self._call_group_api(client, 'set_group_kick', "踢人", group_id=gid, user_id=uid)
             if not ok:
                 yield event.plain_result(f"踢人失败: {err}")
                 return
-            msg = f"已将 {user_id} 踢出群聊"
-            if recalled > 0:
-                msg += f"，已撤回 {recalled} 条消息"
-            yield event.plain_result(msg)
+            yield event.plain_result(f"已将 {user_id} 踢出群聊")
         except Exception as e:
             yield event.plain_result(f"踢人失败: {e}")
 
@@ -857,8 +844,6 @@ class CommandsMixin:
                 fail += 1
                 await asyncio.sleep(0.1)
                 continue
-            # 踢出前先撤回其近期消息（如开启），踢出后无法再拉取历史
-            await self._maybe_recall_on_kick(client, gid, uid)
             done, _e = await self._call_group_api(client, 'set_group_kick', "批量踢人",
                                                   group_id=gid, user_id=uid_int)
             if done:
@@ -938,101 +923,3 @@ class CommandsMixin:
             self._storage.add_group_admin_block(group_id, target)
             self._admin_role_cache.clear()
             yield event.plain_result(f"已移除 {target} 在本群的 bot 管理权限（该用户将无法再使用本插件的群管功能）")
-
-    async def cmd_add_rule_keyword(self, event: AstrMessageEvent):
-        '''添加自定义违禁词。用法: /添加违禁词 <脏话|广告> <关键词>'''
-        if not await self._is_plugin_admin(event):
-            yield event.plain_result(self._admin_denied_message(event, "仅插件管理员可以管理违禁词"))
-            return
-        args = event.message_str.split(maxsplit=2)
-        if len(args) < 3:
-            yield event.plain_result("用法: /添加违禁词 <脏话|广告> <关键词>\n示例: /添加违禁词 广告 加微信免费领")
-            return
-        category = _RULE_CATEGORY_MAP.get(args[1].strip().lower())
-        keyword = args[2].strip()
-        if not category:
-            yield event.plain_result("分类无效，仅支持: 脏话 / 广告")
-            return
-        if not keyword or len(keyword) > 100:
-            yield event.plain_result("关键词不能为空且不超过 100 字符")
-            return
-        try:
-            # 指令语义是"关键词"（字面量），re.escape 后入库，既防 ReDoS 又避免元字符改变语义；
-            # 原始关键词存入 description，供 /查看违禁词 可读展示（pattern 转义后不利于阅读）
-            pattern = re.escape(keyword)
-            saved_id = self._storage.save_moderation_rule(category, pattern, f"指令:{keyword}", True)
-            self._rebuild_rule_matcher(category)
-            self._rule_count_cache = None
-            yield event.plain_result(f"已添加{args[1].strip()}违禁词「{keyword}」(ID:{saved_id})，即时生效")
-        except Exception as e:
-            if "已存在" in str(e) or "UNIQUE" in str(e).upper():
-                yield event.plain_result(f"违禁词「{keyword}」已存在")
-            else:
-                yield event.plain_result(f"添加失败: {e}")
-
-    async def cmd_del_rule_keyword(self, event: AstrMessageEvent):
-        '''删除自定义违禁词。用法: /删除违禁词 <脏话|广告> <关键词或规则ID>'''
-        if not await self._is_plugin_admin(event):
-            yield event.plain_result(self._admin_denied_message(event, "仅插件管理员可以管理违禁词"))
-            return
-        args = event.message_str.split(maxsplit=2)
-        if len(args) < 3:
-            yield event.plain_result("用法: /删除违禁词 <脏话|广告> <关键词或规则ID>")
-            return
-        category = _RULE_CATEGORY_MAP.get(args[1].strip().lower())
-        target = args[2].strip()
-        if not category or not target:
-            yield event.plain_result("分类无效或目标为空，分类仅支持: 脏话 / 广告")
-            return
-        try:
-            deleted = False
-            # 按 ID 删除前必须校验规则确属该分类，否则纯数字关键词/跨分类会误删
-            if target.isdigit():
-                rule = self._storage.get_moderation_rule(int(target))
-                if rule and rule.get("category") == category:
-                    deleted = self._storage.delete_moderation_rule(rule["id"])
-            if not deleted:
-                # 按关键词精确匹配查找规则再删；关键词入库时经 re.escape，故按转义后比较
-                escaped = re.escape(target)
-                rules = self._storage.list_moderation_rules(category, None, target, 50, 0)
-                for r in rules:
-                    if r.get("pattern") in (target, escaped):
-                        deleted = self._storage.delete_moderation_rule(r["id"])
-                        break
-            if not deleted:
-                yield event.plain_result(f"未找到违禁词「{target}」，可先用 WebUI 规则页确认")
-                return
-            self._rebuild_rule_matcher(category)
-            self._rule_count_cache = None
-            yield event.plain_result(f"已删除违禁词「{target}」，即时生效")
-        except Exception as e:
-            yield event.plain_result(f"删除失败: {e}")
-
-    async def cmd_list_rule_keyword(self, event: AstrMessageEvent):
-        '''查看指令添加的自定义违禁词。用法: /查看违禁词 [脏话|广告]'''
-        if not await self._is_plugin_admin(event):
-            yield event.plain_result(self._admin_denied_message(event, "仅插件管理员可以查看违禁词"))
-            return
-        args = event.message_str.split()
-        cats = ["swear", "ad"]
-        if len(args) >= 2:
-            c = _RULE_CATEGORY_MAP.get(args[1].strip().lower())
-            if not c:
-                yield event.plain_result("分类无效，仅支持: 脏话 / 广告")
-                return
-            cats = [c]
-        cat_cn = {"swear": "脏话", "ad": "广告"}
-        lines = []
-        for cat in cats:
-            try:
-                # 只列指令添加的（description 以「指令:」开头），避免混入内置规则
-                rules = self._storage.list_moderation_rules(cat, None, "指令:", 200, 0)
-            except Exception as e:
-                yield event.plain_result(f"查询失败: {e}")
-                return
-            words = [r.get("description", "")[3:] for r in rules if str(r.get("description", "")).startswith("指令:")]
-            if words:
-                lines.append(f"【{cat_cn[cat]}】({len(words)}个): " + "、".join(words))
-            else:
-                lines.append(f"【{cat_cn[cat]}】暂无指令添加的违禁词")
-        yield event.plain_result("自定义违禁词（仅显示指令添加的）:\n" + "\n".join(lines))

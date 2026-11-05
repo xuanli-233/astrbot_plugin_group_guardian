@@ -593,7 +593,9 @@ class DashboardWiringTests(unittest.TestCase):
                 self.assertIn(f'<a class="nav-item" data-tab="{tab}">', html)
                 self.assertIn(f'<a class="mobile-nav-item" data-tab="{tab}">', html)
         self.assertIn('<div class="nav-section">常用功能</div>', html)
-        self.assertIn("<span>内置规则库</span>", html)
+        # 原版的群管理 / 刷屏 / 规则库 / 名片 / 词库学习页面已删除
+        for tab in ("groups", "flood", "rules", "cardmon", "learn"):
+            self.assertNotIn(f'data-tab="{tab}"', html)
         self.assertNotIn("<aclass", html)
         self.assertIn("keyword_rules: true", html)  # 不在全量配置里按逗号拆分
 

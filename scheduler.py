@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
-"""后台调度模块（v2.4.0）。
+"""后台任务。
 
-负责多类周期性任务：
-1. F3 定时自动解禁：扫描 scheduled_unbans 表，成功后删除，失败则退避重试。
-2. F2 申诉超时：把过期仍 waiting 的申诉标记 expired（维持原处罚）。
-3. 审核误判复盘：把人工确认的误判样本交给 LLM，生成待审批修正规则。
-
-设计要点：
-- 单个 asyncio 后台 loop，按 auto_unban_scan_interval 秒轮询；
-- 后台任务无 event，OneBot client 通过 _get_client(None) 的 platform_manager 回退获取；
-- 插件 terminate 时取消任务，避免热重载后残留协程。
+- 定时解禁：/禁言 /批量禁言 登记的解禁计划到期后解除（auto_unban_enabled，默认关），失败退避重试
+- 群名定时改名 / 倒计时（group_name_task.py），每分钟检查一次
+- 群成员缓存后台补齐（group_directory.py）
+- 批量任务执行器（batch_queue.py）
+后台任务没有 event，OneBot client 通过 _get_client(None) 的 platform_manager 回退获取；
+插件 terminate 时取消全部任务，避免热重载后残留协程。
+原版的申诉超时、名片周期同步、词库自学习、AI 误判复盘任务已删除。
 """
 import asyncio
 import time
@@ -20,75 +18,43 @@ from astrbot.api import logger
 UNBAN_RETRY_BASE_SECONDS = 30
 UNBAN_RETRY_MAX_SECONDS = 3600
 
+_TASK_ATTRS = (
+    ("_scheduler_task", "定时解禁任务"),
+    ("_group_name_task", "群名定时任务"),
+    ("_dir_task", "群成员缓存任务"),
+    ("_dir_refresh_task", "群成员缓存刷新"),
+    ("_bq_task", "批量任务执行器"),
+)
+
 
 class SchedulerMixin:
     def _init_scheduler(self) -> None:
         """初始化调度器状态。在 __init__ 中调用。"""
-        self._scheduler_task = None
-        self._card_sync_task = None
-        self._learn_task = None
-        self._moderation_review_task = None
-        self._group_name_task = None
-        self._moderation_review_wakeup = asyncio.Event()
+        for attr, _label in _TASK_ATTRS:
+            setattr(self, attr, None)
         self._scheduler_stop = False
 
     def _start_scheduler(self) -> None:
-        """启动后台调度 loop（幂等：已在运行则不重复启动）。"""
+        """启动后台任务（幂等：已在运行则不重复启动）。"""
         if self._scheduler_task and not self._scheduler_task.done():
             return
         self._scheduler_stop = False
         try:
             self._scheduler_task = asyncio.create_task(self._scheduler_loop())
-            # 名片同步使用独立低频 loop，避免 auto_unban_scan_interval 较大时
-            # 延迟名片变更检测；没有 CardMonitorMixin 时自动跳过。
-            if callable(getattr(self, "_sync_group_cards", None)):
-                self._card_sync_task = asyncio.create_task(self._card_sync_loop())
-            # 自适应上下文学习使用独立低频 loop；没有 LexiconLearnMixin 时自动跳过。
-            # 词库学习与误判复盘都依赖 AI，AI 总闸（constants.AI_FEATURES_ENABLED，
-            # 经 UtilitiesMixin 挂到实例上）关闭时不启动这两个 loop。
-            # 群名定时改名 / 倒计时（group_name_task.py），每分钟检查一次
             if callable(getattr(self, "_group_name_loop", None)):
                 self._group_name_task = asyncio.create_task(self._group_name_loop())
-            # 群成员缓存后台补齐（group_directory.py），每 5 分钟最多刷新 2 个过期的群
             if callable(getattr(self, "_dir_background_loop", None)):
                 self._dir_task = asyncio.create_task(self._dir_background_loop())
-            # 批量任务执行器（batch_queue.py）：按间隔 + 抖动逐项执行
             if callable(getattr(self, "_bq_loop", None)):
                 self._bq_task = asyncio.create_task(self._bq_loop())
-            ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
-            if ai_enabled and callable(getattr(self, "_run_lexicon_learning", None)):
-                self._learn_task = asyncio.create_task(self._lexicon_learn_loop())
-            if ai_enabled and callable(getattr(self, "_run_moderation_feedback_review", None)):
-                self._moderation_review_task = asyncio.create_task(
-                    self._moderation_review_loop()
-                )
         except RuntimeError:
             # 无运行中的事件循环（极少见），放弃后台任务，不影响其它功能
             logger.debug("[GroupMgr] 无事件循环，跳过调度器启动")
 
     async def _stop_scheduler(self) -> None:
-        """停止后台调度 loop。在 terminate 中调用。"""
+        """停止全部后台任务。在 terminate 中调用。"""
         self._scheduler_stop = True
-        if self._scheduler_task and not self._scheduler_task.done():
-            self._scheduler_task.cancel()
-            try:
-                await self._scheduler_task
-            except asyncio.CancelledError:
-                logger.debug("[GroupMgr] 调度器任务已取消")
-        if self._card_sync_task and not self._card_sync_task.done():
-            self._card_sync_task.cancel()
-            try:
-                await self._card_sync_task
-            except asyncio.CancelledError:
-                logger.debug("[GroupMgr] 名片同步任务已取消")
-        if self._learn_task and not self._learn_task.done():
-            self._learn_task.cancel()
-            try:
-                await self._learn_task
-            except asyncio.CancelledError:
-                logger.debug("[GroupMgr] 上下文学习任务已取消")
-        for attr, label in (("_group_name_task", "群名定时任务"), ("_dir_task", "群成员缓存任务"),
-                            ("_dir_refresh_task", "群成员缓存刷新"), ("_bq_task", "批量任务执行器")):
+        for attr, label in _TASK_ATTRS:
             task = getattr(self, attr, None)
             if task and not task.done():
                 task.cancel()
@@ -96,181 +62,26 @@ class SchedulerMixin:
                     await task
                 except asyncio.CancelledError:
                     logger.debug(f"[GroupMgr] {label}已取消")
-        if (self._moderation_review_task
-                and not self._moderation_review_task.done()):
-            self._moderation_review_task.cancel()
-            try:
-                await self._moderation_review_task
-            except asyncio.CancelledError:
-                logger.debug("[GroupMgr] 误判复盘任务已取消")
 
     async def _scheduler_loop(self) -> None:
         consecutive_errors = 0
         while not self._scheduler_stop:
             interval = self._clamp_int(self.config.get("auto_unban_scan_interval", 60), 60, 10, 3600)
-            try:
-                await asyncio.sleep(interval)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                await asyncio.sleep(60)
+            await asyncio.sleep(interval)
             if self._scheduler_stop:
                 break
             try:
                 await self._run_due_unbans()
-                expire_fn = getattr(self, "_expire_appeals", None)
-                if expire_fn:
-                    await expire_fn()
                 consecutive_errors = 0
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 consecutive_errors += 1
-                logger.warning(f"[GroupMgr] 调度任务出错({consecutive_errors}): {e}")
+                logger.warning(f"[GroupMgr] 定时解禁任务出错({consecutive_errors}): {e}")
                 if consecutive_errors >= 10:
-                    logger.error("[GroupMgr] 调度器连续错误过多，暂停 5 分钟")
+                    logger.error("[GroupMgr] 定时解禁连续出错过多，暂停 5 分钟")
                     await asyncio.sleep(300)
                     consecutive_errors = 0
-
-    async def _card_sync_loop(self) -> None:
-        """周期同步成员名片，弥补协议端不发送 group_card 的实现差异。"""
-        # 启动后留出连接建立时间；之后每次间隔均从最新配置读取，支持 WebUI 热更新。
-        first_run = True
-        consecutive_errors = 0
-        while not self._scheduler_stop:
-            try:
-                interval = self._clamp_int(
-                    self._cfg_int("card_sync_interval", 120), 120, 30, 3600
-                )
-                await asyncio.sleep(5 if first_run else interval)
-                first_run = False
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                await asyncio.sleep(30)
-                continue
-            if self._scheduler_stop:
-                break
-            # 没有任何全局或单群启用项时不查询群列表，避免无意义 API 请求；
-            # 标准入群通知仍由 `_on_group_increase_card_check` 即时处理。
-            if not self._card_sync_any_group_enabled():
-                continue
-            try:
-                await self._sync_group_cards()
-                consecutive_errors = 0
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                consecutive_errors += 1
-                logger.warning(f"[GroupMgr] 名片周期同步出错({consecutive_errors}): {e}")
-                if consecutive_errors >= 5:
-                    # 避免协议端持续异常时刷日志和请求；下一轮仍会自动恢复。
-                    await asyncio.sleep(min(300, interval))
-                    consecutive_errors = 0
-
-    async def _lexicon_learn_loop(self) -> None:
-        """周期从群聊上下文挖掘候选违禁词（自适应上下文学习）。"""
-        consecutive_errors = 0
-        while not self._scheduler_stop:
-            try:
-                interval = self._clamp_int(
-                    self._cfg_int("lexicon_learn_interval", 300), 300, 30, 3600
-                )
-                # 先睡一个间隔再挖掘，让缓冲积累到足够样本
-                await asyncio.sleep(interval)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                await asyncio.sleep(60)
-                continue
-            if self._scheduler_stop:
-                break
-            if not self._lexicon_learn_any_group_enabled():
-                continue
-            try:
-                await self._run_lexicon_learning()
-                consecutive_errors = 0
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                consecutive_errors += 1
-                logger.warning(f"[GroupMgr] 上下文学习出错({consecutive_errors}): {e}")
-                if consecutive_errors >= 5:
-                    await asyncio.sleep(min(600, interval))
-                    consecutive_errors = 0
-
-    async def _moderation_review_loop(self) -> None:
-        """周期复盘人工标记的误判样本，只生成候选，不自动应用。"""
-        consecutive_errors = 0
-        while not self._scheduler_stop:
-            try:
-                interval = self._clamp_int(
-                    self._cfg_int("moderation_review_interval", 86400),
-                    86400, 300, 604800,
-                )
-                wakeup = getattr(self, "_moderation_review_wakeup", None)
-                if wakeup is None:
-                    await asyncio.sleep(interval)
-                else:
-                    try:
-                        await asyncio.wait_for(wakeup.wait(), timeout=interval)
-                    except asyncio.TimeoutError:
-                        pass
-                    else:
-                        wakeup.clear()
-                        continue
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                await asyncio.sleep(300)
-                continue
-            if self._scheduler_stop:
-                break
-            if not self._cfg("moderation_review_enabled", False):
-                continue
-            try:
-                result = await self._run_moderation_feedback_review(
-                    manual=False, actor="scheduler"
-                )
-                if result.get("status") == "created":
-                    logger.info(
-                        "[GroupMgr] 已生成误判复盘候选: "
-                        f"#{result.get('suggestion_id')}"
-                    )
-                consecutive_errors = 0
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                consecutive_errors += 1
-                logger.warning(
-                    f"[GroupMgr] 误判复盘任务出错({consecutive_errors}): {exc}"
-                )
-                if consecutive_errors >= 5:
-                    await asyncio.sleep(min(3600, interval))
-                    consecutive_errors = 0
-
-    def _card_sync_any_group_enabled(self) -> bool:
-        """判断是否至少有一个群同时开启名片监控与周期同步。"""
-        config = getattr(self, "config", {}) or {}
-        if not config.get("disclaimer_agreed", False):
-            return False
-        if (self._cfg("enabled", True)
-                and self._cfg("card_monitor_enabled", False)
-                and self._cfg("card_sync_enabled", True)):
-            return True
-        group_ids = set()
-        for attr in ("_group_white_set", "_card_sync_known_groups"):
-            group_ids.update(str(x) for x in (getattr(self, attr, set()) or set()) if x)
-        try:
-            group_ids.update(str(x) for x in self._storage.list_configured_groups() if x)
-        except Exception:
-            pass
-        return any(
-            self._cfg("enabled", True, group_id=gid)
-            and self._cfg("card_monitor_enabled", False, group_id=gid)
-            and self._cfg("card_sync_enabled", True, group_id=gid)
-            for gid in group_ids
-        )
 
     async def _run_due_unbans(self) -> None:
         """执行所有到期的定时解禁。"""

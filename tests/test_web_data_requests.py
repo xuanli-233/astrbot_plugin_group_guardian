@@ -340,17 +340,6 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(harness.client.calls[0][0], "get_group_list")
         self.assertEqual(harness.client.calls[0][1], {})
 
-    async def test_force_member_refresh_only_sends_standard_group_id(self):
-        harness = _Harness({"status": "ok", "retcode": 0, "data": []})
-        web.quart_request = _Request({"group_id": "123", "force": "1"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "success")
-        self.assertEqual(
-            harness.client.calls[0][1], {"group_id": 123}
-        )
-
     async def test_group_list_accepts_multiple_nested_data_wrappers(self):
         harness = _Harness({
             "status": "ok",
@@ -519,105 +508,6 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("malformed", result["message"])
 
-    async def test_member_list_accepts_nested_group_members_payload(self):
-        harness = _Harness({
-            "status": "ok",
-            "retcode": 0,
-            "data": {"data": {"group_members": [
-                {"user_id": 456, "nickname": "member", "role": "admin"},
-            ]}},
-        })
-        web.quart_request = _Request({"group_id": "123", "force": "1"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "success")
-        self.assertEqual(result["data"][0]["user_id"], "456")
-        self.assertEqual(result["data"][0]["role"], "admin")
-
-    async def test_member_list_skips_malformed_rows_and_normalizes_empty_fields(self):
-        harness = _Harness({
-            "status": "ok",
-            "retcode": 0,
-            "payload": {"members": [
-                None,
-                "not-a-member",
-                {"user_id": None},
-                {"user_id": 456, "nickname": None, "card": None, "role": None},
-            ]},
-        })
-        web.quart_request = _Request({"group_id": "123"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "success")
-        self.assertEqual(result["data"], [{
-            "user_id": "456",
-            "nickname": "456",
-            "card": "",
-            "display_name": "456",
-            "role": "member",
-            "title": "",
-            "avatar": "https://q.qlogo.cn/headimg_dl?dst_uin=456&spec=640",
-            "is_plugin_admin": False,
-        }])
-        self.assertEqual(harness.client.calls[-1][1], {"group_id": 123})
-
-    async def test_failed_member_packet_without_cache_is_not_empty_success(self):
-        harness = _Harness({"status": "failed", "retcode": 100, "msg": "denied"})
-        web.quart_request = _Request({"group_id": "123", "force": "1"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "error")
-        self.assertIn("denied", result["message"])
-
-    async def test_nonempty_malformed_member_rows_do_not_erase_cache(self):
-        harness = _Harness({
-            "status": "ok", "retcode": 0,
-            "data": [{"nickname": "missing user id"}, None],
-        })
-        cached = [{"user_id": "456", "display_name": "cached"}]
-        harness._web_member_cache = {"123": {"ts": 1.0, "data": cached}}
-        web.quart_request = _Request({"group_id": "123", "force": "1"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "success")
-        self.assertTrue(result["stale"])
-        self.assertEqual(result["data"], cached)
-        self.assertEqual(harness._web_member_cache["123"]["data"], cached)
-
-    async def test_nonempty_malformed_member_rows_without_cache_are_an_error(self):
-        harness = _Harness({
-            "status": "ok", "retcode": 0,
-            "data": [{"nickname": "missing user id"}],
-        })
-        web.quart_request = _Request({"group_id": "123", "force": "1"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "error")
-        self.assertIn("malformed", result["message"])
-
-    async def test_successful_empty_member_list_is_cached_as_a_real_snapshot(self):
-        harness = _Harness({"status": "ok", "retcode": 0, "data": []})
-        web.quart_request = _Request({"group_id": "123", "force": "1"})
-
-        first = await harness._web_get_group_members()
-
-        self.assertEqual(first["status"], "success")
-        self.assertEqual(first["data"], [])
-        self.assertGreater(harness._web_member_cache["123"]["ts"], 0)
-        self.assertEqual(len(harness.client.calls), 1)
-
-        harness.client.result = {"status": "failed", "retcode": 100, "msg": "offline"}
-        web.quart_request = _Request({"group_id": "123"})
-        second = await harness._web_get_group_members()
-
-        self.assertEqual(second["data"], [])
-        self.assertEqual(len(harness.client.calls), 1)
-
     async def test_success_packet_without_a_list_field_is_an_error(self):
         harness = _Harness({"status": "ok", "retcode": 0})
         web.quart_request = _Request({"force": "1"})
@@ -626,16 +516,6 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["status"], "error")
         self.assertIn("no list data", result["message"])
-
-    async def test_invalid_group_id_is_rejected_before_onebot_request(self):
-        harness = _Harness({"status": "ok", "retcode": 0, "data": []})
-        web.quart_request = _Request({"group_id": "not-a-number"})
-
-        result = await harness._web_get_group_members()
-
-        self.assertEqual(result["status"], "error")
-        self.assertIn("无效", result["message"])
-        self.assertEqual(harness.client.calls, [])
 
     async def test_older_cache_snapshot_cannot_replace_newer_one(self):
         harness = _Harness()
@@ -720,32 +600,6 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
             "message": "fixture failure",
         })
 
-    async def test_lexicon_export_errors_use_non_success_http_status(self):
-        harness = _Harness()
-        web.quart_request = _Request()
-
-        result = await harness._web_export_lexicon_keywords()
-
-        self.assertEqual(result[0]["status"], "error")
-        self.assertEqual(result[1], 400)
-
-    async def test_lexicon_export_uses_utf8_filename_and_csv_response(self):
-        harness = _Harness()
-        harness._storage.list_lexicon_keywords = (
-            lambda category, query, limit, offset: [
-                {"id": 1, "keyword": "测试"},
-            ]
-        )
-        web.quart_request = _Request({"category": "广告", "q": ""})
-
-        result = await harness._web_export_lexicon_keywords()
-
-        self.assertEqual(result[1], 200)
-        self.assertIn("text/csv", result[2]["Content-Type"])
-        self.assertIn("filename*=UTF-8''", result[2]["Content-Disposition"])
-        self.assertIn("%E5%B9%BF%E5%91%8A", result[2]["Content-Disposition"])
-        self.assertIn("测试", result[0])
-
     async def test_log_export_storage_failure_uses_non_success_http_status(self):
         harness = _Harness()
 
@@ -775,9 +629,6 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
 
         harness._storage.list_logs = list_logs
         harness._storage.count_logs_filtered = lambda *args: 7
-        harness._storage.feedback_for_log_ids = lambda ids: {
-            4: {"verdict": "false_positive", "note": "", "review_status": "open"},
-        }
         web.quart_request = _Request({"page": "2", "page_size": "3"})
 
         result = await harness._web_get_logs()
@@ -788,7 +639,6 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["data"]["total"], 7)
         self.assertEqual(result["data"]["offset"], 3)
         self.assertEqual([item["id"] for item in result["data"]["items"]], [4, 5, 6])
-        self.assertEqual(result["data"]["items"][0]["review_verdict"], "false_positive")
 
     async def test_logs_offset_still_maps_to_page(self):
         harness = _Harness()
@@ -848,13 +698,13 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["data"][0]["user_id"], "u1")
 
     async def test_one_bad_route_does_not_stop_remaining_registration(self):
-        context = _Context("/providers")
+        context = _Context("/logs")
         harness = _Harness(context=context)
 
         harness._register_web_apis()
 
-        self.assertGreater(len(context.calls), 80)
-        self.assertFalse(any(path.endswith("/providers") for path, *_ in context.calls))
+        self.assertGreater(len(context.calls), 50)
+        self.assertFalse(any(path.endswith("/logs") for path, *_ in context.calls))
         self.assertTrue(any(path.endswith("/stats") for path, *_ in context.calls))
 
 
