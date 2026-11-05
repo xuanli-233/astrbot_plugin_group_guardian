@@ -1111,10 +1111,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 
       <div class="tab-panel" id="tab-dup">
         <div class="page-header"><h1>重复成员</h1><button class="btn btn-ghost btn-sm" id="btnDupReload">重新检测</button></div>
-        <p class="mn-intro">同一个 QQ 号同时在你管理的 2 个或更多群里。检测只读本地群成员缓存，不调用接口；备份群不参与统计。插件管理员、白名单用户、在任一群是群主 / 管理员的人默认不列出。每次处理都会写进操作记录。</p>
+        <p class="mn-intro">同一个 QQ 号同时在下面勾选的 2 个或更多群里。检测只读本地群成员缓存，不调用接口；备份群不参与统计。插件管理员、白名单用户、在任一群是群主 / 管理员的人默认不列出。默认逐个处理：点每行的「处理」，选好保留哪个群后还要再确认一次。每次处理都会写进操作记录。</p>
         <div class="card">
           <div class="card-header"><h2>检测范围</h2><button class="btn btn-outline btn-sm" id="btnDupRefreshCache">刷新所有群的成员缓存</button></div>
           <div class="mn-body" id="dupCoverage"><p class="mn-hint">加载中...</p></div>
+          <div class="mn-body" style="padding-top:0">
+            <div class="mn-row"><strong style="font-size:13px">在哪些群里去重</strong><button class="btn btn-ghost btn-sm" id="btnDupScopeAll">全选</button><button class="btn btn-ghost btn-sm" id="btnDupScopeNone">全不选</button><button class="btn btn-primary btn-sm" id="btnDupScopeSave">保存范围</button><span class="mn-hint" id="dupScopeHint"></span></div>
+            <div id="dupScope" style="display:flex;flex-wrap:wrap;gap:4px 16px"></div>
+          </div>
         </div>
         <div class="card">
           <div class="card-header"><h2>检测结果</h2>
@@ -1129,6 +1133,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             </div></div>
           <div class="mn-body" style="padding-bottom:0">
             <div class="mn-row">
+              <label><input type="checkbox" id="dupBulkMode" /> 批量处理（一次处理多人）</label>
+              <span class="mn-hint">默认关闭：逐个点「处理」更不容易踢错人</span>
+            </div>
+            <div id="dupBulkBar" style="display:none">
+            <div class="mn-row">
               <label><input type="checkbox" id="dupAll" /> 全选</label>
               <input class="input-sm" id="dupReason" style="flex:1;min-width:200px" placeholder="处理原因（必填），例如：重复加群发广告" />
             </div>
@@ -1142,6 +1151,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
               <button class="btn btn-outline btn-sm" id="btnDupIgnore">选中的人：忽略</button>
               <span class="mn-hint">要保留的群在每行里单选，默认是最早加入的群</span>
             </div>
+            </div>
+            <div id="dupResult"></div>
+          </div>
             <div id="dupResult"></div>
           </div>
           <div class="log-container" id="dupTable"><p class="empty">加载中...</p></div>
@@ -3866,6 +3878,34 @@ function mnDate(ts) {
   var d = new Date(Number(ts) * 1000);
   return d.getFullYear() + '-' + mnPad(d.getMonth() + 1) + '-' + mnPad(d.getDate());
 }
+function dupBulk() { var cb = $('#dupBulkMode'); return !!(cb && cb.checked); }
+function dupAvatar(it, size) {
+  size = size || 36;
+  return '<img src="' + escAttr(it.avatar || ('https://q1.qlogo.cn/g?b=qq&nk=' + encodeURIComponent(it.user_id) + '&s=100')) +
+    '" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;flex:none;background:var(--bg-secondary)" onerror="this.style.visibility=\'hidden\'" />';
+}
+function dupGroupText(g) {
+  return esc(g.group_name || '未命名') + '<span class="mn-hint">（' + esc(g.group_id) + '）' + esc(DUP_ROLES[g.role] || g.role) +
+    (g.card ? ' · ' + esc(g.card) : '') + (g.join_time ? ' · ' + esc(mnDate(g.join_time)) + ' 入群' : '') + '</span>';
+}
+function dupRenderScope(c) {
+  var all = c.scope_all || [];
+  $('#dupScope').innerHTML = all.length ? all.map(function(g) {
+    return '<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="dup-scope" value="' + escAttr(g.group_id) + '"' + (g.selected ? ' checked' : '') + ' />' +
+      esc(g.group_name || '未命名') + '<span class="mn-hint">（' + esc(g.group_id) + '）' + (g.cached ? '' : ' 未缓存') + '</span></label>';
+  }).join('') : '<span class="mn-hint">还没有群列表，先到「群成员缓存」刷新</span>';
+  $('#dupScopeHint').textContent = c.scope_custom ? '当前：只在勾选的 ' + all.filter(function(g) { return g.selected; }).length + ' 个群里检测' : '当前：所有管理的群';
+}
+async function dupSaveScope() {
+  var boxes = $$('#dupScope .dup-scope');
+  var picked = boxes.filter(function(b) { return b.checked; }).map(function(b) { return b.value; });
+  if (!picked.length) { toast('至少勾选 2 个群', 'warning'); return; }
+  if (picked.length < 2) { toast('至少勾选 2 个群才能检测重复成员', 'warning'); return; }
+  var res = await safePost('minimal/duplicates/scope', { groups: picked.length === boxes.length ? [] : picked });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  toast('已保存检测范围', 'success');
+  loadDup();
+}
 async function loadDup() {
   var res = await safeGet('minimal/duplicates', {
     min_groups: $('#dupMin').value, include_exempt: $('#dupExempt').checked ? 1 : 0,
@@ -3876,7 +3916,7 @@ async function loadDup() {
   DUP.items = d.items || [];
   var c = d.coverage || {};
   var names = {}; (MN.overview && MN.overview.groups || []).forEach(function(g) { names[g.group_id] = g.group_name; });
-  var cov = '已缓存成员的群：<strong>' + c.groups_cached + ' / ' + c.groups_total + '</strong>';
+  var cov = '检测范围内已缓存成员的群：<strong>' + c.groups_cached + ' / ' + c.groups_total + '</strong>';
   if (c.oldest_update) cov += ' · 最早的缓存更新于 ' + esc(mnTime(c.oldest_update));
   if ((c.stale || []).length) cov += ' · <span style="color:var(--warning)">' + c.stale.length + ' 个群的缓存已过期</span>';
   if ((c.missing || []).length) {
@@ -3885,10 +3925,17 @@ async function loadDup() {
       '。点右上角「刷新所有群的成员缓存」，完成后再「重新检测」。</div>';
   }
   $('#dupCoverage').innerHTML = '<div class="mn-hint">' + cov + '</div>';
+  dupRenderScope(c);
+  dupRenderTable();
+}
+function dupRenderTable() {
+  var bulk = dupBulk();
+  $('#dupBulkBar').style.display = bulk ? '' : 'none';
   $('#dupAll').checked = false;
   if (!DUP.items.length) { $('#dupTable').innerHTML = '<p class="empty">没有发现重复成员</p>'; return; }
-  $('#dupTable').innerHTML = '<p class="mn-hint" style="margin-bottom:8px">共 ' + DUP.items.length + ' 人</p><table class="mn-table"><thead><tr><th></th><th>成员</th><th>群数</th><th>所在的群（单选 = 要保留的群）</th></tr></thead><tbody>' +
-    DUP.items.map(function(it) {
+  $('#dupTable').innerHTML = '<p class="mn-hint" style="margin-bottom:8px">共 ' + DUP.items.length + ' 人</p><table class="mn-table"><thead><tr>' + (bulk ? '<th></th>' : '') +
+    '<th>成员</th><th>群数</th><th>所在的群' + (bulk ? '（单选 = 要保留的群）' : '') + '</th><th>操作</th></tr></thead><tbody>' +
+    DUP.items.map(function(it, idx) {
       var tags = [];
       if (it.blacklisted) tags.push('<span class="mn-type regex">已在黑名单</span>');
       if (it.plugin_admin) tags.push('<span class="mn-type exact">插件管理员</span>');
@@ -3896,14 +3943,20 @@ async function loadDup() {
       if ((it.managers || []).length) tags.push('<span class="mn-type exact">群管理</span>');
       if (it.ignored) tags.push('<span class="mn-type">已忽略' + (it.ignored.reason ? '：' + esc(it.ignored.reason) : '') + '</span>');
       var groups = it.groups.map(function(g) {
-        return '<label style="display:flex;gap:6px;align-items:center;padding:2px 0"><input type="radio" name="dupKeep-' + escAttr(it.user_id) + '" value="' + escAttr(g.group_id) + '"' +
-          (g.group_id === it.keep_default ? ' checked' : '') + ' />' + esc(g.group_name || '未命名') + '<span class="mn-hint">（' + esc(g.group_id) + '）' +
-          esc(DUP_ROLES[g.role] || g.role) + (g.card ? ' · ' + esc(g.card) : '') + (g.join_time ? ' · ' + esc(mnDate(g.join_time)) + ' 入群' : '') + '</span></label>';
+        return bulk
+          ? '<label style="display:flex;gap:6px;align-items:center;padding:2px 0"><input type="radio" name="dupKeep-' + escAttr(it.user_id) + '" value="' + escAttr(g.group_id) + '"' +
+            (g.group_id === it.keep_default ? ' checked' : '') + ' />' + dupGroupText(g) + '</label>'
+          : '<div style="padding:2px 0">' + dupGroupText(g) + '</div>';
       }).join('');
-      return '<tr><td><input type="checkbox" class="dup-check" value="' + escAttr(it.user_id) + '" /></td>' +
-        '<td>' + esc(it.user_id) + '<br><span class="mn-hint">' + esc(it.name) + '</span>' + (tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">' + tags.join('') + '</div>' : '') +
-        (it.ignored ? '<div><button class="btn btn-ghost btn-sm" data-dup-unignore="' + escAttr(it.user_id) + '">取消忽略</button></div>' : '') + '</td>' +
-        '<td><strong>' + it.count + '</strong></td><td>' + groups + '</td></tr>';
+      var protectedUser = it.plugin_admin || it.whitelisted;
+      var ops = protectedUser ? '<span class="mn-hint">不处理</span>' :
+        '<button class="btn btn-primary btn-sm" data-dup-handle="' + idx + '">处理</button>' +
+        (it.ignored ? ' <button class="btn btn-ghost btn-sm" data-dup-unignore="' + escAttr(it.user_id) + '">取消忽略</button>'
+                    : ' <button class="btn btn-ghost btn-sm" data-dup-ignore-one="' + escAttr(it.user_id) + '">忽略</button>');
+      return '<tr>' + (bulk ? '<td><input type="checkbox" class="dup-check" value="' + escAttr(it.user_id) + '" /></td>' : '') +
+        '<td><div style="display:flex;gap:8px;align-items:flex-start">' + dupAvatar(it) + '<div>' + esc(it.user_id) + '<br><span class="mn-hint">' + esc(it.name) + '</span>' +
+        (tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">' + tags.join('') + '</div>' : '') + '</div></div></td>' +
+        '<td><strong>' + it.count + '</strong></td><td>' + groups + '</td><td style="white-space:nowrap">' + ops + '</td></tr>';
     }).join('') + '</tbody></table>';
   $$('[data-dup-unignore]').forEach(function(btn) {
     btn.addEventListener('click', async function() {
@@ -3911,6 +3964,72 @@ async function loadDup() {
       if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
       toast('已取消忽略', 'success'); loadDup();
     });
+  });
+  $$('[data-dup-ignore-one]').forEach(function(btn) { btn.addEventListener('click', function() { mnDupIgnore([btn.getAttribute('data-dup-ignore-one')]); }); });
+  $$('[data-dup-handle]').forEach(function(btn) { btn.addEventListener('click', function() { dupHandleOne(DUP.items[Number(btn.getAttribute('data-dup-handle'))]); }); });
+}
+function dupGroupLabel(it, gid) {
+  var g = (it.groups || []).filter(function(x) { return x.group_id === gid; })[0];
+  return (g && g.group_name ? g.group_name : '未命名') + '（' + gid + '）';
+}
+function dupPlan(it, mode, keep) {
+  var gids = (it.groups || []).map(function(g) { return g.group_id; });
+  var kept = mode === 'keep_one' ? (gids.indexOf(keep) >= 0 ? keep : it.keep_default) : '';
+  return { kept: kept, targets: gids.filter(function(g) { return g !== kept; }) };
+}
+function dupPlanText(it, mode, keep, block) {
+  var p = dupPlan(it, mode, keep);
+  var lines = [it.user_id + (it.name ? '（' + it.name + '）' : '') + '：'];
+  if (p.kept) lines.push('  保留：' + dupGroupLabel(it, p.kept));
+  lines.push('  踢出 ' + p.targets.length + ' 个群：' + p.targets.map(function(g) { return dupGroupLabel(it, g); }).join('、'));
+  if (block) lines.push(mode === 'keep_one' ? '  被踢的群里 QQ 拉黑（不能再申请加入）' : '  加入插件黑名单（所有群通用）');
+  return lines.join('\n');
+}
+async function dupSubmit(ids, mode, reason, keep, block) {
+  $('#dupResult').innerHTML = '<div class="mn-result no">处理中……</div>';
+  var res = await safePost('minimal/duplicates/handle', { user_ids: ids, mode: mode, reason: reason, keep: keep, block: block }, 300000);
+  if (isApiError(res)) { $('#dupResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var data = mnData(res), results = data.results || {};
+  var lines = [];
+  Object.keys(results).forEach(function(uid) {
+    var r = results[uid];
+    if (r.skipped) { lines.push(uid + '：跳过（' + r.skipped + '）'); return; }
+    lines.push(uid + '：' + (r.kept ? '保留 ' + r.kept + '，' : '') + '将从 ' + (r.groups || []).length + ' 个群踢出');
+  });
+  $('#dupResult').innerHTML = mnJobCreatedHtml(data.job, lines);
+}
+// 逐个处理：第一步选方式 / 保留的群 / 原因，第二步再确认要踢的群
+function dupHandleOne(it) {
+  if (!it) return;
+  var radios = it.groups.map(function(g) {
+    return '<label style="display:flex;gap:6px;align-items:center;padding:3px 0"><input type="radio" name="dupOneKeep" value="' + escAttr(g.group_id) + '"' +
+      (g.group_id === it.keep_default ? ' checked' : '') + ' />' + dupGroupText(g) + '</label>';
+  }).join('');
+  var body = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">' + dupAvatar(it, 48) + '<div><strong>' + esc(it.user_id) + '</strong><br><span class="mn-hint">' + esc(it.name) + ' · 在 ' + it.count + ' 个群</span></div></div>' +
+    '<div class="mn-row" style="margin-bottom:6px"><label><input type="radio" name="dupOneMode" value="keep_one" checked /> 只保留一个群</label><label><input type="radio" name="dupOneMode" value="kick_all" /> 全部踢出</label></div>' +
+    '<div id="dupOneKeepBox"><div class="mn-hint" style="margin-bottom:4px">保留哪个群（默认最早加入的）：</div>' + radios + '</div>' +
+    '<div class="mn-row" style="margin-top:8px"><label><input type="checkbox" id="dupOneBlock" /> 同时拉黑</label><span class="mn-hint" id="dupOneBlockHint">在被踢的群里 QQ 拉黑，不能再申请加入</span></div>' +
+    '<input class="input-sm" id="dupOneReason" style="width:100%;margin-top:8px" placeholder="处理原因（必填），例如：重复加群发广告" value="' + escAttr(($('#dupReason') || {}).value || '') + '" />';
+  showModal('处理重复成员', body, '<button class="btn btn-ghost btn-sm" id="dupOneCancel">取消</button><button class="btn btn-primary btn-sm" id="dupOneNext">下一步</button>');
+  var sync = function() {
+    var mode = ($('input[name=dupOneMode]:checked') || {}).value;
+    $('#dupOneKeepBox').style.display = mode === 'keep_one' ? '' : 'none';
+    $('#dupOneBlockHint').textContent = mode === 'keep_one' ? '在被踢的群里 QQ 拉黑，不能再申请加入' : '加入插件黑名单（所有群通用）';
+  };
+  $$('input[name=dupOneMode]').forEach(function(r) { r.addEventListener('change', sync); });
+  $('#dupOneCancel').addEventListener('click', closeModal);
+  $('#dupOneNext').addEventListener('click', async function() {
+    var mode = ($('input[name=dupOneMode]:checked') || {}).value || 'keep_one';
+    var keepGid = ($('input[name=dupOneKeep]:checked') || {}).value || it.keep_default;
+    var block = $('#dupOneBlock').checked;
+    var reason = $('#dupOneReason').value.trim();
+    if (!reason) { toast('请填写处理原因', 'warning'); $('#dupOneReason').focus(); return; }
+    closeModal();
+    var ok = await mnConfirm('请再确认一次：\n' + dupPlanText(it, mode, keepGid, block) + '\n原因：' + reason,
+      { title: '确认踢出', okText: '确认踢出', danger: true });
+    if (!ok) return;
+    var keep = {}; if (mode === 'keep_one') keep[it.user_id] = keepGid;
+    await dupSubmit([it.user_id], mode, reason, keep, block);
   });
 }
 function mnDupSelected() { return $$('#dupTable .dup-check:checked').map(function(cb) { return cb.value; }); }
@@ -3926,23 +4045,17 @@ async function mnDupHandle(mode) {
     ? '只保留各自选中的一个群，从其余群踢出' + (block ? '，并在被踢的群里 QQ 拉黑' : '')
     : '从所有群踢出' + (block ? '，并加入插件黑名单' : '');
   if (!(await mnConfirm('确定处理选中的 ' + ids.length + ' 人？\n' + desc + '\n原因：' + reason,
-    { title: '处理重复成员', okText: '执行', danger: true }))) return;
-  $('#dupResult').innerHTML = '<div class="mn-result no">处理中……</div>';
-  var res = await safePost('minimal/duplicates/handle', { user_ids: ids, mode: mode, reason: reason, keep: keep, block: block }, 300000);
-  if (isApiError(res)) { $('#dupResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
-  var data = mnData(res), results = data.results || {};
-  var lines = [];
-  Object.keys(results).forEach(function(uid) {
-    var r = results[uid];
-    if (r.skipped) { lines.push(uid + '：跳过（' + r.skipped + '）'); return; }
-    lines.push(uid + '：' + (r.kept ? '保留 ' + r.kept + '，' : '') + '将从 ' + (r.groups || []).length + ' 个群踢出');
-  });
-  $('#dupResult').innerHTML = mnJobCreatedHtml(data.job, lines);
+    { title: '处理重复成员', okText: '下一步', danger: true }))) return;
+  var byId = {}; DUP.items.forEach(function(it) { byId[it.user_id] = it; });
+  var details = ids.filter(function(uid) { return byId[uid]; }).map(function(uid) { return dupPlanText(byId[uid], mode, keep[uid], block); });
+  var shown = details.slice(0, 20).join('\n') + (details.length > 20 ? '\n……还有 ' + (details.length - 20) + ' 人' : '');
+  if (!(await mnConfirm('请再确认一次，将执行：\n' + shown + '\n原因：' + reason, { title: '确认踢出 ' + ids.length + ' 人', okText: '确认踢出', danger: true }))) return;
+  await dupSubmit(ids, mode, reason, keep, block);
 }
-async function mnDupIgnore() {
-  var ids = mnDupSelected();
+async function mnDupIgnore(only) {
+  var ids = only || mnDupSelected();
   if (!ids.length) { toast('请先勾选成员', 'warning'); return; }
-  var reason = await promptModal({ title: '忽略重复成员', label: '忽略选中的 ' + ids.length + ' 人（以后不再列出）。可以填写原因，例如「工作人员」', value: $('#dupReason').value.trim(), placeholder: '原因（可不填）', okText: '忽略' });
+  var reason = await promptModal({ title: '忽略重复成员', label: '忽略 ' + (ids.length === 1 ? ids[0] : '选中的 ' + ids.length + ' 人') + '（以后不再列出）。可以填写原因，例如「工作人员」', value: ($('#dupReason') || {}).value ? $('#dupReason').value.trim() : '', placeholder: '原因（可不填）', okText: '忽略' });
   if (reason === null) return;
   var res = await safePost('minimal/duplicates/ignore', { user_ids: ids, ignore: true, reason: reason });
   if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
@@ -4770,7 +4883,11 @@ function initMinimalPages() {
   bindIfExists('dupAll', function() { var on = $('#dupAll').checked; $$('#dupTable .dup-check').forEach(function(cb) { cb.checked = on; }); }, 'change');
   bindIfExists('btnDupKeep', function() { mnDupHandle('keep_one'); });
   bindIfExists('btnDupKickAll', function() { mnDupHandle('kick_all'); });
-  bindIfExists('btnDupIgnore', mnDupIgnore);
+  bindIfExists('btnDupIgnore', function() { mnDupIgnore(); });
+  bindIfExists('dupBulkMode', dupRenderTable, 'change');
+  bindIfExists('btnDupScopeSave', dupSaveScope);
+  bindIfExists('btnDupScopeAll', function() { $$('#dupScope .dup-scope').forEach(function(b) { b.checked = true; }); });
+  bindIfExists('btnDupScopeNone', function() { $$('#dupScope .dup-scope').forEach(function(b) { b.checked = false; }); });
   bindIfExists('btnDupRefreshCache', async function() {
     if (!(await mnConfirm('逐个刷新所有群的成员缓存？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行，完成后点「重新检测」。', { okText: '刷新' }))) return;
     var res = await safePost('minimal/directory/refresh', { all: true });

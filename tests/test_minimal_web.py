@@ -545,6 +545,34 @@ class DuplicateMemberTests(unittest.IsolatedAsyncioTestCase):
         coverage = self.h._dup_find()["coverage"]
         self.assertEqual((coverage["groups_total"], coverage["groups_cached"]), (3, 3))
 
+    def test_scope_limits_groups_and_is_saved(self):
+        coverage = self.h._dup_find()["coverage"]
+        self.assertFalse(coverage["scope_custom"])
+        self.assertEqual(sorted(g["group_id"] for g in coverage["scope_all"]), ["10001", "10002", "10003"])
+        self.assertTrue(all(g["selected"] for g in coverage["scope_all"]))
+        # 只在一群、三群里去重：30002 只在一群 → 不算；30001 在一、三群 → 2 个群
+        selected = self.h._dup_set_scope(["10001", "10003", "900000001", "abc"])
+        self.assertEqual(selected, ["10001", "10003"])  # 备份群 / 无效群号被丢掉
+        found = self.found()
+        self.assertEqual(list(found), ["30001"])
+        self.assertEqual(found["30001"]["count"], 2)
+        self.assertEqual(found["30001"]["keep_default"], "10001")
+        coverage = self.h._dup_find()["coverage"]
+        self.assertTrue(coverage["scope_custom"])
+        self.assertEqual(coverage["groups_total"], 2)
+        self.assertEqual({g["group_id"]: g["selected"] for g in coverage["scope_all"]},
+                         {"10001": True, "10002": False, "10003": True})
+        self.assertEqual(len(self.h._op_list(action="设置重复成员检测范围")[0]), 1)
+        # 清空 = 所有群
+        self.h._dup_set_scope([])
+        self.assertEqual(sorted(self.found()), ["30001", "30002"])
+
+    async def test_scope_endpoint_and_avatar(self):
+        res = await call(self.h._web_minimal_duplicates_scope, {"groups": ["10001", "10002"]})
+        self.assertEqual(res["data"]["groups"], ["10001", "10002"])
+        item = self.found()["30001"]
+        self.assertEqual(item["avatar"], "https://q1.qlogo.cn/g?b=qq&nk=30001&s=100")
+
     def test_ignore_hides_member(self):
         self.h._dup_set_ignored("30002", True, "工作人员")
         self.assertNotIn("30002", self.found())

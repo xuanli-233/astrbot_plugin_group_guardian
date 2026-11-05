@@ -409,6 +409,12 @@ class MinimalWebMixin:
                                block=bool(data.get("block")), **WEB_LOG)
         return jsonify({"status": "success", "data": result})
 
+    async def _web_minimal_duplicates_scope(self):
+        data = await self._minimal_body()
+        groups = self._minimal_ids(data.get("groups"))
+        selected = self._dup_set_scope(groups, **WEB_LOG)
+        return jsonify({"status": "success", "data": {"groups": selected}})
+
     async def _web_minimal_duplicates_ignore(self):
         data = await self._minimal_body()
         user_ids = self._minimal_ids(data.get("user_ids") or data.get("user_id"))

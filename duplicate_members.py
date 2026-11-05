@@ -5,6 +5,7 @@
 不额外调用接口；缓存不完整时结果也不完整，WebUI 会提示缓存覆盖了多少个群。
 
 不参与统计：备份群 / 葵花码转发群、插件不管理的群、机器人自己。
+检测范围可以在 WebUI 里勾选（存在 meta 表 duplicate_member_scope；没勾选 = 所有管理的群）。
 默认不列出（可在 WebUI 打开）：插件管理员、用户白名单、在任一群是群主 / 管理员的人、已忽略的人。
 
 处理方式（每一步都写操作记录）：
@@ -21,6 +22,8 @@ from astrbot.api import logger
 
 class DuplicateMemberMixin:
     DUP_IGNORE_META_KEY = "duplicate_member_ignore"
+    DUP_SCOPE_META_KEY = "duplicate_member_scope"
+    DUP_AVATAR_URL = "https://q1.qlogo.cn/g?b=qq&nk={uid}&s=100"
 
     # ------------------------------------------------------------------
     # 忽略名单
@@ -47,17 +50,46 @@ class DuplicateMemberMixin:
     # ------------------------------------------------------------------
     # 检测
     # ------------------------------------------------------------------
-    def _dup_scope_groups(self) -> List[str]:
-        """参与统计的群：缓存里有的、插件管理的、不是备份群的群。"""
+    def _dup_candidate_groups(self) -> List[str]:
+        """可以参与统计的群：缓存里有的、插件管理的、不是备份群的群。"""
         state = self._dir()
         is_backup = getattr(self, "_is_backup_group", lambda _g: False)
         return [gid for gid in state["groups"] if self._group_id_allowed(gid) and not is_backup(gid)]
+
+    def _dup_scope_selected(self) -> List[str]:
+        """WebUI 里勾选的检测范围；空 = 所有管理的群。"""
+        try:
+            data = json.loads(self._storage.get_meta(self.DUP_SCOPE_META_KEY, "") or "[]")
+        except Exception:
+            return []
+        return [str(g) for g in data] if isinstance(data, list) else []
+
+    def _dup_set_scope(self, group_ids: List[str], source: str = "WebUI", operator: str = "") -> List[str]:
+        candidates = set(self._dup_candidate_groups())
+        selected = []
+        for gid in group_ids or []:
+            gid = str(gid)
+            if gid in candidates and gid not in selected:
+                selected.append(gid)
+        self._storage.set_meta(self.DUP_SCOPE_META_KEY, json.dumps(selected, ensure_ascii=False))
+        self._record_op("设置重复成员检测范围", source=source, operator=operator,
+                        detail=("、".join(selected) if selected else "所有管理的群"))
+        return selected
+
+    def _dup_scope_groups(self) -> List[str]:
+        """参与统计的群：可参与的群 ∩ 勾选的范围（没勾选时全部）。"""
+        candidates = self._dup_candidate_groups()
+        selected = set(self._dup_scope_selected())
+        if not selected:
+            return candidates
+        return [gid for gid in candidates if gid in selected]
 
     def _dup_find(self, min_groups: int = 2, include_exempt: bool = False,
                   include_ignored: bool = False, keyword: str = "") -> dict:
         """返回 {"items": [...], "coverage": {...}}，items 按所在群数从多到少排序。"""
         state = self._dir()
         scope = self._dup_scope_groups()
+        selected = set(self._dup_scope_selected())
         cached = [g for g in scope if g in state["members"]]
         bot_uin = str(getattr(self, "_bot_uin_cache", 0) or "")
         ignored = self._dup_ignored()
@@ -95,6 +127,7 @@ class DuplicateMemberMixin:
             groups.sort(key=lambda g: (g["join_time"] or 1 << 62, scope.index(g["group_id"])))
             items.append({
                 "user_id": uid, "name": names[0] if names else "", "count": len(groups), "groups": groups,
+                "avatar": self.DUP_AVATAR_URL.format(uid=uid),
                 "keep_default": groups[0]["group_id"], "exempt": exempt, "managers": managers,
                 "plugin_admin": uid in admins, "whitelisted": uid in white,
                 "blacklisted": uid in black, "ignored": ignored.get(uid),
@@ -107,6 +140,12 @@ class DuplicateMemberMixin:
                 "missing": [g for g in scope if g not in state["members"]],
                 "stale": [g for g in cached if not self._dir_members_fresh(g)],
                 "oldest_update": min((state["members_ts"].get(g, 0) for g in cached), default=0),
+                "scope_custom": bool(selected),
+                "scope_all": [
+                    {"group_id": gid, "group_name": (state["groups"].get(gid) or {}).get("group_name", ""),
+                     "selected": (not selected) or gid in selected, "cached": gid in state["members"]}
+                    for gid in self._dup_candidate_groups()
+                ],
             },
         }
 

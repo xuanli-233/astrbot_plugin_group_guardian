@@ -694,6 +694,7 @@ class WebMixin:
                 ("/minimal/duplicates", self._web_minimal_duplicates, ["GET"], "重复群成员"),
                 ("/minimal/duplicates/handle", self._web_minimal_duplicates_handle, ["POST"], "处理重复群成员"),
                 ("/minimal/duplicates/ignore", self._web_minimal_duplicates_ignore, ["POST"], "忽略 / 取消忽略重复成员"),
+                ("/minimal/duplicates/scope", self._web_minimal_duplicates_scope, ["POST"], "设置重复成员检测范围"),
                 ("/minimal/blacklist/add", self._web_minimal_blacklist_add, ["POST"], "加入黑名单（带原因）"),
                 ("/minimal/blacklist/remove", self._web_minimal_blacklist_remove, ["POST"], "移出黑名单"),
             ]
