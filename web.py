@@ -354,6 +354,9 @@ class WebMixin:
 
     @staticmethod
     def _format_web_error(e: Exception) -> str:
+        if type(e).__name__ == "ApiNotAvailable":
+            # 没有 self 上下文时给通用提示；有 client 的地方用 _onebot_unavailable_hint 给出连接数
+            return "QQ 协议端没有连接到 AstrBot（ApiNotAvailable），请检查 LuckyLilliaBot 的反向 WebSocket 连接"
         msg = str(e).strip()
         return msg or e.__class__.__name__
 
@@ -1972,7 +1975,15 @@ class WebMixin:
                 return jsonify({"status": "success", "data": fallback, "stale": True, "message": "获取群列表超时，已显示本地缓存/配置群"})
             return jsonify({"status": "error", "message": "获取群列表超时，请稍后重试"})
         except Exception as e:
-            logger.warning(f"[GroupMgr] WebUI 获取群列表失败: {e!r}")
+            if type(e).__name__ == "ApiNotAvailable":
+                hint_fn = getattr(type(self), "_onebot_unavailable_hint", None)
+                hint_fn = hint_fn.__get__(self) if callable(hint_fn) else None
+                e = RuntimeError(hint_fn(client) if callable(hint_fn) else self._format_web_error(e))
+            # WebUI 会反复重试，同一个错误每分钟只记一次日志
+            last = self.__dict__.get("_web_groups_last_warn") or ("", 0.0)
+            if str(e) != last[0] or now - last[1] >= 60:
+                self._web_groups_last_warn = (str(e), now)
+                logger.warning(f"[GroupMgr] WebUI 获取群列表失败: {e}")
             cache = self._current_web_group_snapshot()
             if self._web_cache_has_snapshot(cache):
                 return jsonify({"status": "success", "data": cache.get("data", []), "stale": True, "message": f"获取群列表失败，已显示缓存: {self._format_web_error(e)}"})

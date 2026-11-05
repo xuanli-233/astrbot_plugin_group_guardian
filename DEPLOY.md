@@ -181,6 +181,7 @@ uv pip install -r requirements.txt   # 依赖有变化时
 | 现象 | 处理 |
 | --- | --- |
 | AstrBot 收不到消息 | 检查 AstrBot 平台是否启用、端口是否为 6199、LLBot 的 URL 是否以 `/ws` 结尾、两边 Token 是否一致、防火墙 |
+| 日志反复出现「获取群列表失败: ApiNotAvailable」/ 页面提示「QQ 协议端没有连接到 AstrBot」 | LuckyLilliaBot 没有连上 AstrBot 的 aiocqhttp 平台：确认 LLBot 已登录、OneBot 11 已启用、反向 WebSocket 地址是 `ws://AstrBot地址:6199/ws`（不是 6185）、Token 一致、AstrBot 平台已启用；改完重启 LLBot。提示「连接了 N 个 QQ 账号」时，给每个账号单独建一个平台（不同端口） |
 | 插件加载失败 | 看 AstrBot 日志里的报错；通常是依赖没装到 AstrBot 的 Python 环境，按第 4 节重新安装 |
 | 管理页面打不开 / 显示「API 不可用」 | 确认 AstrBot ≥ 4.24.2，并从 AstrBot 管理面板的插件页面进入 |
 | 指令提示无权限 | 发送者需为插件管理员 / 群超管 / 群主；群管理员默认无权限（严格权限），需在 WebUI 设置；跨群指令只允许插件管理员 |

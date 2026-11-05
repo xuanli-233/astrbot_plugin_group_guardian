@@ -31,9 +31,12 @@ class OneBotMixin:
                 self._client = client
                 return client
         cached = self._normalize_action_client(self._client)
-        if cached:
+        # 缓存的 client 已确认没有任何 QQ 账号连接时（协议端断线 / 当初选错了平台）重新查找，
+        # 否则 WebUI 等没有事件上下文的调用会一直报 ApiNotAvailable。
+        if cached and self._onebot_connected_ids(cached) != []:
             self._client = cached
             return cached
+        candidates = []
         try:
             pm = self.context.platform_manager
             if hasattr(pm, 'get_insts'):
@@ -41,22 +44,78 @@ class OneBotMixin:
             else:
                 platforms = pm._platforms.values() if hasattr(pm, '_platforms') else []
             for platform in platforms:
+                found = None
                 if hasattr(platform, 'get_client'):
                     client = platform.get_client()
                     if inspect.isawaitable(client):
                         client = await client
-                    client = self._normalize_action_client(client)
-                    if client:
-                        self._client = client
-                        return client
-                for attr in ("client", "bot", "api"):
-                    client = self._normalize_action_client(getattr(platform, attr, None))
-                    if client:
-                        self._client = client
-                        return client
+                    found = self._normalize_action_client(client)
+                if not found:
+                    for attr in ("client", "bot", "api"):
+                        found = self._normalize_action_client(getattr(platform, attr, None))
+                        if found:
+                            break
+                if found and all(found is not c for c in candidates):
+                    candidates.append(found)
         except Exception as e:
             logger.debug(f"[GroupMgr] 从 platform_manager 获取 client 失败: {e}")
+        if cached and all(cached is not c for c in candidates):
+            candidates.append(cached)
+        if not candidates:
+            return None
+        # 有多个 aiocqhttp 平台时，优先选恰好连着 1 个 QQ 账号的，其次是连接数未知的，
+        # 最后才退回到没有连接的（保持原有报错路径，由调用方给出连接提示）。
+        def rank(c):
+            ids = self._onebot_connected_ids(c)
+            if ids is None:
+                return 1
+            if len(ids) == 1:
+                return 0
+            return 2 if ids else 3
+        best = min(candidates, key=rank)
+        self._client = best
+        return best
+
+    @staticmethod
+    def _onebot_connected_ids(client):
+        """aiocqhttp 反向 WebSocket 当前连接的 QQ 号列表；无法判断（非 aiocqhttp、配置了 HTTP API 等）时返回 None。
+
+        aiocqhttp 在没有事件上下文（WebUI、定时任务）时调用接口，只有「恰好连接 1 个账号」或
+        传入 self_id 才能选出连接，否则抛 ApiNotAvailable。
+        """
+        if client is None:
+            return None
+        api = getattr(client, "_api", None)
+        unified = api if api is not None else client
+        http_api = getattr(unified, "_http_api", None)
+        if http_api is not None and getattr(http_api, "_api_root", None):
+            return None
+        holders = (
+            getattr(client, "_wsr_api_clients", None),
+            getattr(getattr(unified, "_wsr_api", None), "_api_clients", None),
+            getattr(client, "_api_clients", None),
+        )
+        for holder in holders:
+            if isinstance(holder, dict):
+                return [str(k) for k in holder.keys()]
         return None
+
+    def _onebot_unavailable_hint(self, client=None) -> str:
+        """把 aiocqhttp 的 ApiNotAvailable 转成可操作的提示。"""
+        ids = self._onebot_connected_ids(client if client is not None else getattr(self, "_client", None))
+        if ids == []:
+            return ("QQ 协议端没有连接到 AstrBot（aiocqhttp 平台当前没有在线的 QQ 账号）。"
+                    "请检查：LuckyLilliaBot 是否已登录并启用 OneBot 11 反向 WebSocket；地址是否为 "
+                    "ws://AstrBot所在机器:平台端口/ws（默认 6199，不是面板的 6185）；两边 Token 是否一致；"
+                    "AstrBot 的 aiocqhttp 平台是否已启用")
+        if ids and len(ids) > 1:
+            return (f"同一个 aiocqhttp 平台连接了 {len(ids)} 个 QQ 账号（{', '.join(ids[:5])}），"
+                    "插件在 WebUI / 定时任务中无法确定使用哪个账号。请为每个 QQ 账号单独建一个 aiocqhttp 平台（不同端口）")
+        return "QQ 协议端暂不可用（ApiNotAvailable），请确认 LuckyLilliaBot 已连接到 AstrBot"
+
+    @staticmethod
+    def _is_api_not_available(exc) -> bool:
+        return type(exc).__name__ == "ApiNotAvailable"
 
     @staticmethod
     def _normalize_action_client(candidate):
@@ -712,6 +771,8 @@ class OneBotMixin:
         except asyncio.TimeoutError:
             return False, None, f"{result_name or action} 超时（协议端 {ONEBOT_CALL_TIMEOUT:.0f}s 无响应）"
         except Exception as e:
+            if self._is_api_not_available(e):
+                return False, None, self._onebot_unavailable_hint(client)
             err = str(e)
             # Issue #34：QQ 权限错误的原始 OIDB 报文对用户不友好，转成可读提示
             if "ERR_NO_PERMISSION" in err or "120101007" in err:
@@ -733,6 +794,10 @@ class OneBotMixin:
             )
         except asyncio.TimeoutError:
             raise RuntimeError(f"{name} 超时（协议端 {ONEBOT_CALL_TIMEOUT:.0f}s 无响应）")
+        except Exception as e:
+            if self._is_api_not_available(e):
+                raise RuntimeError(self._onebot_unavailable_hint(client)) from e
+            raise
         ok, err = self._check_api_result(result, name)
         if not ok:
             raise RuntimeError(err or f"{name} 失败")

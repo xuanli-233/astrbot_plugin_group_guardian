@@ -2,8 +2,10 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _astrbot_stubs  # noqa: E402
 
+_astrbot_stubs.install()
 from onebot import OneBotMixin  # noqa: E402
 
 
