@@ -612,6 +612,57 @@ class DuplicateMemberTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(i["user_id"] for i in listed["data"]["items"]), ["30001", "30002"])
 
 
+class DashboardStructureTests(unittest.TestCase):
+    """多写 / 少写一个 </div> 会把后面的页面挤出主内容区（页面空白或排到最下面）。"""
+
+    def test_every_tab_panel_sits_directly_in_main_content(self):
+        from html.parser import HTMLParser
+
+        html = (ROOT / "pages" / "dashboard" / "index.html").read_text(encoding="utf-8")
+        body = html[:html.index("<script>", html.index("</style>"))]
+
+        class P(HTMLParser):
+            VOID = {"input", "img", "br", "hr", "meta", "link", "source", "path", "circle", "rect", "line", "polyline"}
+
+            def __init__(self):
+                super().__init__()
+                self.stack, self.panels, self.unbalanced = [], {}, []
+
+            def handle_starttag(self, tag, attrs):
+                if tag in self.VOID:
+                    return
+                a = dict(attrs)
+                if "tab-panel" in (a.get("class") or "").split():
+                    parent = next((t for t in reversed(self.stack) if t[0] in ("main", "div", "body")), None)
+                    self.panels[a.get("id")] = parent
+                self.stack.append((tag, a.get("id") or "", a.get("class") or ""))
+
+            def handle_startendtag(self, tag, attrs):
+                pass
+
+            def handle_endtag(self, tag):
+                if tag in self.VOID:
+                    return
+                if not self.stack or self.stack[-1][0] != tag:
+                    self.unbalanced.append((tag, self.getpos(), self.stack[-1] if self.stack else None))
+                    # 尽量恢复：弹到最近的同名标签
+                    for i in range(len(self.stack) - 1, -1, -1):
+                        if self.stack[i][0] == tag:
+                            del self.stack[i:]
+                            break
+                    return
+                self.stack.pop()
+
+        p = P()
+        p.feed(body)
+        self.assertEqual(p.unbalanced, [])
+        self.assertGreater(len(p.panels), 10)
+        for pid, parent in p.panels.items():
+            with self.subTest(panel=pid):
+                self.assertIsNotNone(parent)
+                self.assertEqual(parent[0], "main", f"{pid} 不在 <main> 里，而是在 {parent}")
+
+
 class DashboardWiringTests(unittest.TestCase):
     def test_new_pages_and_nav_entries_exist(self):
         html = (ROOT / "pages" / "dashboard" / "index.html").read_text(encoding="utf-8")
