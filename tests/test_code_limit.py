@@ -1,6 +1,7 @@
 """同一个码的发送次数限制（code_limit.py）：滑动窗口、全局 / 按群计次、与识别流水线的衔接。"""
 import importlib.util
 import io
+import os
 import sys
 import types
 import unittest
@@ -142,17 +143,71 @@ class CheckTests(unittest.TestCase):
         h.cfg_values["code_limit_warn_enabled"] = False
         self.assertIsNone(h._cl_warning("100", "555", "张三", over))
 
-    def test_top_codes(self):
-        import time
-        h = _Harness({"code_limit_max": 100})
-        now = int(time.time())
-        for gid, uid in (("1", "a"), ("2", "b"), ("2", "b")):
-            h._cl_check(gid, uid, ["hot"], now=now)
-        h._cl_check("1", "a", ["cold"], now=now)
-        top = h._cl_top(hours=5)
-        self.assertEqual(top[0]["text"], "hot")
-        self.assertEqual((top[0]["count"], top[0]["groups"], top[0]["users"]), (3, 2, 2))
-        self.assertEqual(sorted(t["text"] for t in h._cl_top(hours=5, group_id="1")), ["cold", "hot"])
+    def test_count_by_user(self):
+        h = _Harness({"code_limit_count_by": "user", "code_limit_max": 1})
+        self.assertIsNone(h._cl_check("1", "a", ["c"], now=T0))
+        self.assertIsNone(h._cl_check("1", "b", ["c"], now=T0 + 1))  # 另一个人单独计
+        over = h._cl_check("2", "a", ["c"], now=T0 + 2)  # 同一个人，所有群合计
+        self.assertEqual((over["by"], over["count"]), ("user", 1))
+        h.cfg_values["code_limit_scope"] = "group"
+        self.assertIsNone(h._cl_check("2", "a", ["c"], now=T0 + 3))  # 每群单独 + 按人：这个人在 2 群第一次
+
+    def test_whitelisted_codes_pass_and_are_not_counted(self):
+        h = _Harness({"code_limit_max": 1})
+        self.assertEqual(h._code_set_allowed("good", True), "")
+        for i in range(3):
+            self.assertIsNone(h._cl_check("1", "a", ["good"], now=T0 + i))
+        self.assertEqual(h._cl_count(h._cl_hash("good"), 0), 0)
+        self.assertIsNone(h._code_rule_hit("good"))
+        h.config["wxcode_regex_rules"] = ["go+d"]
+        self.assertIsNone(h._code_rule_hit("good"))  # 白名单优先于正则规则
+        # 拉黑会把它从白名单移除，反之亦然
+        h._code_set_blocked("good", True)
+        self.assertEqual((h._code_allow_list(), h._code_block_list()), ([], ["good"]))
+        h._code_set_allowed("good", True)
+        self.assertEqual((h._code_allow_list(), h._code_block_list()), (["good"], []))
+
+    def test_stats_record_every_outcome(self):
+        import time as _t
+        h = _Harness({"code_limit_max": 1})
+        now = int(_t.time())
+        h._code_set_allowed("ok", True)
+        h._cl_process("1", "a", ["hot"], now=now, user_name="张三")
+        h._cl_process("2", "b", ["hot"], now=now + 1)               # 超限
+        h._cl_process("1", "a", ["ok"], now=now + 2)                # 白名单
+        h._cs_log_rule("1", "c", "", ["https://a/invite"])          # 规则撤回
+        items, total = h._cs_stats(hours=5)
+        by = {i["text"]: i for i in items}
+        self.assertEqual(total, 3)
+        self.assertEqual((by["hot"]["total"], by["hot"]["passed"], by["hot"]["limited"]), (2, 1, 1))
+        self.assertEqual((by["hot"]["groups"], by["hot"]["users"]), (2, 2))
+        self.assertEqual((by["ok"]["allowed"], by["ok"]["state"]), (1, "allow"))
+        self.assertEqual(by["https://a/invite"]["ruled"], 1)
+        users, utotal = h._cs_stats(hours=5, by="user", keyword="hot")
+        self.assertEqual(utotal, 2)
+        self.assertEqual(sorted(u["user_id"] for u in users), ["a", "b"])
+        self.assertEqual(h._cs_stats(hours=5, keyword="张三")[1], 1)
+        detail = h._cs_detail(by["hot"]["code_hash"])
+        self.assertEqual([r["outcome"] for r in detail["sends"]], ["limit", "pass"])
+
+    def test_store_disabled_and_limit_disabled_records_nothing(self):
+        h = _Harness({"code_limit_enabled": False, "code_store_enabled": False})
+        self.assertEqual(h._cl_process("1", "a", ["x"], now=T0), (None, {}))
+        self.assertEqual(h._cs_stats(hours=5)[1], 0)
+        h = _Harness({"code_limit_enabled": False})  # 只开记录：照样记 pass，不限制
+        for i in range(5):
+            self.assertIsNone(h._cl_check("1", "a", ["x"], now=T0 + i))
+        self.assertEqual(h._cl_count(h._cl_hash("x"), 0), 5)
+
+    def test_clean_removes_rows_older_than_twice_the_window(self):
+        h = _Harness({"code_limit_window_hours": 2})
+        self.assertEqual(h._cs_ttl(), 4 * HOUR)
+        h._cl_record("1", "a", [(h._cl_hash("old"), "old")], T0 - 5 * HOUR)
+        h._cl_record("1", "a", [(h._cl_hash("new"), "new")], T0 - 3 * HOUR)
+        h._cs_clean(T0)
+        with h._storage._connect() as conn:
+            left = [r["code_text"] for r in conn.execute("SELECT code_text FROM code_sends")]
+        self.assertEqual(left, ["new"])
 
 
 def _png():
@@ -191,6 +246,52 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(handled)
         self.assertTrue(all(kind == "wxcode" for _r, kind in h.hits))
         self.assertEqual(h._cl_count(h._cl_hash("https://a/invite"), 0), 0)
+
+
+
+@unittest.skipIf(Image is None, "需要 Pillow")
+class ImageStoreTests(unittest.IsolatedAsyncioTestCase):
+    async def test_orig_and_crop_saved_compressed_dedup_and_cleaned(self):
+        import random
+        import tempfile
+        import time as _t
+        tmp = tempfile.TemporaryDirectory()
+        h = _Harness({"code_image_max_kb": 50, "code_limit_max": 100})
+        h._data_dir = tmp.name
+        # 噪点图：PNG 远大于 50KB，必须压缩
+        img = Image.new("RGB", (600, 600))
+        rnd = random.Random(1)
+        img.putdata([(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256)) for _ in range(600 * 600)])
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        data = buf.getvalue()
+        self.assertGreater(len(data), 50 * 1024)
+        collected = [{"url": "u", "data": data, "scan": {"codes": [
+            {"decoded": {"text": "https://x"}, "crop_box": [10, 10, 200, 200], "bbox": [20, 20, 190, 190]}]}}]
+        now = int(_t.time())
+        for i in range(2):  # 同一张图发两次：只存一份
+            _over, rows = h._cl_process("1", "a", ["https://x"], now=now + i)
+            await h._cs_save_images(rows, collected)
+        with h._storage._connect() as conn:
+            imgs = conn.execute("SELECT kind, bytes, path, thumb FROM code_images ORDER BY kind").fetchall()
+            sends = conn.execute("SELECT img_hash, crop_hash FROM code_sends").fetchall()
+        self.assertEqual([r["kind"] for r in imgs], ["crop", "orig"])
+        self.assertTrue(all(r["bytes"] <= 50 * 1024 for r in imgs))
+        self.assertTrue(imgs[0]["thumb"].startswith("data:image/jpeg;base64,"))
+        self.assertTrue(all(s["img_hash"] and s["crop_hash"] for s in sends))
+        self.assertEqual(len({s["img_hash"] for s in sends}), 1)
+        detail = h._cs_detail(h._cl_hash("https://x"))
+        self.assertEqual(len(detail["images"]), 1)
+        self.assertTrue(detail["images"][0]["orig"].startswith("data:image/jpeg;base64,"))
+        items, _ = h._cs_stats(hours=5)
+        self.assertTrue(items[0]["thumb"])
+        # 过了保留时长：记录和文件都删掉
+        paths = [r["path"] for r in imgs]
+        self.assertEqual(h._cs_clean(now + 10), 0)  # 还在保留时长内：不删
+        self.assertTrue(all(os.path.exists(p) for p in paths))
+        self.assertEqual(h._cs_clean(now + h._cs_ttl() + 10), 2)
+        self.assertFalse(any(os.path.exists(p) for p in paths))
+        tmp.cleanup()
 
 
 if __name__ == "__main__":

@@ -230,6 +230,25 @@
         "options": ["global", "group"],
         "hint": "global = 所有群合计（同一个码在任何群发都算）；group = 每个群单独计"
     },
+    "code_limit_count_by": {
+        "description": "码发送次数：按码计还是按人计",
+        "type": "string",
+        "default": "code",
+        "options": ["code", "user"],
+        "hint": "code = 按码计（谁发都算进同一个码的次数）；user = 按人计（同一个人发同一个码才累加，不同的人各算各的）"
+    },
+    "code_store_enabled": {
+        "description": "码记录：统计码内容并保存图片",
+        "type": "bool",
+        "default": true,
+        "hint": "每个解出内容的码都记下时间、群、发送者和处理结果，并保存原图和裁剪图（WebUI「码管理」查看）。记录和图片保留「滚动窗口 × 2」后自动删除"
+    },
+    "code_image_max_kb": {
+        "description": "码记录：图片超过多少 KB 就压缩",
+        "type": "int",
+        "default": 500,
+        "hint": "原图、裁剪图超过这个大小时转成 JPEG 并逐步降低质量 / 缩小，直到不超过。范围 50–5000"
+    },
     "code_limit_window_hours": {
         "description": "码发送次数：统计最近几小时",
         "type": "int",
@@ -265,6 +284,12 @@
         "type": "int",
         "default": 30,
         "hint": "范围 5–200。每张图约几十 KB（缩略图）"
+    },
+    "wxcode_allow_codes": {
+        "description": "白名单里的码（码内容完全一致即放行）",
+        "type": "list",
+        "default": [],
+        "hint": "在「码管理」或二维码看板上点「加白名单」添加。解出与这里完全相同内容的码一律放行：不按正则规则撤回、不计发送次数"
     },
     "wxcode_block_codes": {
         "description": "已拉黑的码（码内容完全一致即命中）",

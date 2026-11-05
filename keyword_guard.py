@@ -255,11 +255,15 @@ class KeywordGuardMixin:
                 hit_rule = getattr(self, "_code_rule_hit", None)
                 if not callable(hit_rule):
                     hit_rule = lambda t: self._match_rules(t, "wxcode_regex_rules", regex_only=True)  # noqa: E731
-                collected = [] if self._cfg("code_board_enabled", True) else None
+                # 二维码看板 / 码记录（保存图片）要用到原图字节
+                keep_images = self._cfg("code_board_enabled", True) or self._cfg("code_store_enabled", True)
+                collected = [] if keep_images else None
                 scans = await self._code_scan_images(image_urls, stop_when=lambda t: bool(hit_rule(t)),
                                                      collect=collected)
                 texts = self._code_texts(scans)
-                joined = "\n".join(texts)
+                allowed = getattr(self, "_code_allowed", None)
+                # 白名单里的码不参与正则匹配（包括多个码拼起来的整体匹配）
+                joined = "\n".join(t for t in texts if not (callable(allowed) and allowed(t)))
                 summary = self._code_describe(scans)
                 live_lines = getattr(self, "_code_live_lines", None)
                 if callable(live_lines):
@@ -277,10 +281,14 @@ class KeywordGuardMixin:
                         event, group_id, user_id, user_name, text or "[图片]", reason,
                         kind="wxcode", extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
                     )
+                    log_rule = getattr(self, "_cs_log_rule", None)
+                    if callable(log_rule) and texts:
+                        log_rule(group_id, user_id, user_name, texts, collected)
                 elif texts and callable(getattr(self, "_cl_enforce", None)):
-                    # 没命中规则：同一个码在时间窗口内发送次数超限也撤回（code_limit.py）
+                    # 没命中规则：记录码；同一个码在时间窗口内发送次数超限也撤回（code_limit.py）
                     limited, notice = await self._cl_enforce(
-                        event, group_id, user_id, user_name, text, texts, image_urls, summary=summary)
+                        event, group_id, user_id, user_name, text, texts, image_urls, summary=summary,
+                        collected=collected)
                     if limited:
                         reason = "同一个码发送次数超限"
                 # 二维码看板：撤回之后再在后台生成缩略图
@@ -292,7 +300,8 @@ class KeywordGuardMixin:
             else:
                 live_stage("识别葵花码")
                 texts = await self._recognize_images(image_urls, "wxcode")
-                joined = "\n".join(texts)
+                allowed = getattr(self, "_code_allowed", None)
+                joined = "\n".join(t for t in texts if not (callable(allowed) and allowed(t)))
                 hit_rule = getattr(self, "_code_rule_hit", None)
                 if not callable(hit_rule):
                     hit_rule = lambda t: self._match_rules(t, "wxcode_regex_rules", regex_only=True)  # noqa: E731
@@ -306,6 +315,9 @@ class KeywordGuardMixin:
                         event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
                         kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
                     )
+                    log_rule = getattr(self, "_cs_log_rule", None)
+                    if callable(log_rule):
+                        log_rule(group_id, user_id, user_name, texts, None)
                     return True, notice
                 if texts and callable(getattr(self, "_cl_enforce", None)):
                     limited, notice = await self._cl_enforce(

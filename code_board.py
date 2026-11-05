@@ -85,59 +85,94 @@ def render_board_images(data: bytes, codes: List[dict]) -> dict:
 
 class CodeBoardMixin:
     # ------------------------------------------------------------------
-    # 码内容拉黑名单（wxcode_block_codes）
+    # 码内容黑名单（wxcode_block_codes）/ 白名单（wxcode_allow_codes）
+    #   黑名单：解出完全相同内容的码按命中处理（撤回 + 备份）
+    #   白名单：解出完全相同内容的码一律放行——不按正则规则撤回、不计发送次数
+    #   同一个码只能在其中一个名单里：加入一个就从另一个移除
     # ------------------------------------------------------------------
-    def _code_block_list(self) -> List[str]:
-        raw = self.config.get("wxcode_block_codes", []) if hasattr(self.config, "get") else []
+    _CODE_LISTS = {
+        "block": ("wxcode_block_codes", "拉黑二维码内容", "解除拉黑二维码内容", "已拉黑的码"),
+        "allow": ("wxcode_allow_codes", "二维码内容加白名单", "二维码内容移出白名单", "白名单里的码"),
+    }
+
+    def _code_list(self, kind: str) -> List[str]:
+        key = self._CODE_LISTS[kind][0]
+        raw = self.config.get(key, []) if hasattr(self.config, "get") else []
         if isinstance(raw, str):
             raw = [x for x in raw.split("\n")]
         return [str(x).strip() for x in (raw or []) if str(x).strip()]
 
-    def _code_block_set(self) -> set:
-        items = tuple(self._code_block_list())
-        cached = getattr(self, "_code_block_cache", None)
+    def _code_list_set(self, kind: str) -> set:
+        items = tuple(self._code_list(kind))
+        attr = f"_code_{kind}_cache"
+        cached = getattr(self, attr, None)
         if cached and cached[0] == items:
             return cached[1]
         result = set(items)
-        self._code_block_cache = (items, result)
+        setattr(self, attr, (items, result))
         return result
 
-    def _code_rule_hit(self, text) -> Optional[str]:
-        """某个码的内容是否命中：先查已拉黑的码（完全一致），再查码内容正则规则。返回命中说明或 None。"""
+    def _code_block_list(self) -> List[str]:
+        return self._code_list("block")
+
+    def _code_block_set(self) -> set:
+        return self._code_list_set("block")
+
+    def _code_allow_list(self) -> List[str]:
+        return self._code_list("allow")
+
+    def _code_allowed(self, text) -> bool:
         t = str(text or "").strip()
-        if not t:
+        return bool(t) and t in self._code_list_set("allow")
+
+    def _code_rule_hit(self, text) -> Optional[str]:
+        """某个码的内容是否命中：白名单的码直接放行；再查已拉黑的码（完全一致）、码内容正则规则。
+        返回命中说明或 None。"""
+        t = str(text or "").strip()
+        if not t or self._code_allowed(t):
             return None
         if t in self._code_block_set():
             return "已拉黑的码"
         return self._match_rules(t, "wxcode_regex_rules", regex_only=True)
 
-    def _code_set_blocked(self, text: str, block: bool, source: str = "WebUI", operator: str = "") -> str:
-        """拉黑 / 解除拉黑一段码内容。返回错误说明，成功返回空串。"""
+    def _code_set_in_list(self, kind: str, text: str, on: bool, source: str = "WebUI", operator: str = "") -> str:
+        """把一段码内容加入 / 移出黑名单或白名单。返回错误说明，成功返回空串。"""
         t = str(text or "").strip()
         if not t:
             return "码内容为空"
         if len(t) > CB_TEXT_MAX:
             return f"码内容过长（超过 {CB_TEXT_MAX} 字）"
-        items = self._code_block_list()
-        if block:
-            if t in items:
-                return ""
-            if len(items) >= CB_BLOCK_MAX:
-                return f"已拉黑的码已达上限 {CB_BLOCK_MAX} 个"
-            items.append(t)
-        else:
+        key, op_on, op_off, label = self._CODE_LISTS[kind]
+        items = self._code_list(kind)
+        changed = {}
+        if on:
             if t not in items:
-                return ""
-            items = [x for x in items if x != t]
-        self.config["wxcode_block_codes"] = items
+                if len(items) >= CB_BLOCK_MAX:
+                    return f"{label}已达上限 {CB_BLOCK_MAX} 个"
+                changed[key] = items + [t]
+            other = "allow" if kind == "block" else "block"
+            other_items = self._code_list(other)
+            if t in other_items:
+                changed[self._CODE_LISTS[other][0]] = [x for x in other_items if x != t]
+        elif t in items:
+            changed[key] = [x for x in items if x != t]
+        if not changed:
+            return ""
+        for k, v in changed.items():
+            self.config[k] = v
         try:
             self.config.save_config()
         except Exception as e:
-            logger.warning(f"[GroupMgr] 保存已拉黑的码失败: {e}")
+            logger.warning(f"[GroupMgr] 保存{label}失败: {e}")
             return f"保存失败：{e}"
-        self._record_op("拉黑二维码内容" if block else "解除拉黑二维码内容", source=source, operator=operator,
-                        detail=t[:300])
+        self._record_op(op_on if on else op_off, source=source, operator=operator, detail=t[:300])
         return ""
+
+    def _code_set_blocked(self, text: str, block: bool, source: str = "WebUI", operator: str = "") -> str:
+        return self._code_set_in_list("block", text, block, source=source, operator=operator)
+
+    def _code_set_allowed(self, text: str, allow: bool, source: str = "WebUI", operator: str = "") -> str:
+        return self._code_set_in_list("allow", text, allow, source=source, operator=operator)
 
     # ------------------------------------------------------------------
     # 看板存储

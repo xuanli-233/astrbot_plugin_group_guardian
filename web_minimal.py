@@ -14,7 +14,10 @@
   POST /minimal/kick                   跨群踢人 / 踢出并拉黑
   GET  /minimal/leavelog               退群记录（按 QQ / 群筛选，分页）
   GET  /minimal/leavelog/user          某个 QQ 的退群汇总
-  GET  /minimal/codelimit/top          近期发送次数最多的码（码发送次数限制）
+  GET  /minimal/codes                  码统计（按码 / 按人汇总，时间范围、关键词、群筛选）
+  GET  /minimal/codes/detail           某个码的发送记录、原图和裁剪图
+  GET  /minimal/codes/lists            码白名单 / 黑名单
+  POST /minimal/codes/list             码加入 / 移出白名单或黑名单
   GET  /minimal/msgmask                各群消息接收方式的设置情况
   POST /minimal/msgmask/apply          给选中的群设置消息接收方式（批量任务）
 业务逻辑全部复用指令所用的函数（group_blacklist / group_broadcast / group_name_task / keyword_guard）。
@@ -51,7 +54,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
-    "code_limit_warn_enabled", "code_limit_warn_template",
+    "code_limit_warn_enabled", "code_limit_warn_template", "code_limit_count_by", "code_store_enabled", "code_image_max_kb",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
@@ -475,12 +478,40 @@ class MinimalWebMixin:
         job = self._mm_job(groups, mask, **WEB_LOG)
         return jsonify({"status": "success", "data": {"job": job}})
 
-    async def _web_minimal_codelimit_top(self):
+    async def _web_minimal_codes(self):
         args = quart_request.args
-        hours = self._safe_int(args.get("hours", 0), 0) or self._cfg_int("code_limit_window_hours", 5)
-        items = self._cl_top(hours=hours, group_id=str(args.get("group_id", "") or "").strip(),
-                             limit=self._safe_int(args.get("limit", 50), 50))
-        return jsonify({"status": "success", "data": {"items": items, "hours": min(max(hours, 1), 168)}})
+        by = "user" if str(args.get("by", "")) == "user" else "code"
+        items, total = self._cs_stats(
+            hours=self._safe_int(args.get("hours", 0), 0), keyword=str(args.get("keyword", "") or ""),
+            group_id=str(args.get("group_id", "") or "").strip(), by=by,
+            page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+        )
+        window = min(max(self._cfg_int("code_limit_window_hours", 5), 1), 168)
+        return jsonify({"status": "success", "data": {
+            "items": items, "total": total, "by": by, "window_hours": window, "ttl_hours": self._cs_ttl() // 3600,
+            "store_enabled": bool(self._cfg("code_store_enabled", True)),
+        }})
+
+    async def _web_minimal_codes_detail(self):
+        args = quart_request.args
+        code_hash = str(args.get("code_hash", "") or "").strip()
+        if not code_hash:
+            return self._minimal_error("缺少 code_hash")
+        return jsonify({"status": "success", "data": self._cs_detail(
+            code_hash, user_id=str(args.get("user_id", "") or "").strip())})
+
+    async def _web_minimal_codes_lists(self):
+        return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})
+
+    async def _web_minimal_codes_list_set(self):
+        data = await self._minimal_body()
+        kind = str(data.get("kind") or "")
+        if kind not in ("allow", "block"):
+            return self._minimal_error("kind 只能是 allow 或 block")
+        err = self._code_set_in_list(kind, str(data.get("text") or ""), bool(data.get("on", True)), **WEB_LOG)
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})
 
     async def _web_minimal_leavelog_user(self):
         uid = str(quart_request.args.get("user_id", "") or "").strip()
@@ -554,6 +585,7 @@ class MinimalWebMixin:
         snap["enabled"] = bool(self._cfg("code_board_enabled", True))
         snap["wxcode_enabled"] = bool(self._cfg("wxcode_enabled", False))
         snap["blocked"] = self._code_block_list()
+        snap["allowed"] = self._code_allow_list()
         names = {}
         try:
             names = {gid: (g or {}).get("group_name") or "" for gid, g in self._dir()["groups"].items()}

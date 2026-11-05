@@ -453,6 +453,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .cb-acts .btn{padding:2px 8px;font-size:11px}
     .cb-tag{font-size:11px;padding:0 6px;border-radius:9px;background:var(--danger-light);color:var(--danger)}
     .cb-tag.blocked{background:var(--text-primary);color:var(--surface)}
+    .cb-tag.allowed{background:var(--success-light);color:var(--success)}
     .cb-foot{padding:6px 10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted)}
     .cb-zoom img{max-width:100%;image-rendering:pixelated}
     /* 全局右侧批量任务栏 */
@@ -547,6 +548,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 
         <div class="nav-section">常用功能</div>
 
+        <a class="nav-item" data-tab="codes">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
+          <span>码管理</span>
+        </a>
         <a class="nav-item" data-tab="guard">
 
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
@@ -935,6 +940,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
               <div class="mn-row" id="wxModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="wxModule" style="flex:1" placeholder="wxcode.py（放在插件数据目录 extensions/ 下）" /></div>
               <div class="mn-row"><label style="width:84px">转发到</label><select class="input-sm" id="wxForward" style="flex:1"></select></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnWxSave">保存</button><span class="mn-hint">接入方法见插件目录 examples/wxcode_recognizer_example.py</span></div>
+              <p class="mn-hint">码的白名单 / 黑名单、发送次数限制、码记录和保存的图片在「码管理」页。</p>
               <div class="mn-row" style="margin-top:6px"><label>码内容正则规则</label><span class="rules-subtle" id="wxCount"></span></div>
               <p class="mn-hint" style="margin-bottom:8px">对解码出的内容（二维码和葵花码都适用）逐条做正则匹配，不区分大小写。</p>
               <div class="mn-row">
@@ -945,20 +951,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
               <div class="mn-rule-list" id="wxList"></div>
               <div class="mn-row"><input class="input-sm" id="wxTestText" style="flex:1" placeholder="输入一段识别内容测试，例如 pages/invite?code=1" /><button class="btn btn-outline btn-sm" id="btnWxTest">测试</button></div>
               <div id="wxTestResult"></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h2>同一个码发送次数</h2><span class="rules-subtle">没命中规则的码，一段时间内发太多次也撤回</span></div>
-            <div class="settings-list" id="clSwitches"></div>
-            <div class="mn-body">
-              <div class="mn-row"><label style="width:84px">计次范围</label>
-                <label><input type="radio" name="clScope" value="global" /> 所有群合计</label>
-                <label><input type="radio" name="clScope" value="group" /> 每个群单独计</label></div>
-              <div class="mn-row"><label style="width:84px">限制</label><input type="number" min="1" max="168" class="input-sm" id="clHours" style="width:80px" /><span>小时内同一个码最多发</span><input type="number" min="1" max="1000" class="input-sm" id="clMax" style="width:80px" /><span>次</span></div>
-              <div class="mn-row"><label style="width:84px">警告模板</label><input class="input-sm" id="clTpl" style="flex:1" /></div>
-              <p class="mn-hint">滑动窗口：例如「5 小时 3 次」= 最近 5 小时里这个码已经发过 3 次，第 4 次撤回（先备份；开了「同时禁言」也会禁言）。只有解出了内容的码能计次；被码内容规则撤回的不计次；同一条消息里重复的码算一次。模板变量：{name} {uid} {group} {hours} {max} {count}</p>
-              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnClSave">保存</button><button class="btn btn-outline btn-sm" id="btnClTop">查看最近发得最多的码</button></div>
-              <div id="clTop"></div>
             </div>
           </div>
           <div class="card">
@@ -974,6 +966,67 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
               <div class="mn-row" id="ocrUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="ocrUrl" style="flex:1" /></div>
               <div class="mn-row" id="ocrModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="ocrModule" style="flex:1" /></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnOcrSave">保存</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-codes">
+        <div class="page-header"><h1>码管理</h1><button class="btn btn-ghost btn-sm" id="btnCodesRefresh">刷新</button></div>
+        <p class="mn-intro">群图片里解出的二维码 / 小程序码 / 葵花码都在这里：每个码发了多少次、在哪些群、谁发的、怎么处理的，以及保存下来的原图和裁剪图。可以一键加白名单（一律放行）或拉黑（一律撤回）。识别本身在「关键词与识别」里配置。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>发送次数限制</h2><span class="rules-subtle">没命中规则的码，一段时间内发太多次也撤回</span></div>
+            <div class="settings-list" id="clSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:84px">计次范围</label>
+                <label><input type="radio" name="clScope" value="global" /> 所有群合计</label>
+                <label><input type="radio" name="clScope" value="group" /> 每个群单独计</label></div>
+              <div class="mn-row"><label style="width:84px">计次方式</label>
+                <label><input type="radio" name="clBy" value="code" /> 按码计（谁发都算）</label>
+                <label><input type="radio" name="clBy" value="user" /> 按人计（同一个人发同一个码才累加）</label></div>
+              <div class="mn-row"><label style="width:84px">限制</label><input type="number" min="1" max="168" class="input-sm" id="clHours" style="width:80px" /><span>小时内同一个码最多发</span><input type="number" min="1" max="1000" class="input-sm" id="clMax" style="width:80px" /><span>次</span></div>
+              <div class="mn-row"><label style="width:84px">警告模板</label><input class="input-sm" id="clTpl" style="flex:1" /></div>
+              <p class="mn-hint">滑动窗口：例如「5 小时 3 次」= 最近 5 小时里这个码已经发过 3 次，第 4 次撤回（先备份；开了「同时禁言」也会禁言）。只有解出了内容的码能计次；白名单里的、被规则撤回的、超限撤回的都不计次；同一条消息里重复的码算一次。模板变量：{name} {uid} {group} {hours} {max} {count}</p>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnClSave">保存</button></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>码记录与图片</h2></div>
+            <div class="settings-list" id="csSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:150px">图片超过多少 KB 压缩</label><input type="number" min="50" max="5000" class="input-sm" id="csMaxKb" style="width:100px" /><span>KB</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
+              <p class="mn-hint" id="csTtlHint">每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留「滚动窗口 × 2」后自动删除。</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>码统计</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
+              <select class="input-sm" id="csHours" style="width:150px"></select>
+              <select class="input-sm" id="csGroup" style="width:180px"><option value="">所有群</option></select>
+              <input class="input-sm" id="csKeyword" placeholder="码内容 / QQ号 / 昵称" style="width:170px" />
+              <button class="btn btn-outline btn-sm" id="btnCsFilter">筛选</button>
+            </div></div>
+          <div class="log-container" id="csTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="csPager"></div></div>
+        </div>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>白名单</h2><span class="rules-subtle" id="csAllowCount"></span></div>
+            <div class="mn-body">
+              <p class="mn-hint">码内容完全一致才算。白名单里的码一律放行：不按正则规则撤回、不计发送次数。</p>
+              <div class="mn-row"><input class="input-sm" id="csAllowAdd" style="flex:1" placeholder="粘贴码内容" /><button class="btn btn-primary btn-sm" id="btnCsAllowAdd">加白名单</button></div>
+              <div class="mn-rule-list" id="csAllowList"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>黑名单</h2><span class="rules-subtle" id="csBlockCount"></span></div>
+            <div class="mn-body">
+              <p class="mn-hint">码内容完全一致才算。任何群里解出黑名单里的码都按命中处理（撤回 + 备份）。</p>
+              <div class="mn-row"><input class="input-sm" id="csBlockAdd" style="flex:1" placeholder="粘贴码内容" /><button class="btn btn-danger btn-sm" id="btnCsBlockAdd">拉黑</button></div>
+              <div class="mn-rule-list" id="csBlockList"></div>
             </div>
           </div>
         </div>
@@ -1443,6 +1496,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
       <span>总览</span>
     </a>
 
+    <a class="mobile-nav-item" data-tab="codes">
+      <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
+      <span>码管理</span>
+    </a>
     <a class="mobile-nav-item" data-tab="guard">
 
       <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
@@ -2093,6 +2150,7 @@ function switchTab(tabName) {
   if (tabName === 'kick') loadKick();
   if (tabName === 'oplog') loadOplog(1);
   if (tabName === 'leavelog') loadLeaveLog(1);
+  if (tabName === 'codes') loadCodes(1);
   if (tabName === 'livelog') loadLive();
   if (tabName === 'batch') loadBatch();
   if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
@@ -2658,6 +2716,10 @@ var MANUAL_SETTING_KEYS = {
   code_limit_max: true,
   code_limit_warn_enabled: true,
   code_limit_warn_template: true,
+  code_limit_count_by: true,
+  code_store_enabled: true,
+  code_image_max_kb: true,
+  wxcode_allow_codes: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
   blacklist_native_block_enabled: true,
@@ -3427,6 +3489,9 @@ var MN_SWITCHES = {
     { key: 'card_parse_enabled', label: '解析小程序 / 分享卡片', desc: '小程序名、标题、appid、跳转链接也参与关键词匹配，例如规则写 wx 开头的 appid 可拦某个小程序' },
     { key: 'card_scan_preview', label: '卡片预览图也识别', desc: '卡片封面当作图片，开启葵花码识别 / OCR 时一起识别' }
   ],
+  csSwitches: [
+    { key: 'code_store_enabled', label: '记录码并保存图片', desc: '关闭后不再记录新的码（统计为空），发送次数限制照常计次' }
+  ],
   clSwitches: [
     { key: 'code_limit_enabled', label: '限制同一个码的发送次数', desc: '超过次数的那条消息撤回' },
     { key: 'code_limit_warn_enabled', label: '超限时在群里警告', desc: '撤回后按下面的模板发一条提示' }
@@ -3653,12 +3718,6 @@ async function loadGuard() {
   MN.wx = (mnCfg('wxcode_regex_rules') || []).slice();
   mnRenderSwitches('guardSwitches');
   mnRenderSwitches('wxSwitches');
-  mnRenderSwitches('clSwitches');
-  var clScope = mnCfg('code_limit_scope') || 'global';
-  $$('input[name=clScope]').forEach(function(r) { r.checked = r.value === clScope; });
-  $('#clHours').value = mnCfg('code_limit_window_hours') || 5;
-  $('#clMax').value = mnCfg('code_limit_max') || 3;
-  $('#clTpl').value = mnCfg('code_limit_warn_template') || '';
   mnRenderRules('kw');
   mnRenderRules('wx');
   mnUpdateTypeHint();
@@ -3683,27 +3742,141 @@ async function loadGuard() {
   mnToggleDriverRows();
 }
 
+/* ---- 码管理 ---- */
+var CS = { page: 1, pageSize: 50, items: [], window: 5, ttl: 10 };
+var CS_OUTCOME = { pass: '放行', limit: '超限撤回', rule: '规则撤回', allow: '白名单放行' };
+async function loadCodes(page) {
+  if (page) CS.page = page;
+  if (!await mnLoadOverview()) return;
+  mnRenderSwitches('clSwitches');
+  mnRenderSwitches('csSwitches');
+  var scope = mnCfg('code_limit_scope') || 'global', by = mnCfg('code_limit_count_by') || 'code';
+  $$('input[name=clScope]').forEach(function(r) { r.checked = r.value === scope; });
+  $$('input[name=clBy]').forEach(function(r) { r.checked = r.value === by; });
+  $('#clHours').value = mnCfg('code_limit_window_hours') || 5;
+  $('#clMax').value = mnCfg('code_limit_max') || 3;
+  $('#clTpl').value = mnCfg('code_limit_warn_template') || '';
+  $('#csMaxKb').value = mnCfg('code_image_max_kb') || 500;
+  var g = $('#csGroup'), cur = g.value;
+  g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
+  g.value = cur;
+  await Promise.all([csLoadStats(), csLoadLists()]);
+}
+async function csLoadStats() {
+  var hoursSel = $('#csHours');
+  var res = await safeGet('minimal/codes', { by: $('#csBy').value, hours: hoursSel.value || '', group_id: $('#csGroup').value,
+    keyword: $('#csKeyword').value.trim(), page: CS.page, page_size: CS.pageSize });
+  if (isApiError(res)) { $('#csTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res);
+  CS.window = d.window_hours; CS.ttl = d.ttl_hours; CS.items = d.items || [];
+  var pick = hoursSel.value;
+  hoursSel.innerHTML = '<option value="' + d.window_hours + '">最近 ' + d.window_hours + ' 小时（计次窗口）</option>' +
+    '<option value="' + d.ttl_hours + '">最近 ' + d.ttl_hours + ' 小时（全部保留的）</option>';
+  hoursSel.value = pick && Number(pick) === d.ttl_hours ? String(d.ttl_hours) : String(d.window_hours);
+  $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留 ' + d.ttl_hours + ' 小时（滚动窗口 ' + d.window_hours + ' 小时 × 2）后自动删除。' + (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
+  var byUser = d.by === 'user';
+  $('#csTable').innerHTML = CS.items.length ? '<table class="mn-table"><thead><tr><th>码</th><th>内容</th>' + (byUser ? '<th>发送者</th>' : '') +
+    '<th>次数</th><th>群 / 人</th><th>最近</th><th>操作</th></tr></thead><tbody>' + CS.items.map(function(it, i) {
+      var tag = it.state === 'allow' ? '<span class="cb-tag allowed">白名单</span>' : (it.state === 'block' ? '<span class="cb-tag blocked">已拉黑</span>' : '');
+      var parts = ['放行 ' + it.passed];
+      if (it.limited) parts.push('<span style="color:var(--danger)">超限 ' + it.limited + '</span>');
+      if (it.ruled) parts.push('<span style="color:var(--danger)">规则 ' + it.ruled + '</span>');
+      if (it.allowed) parts.push('白名单 ' + it.allowed);
+      var short = it.text.length > 90 ? it.text.slice(0, 90) + '…' : it.text;
+      var acts = '<button class="btn btn-ghost btn-sm" data-cs-act="detail" data-i="' + i + '">详情</button>' +
+        '<button class="btn btn-ghost btn-sm" data-cs-act="copy" data-i="' + i + '">复制</button>' +
+        (it.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-cs-act="unallow" data-i="' + i + '">移出白名单</button>'
+          : '<button class="btn btn-outline btn-sm" data-cs-act="allow" data-i="' + i + '">加白名单</button>') +
+        (it.state === 'block' ? '<button class="btn btn-outline btn-sm" data-cs-act="unblock" data-i="' + i + '">解除拉黑</button>'
+          : '<button class="btn btn-danger btn-sm" data-cs-act="block" data-i="' + i + '">拉黑</button>');
+      return '<tr><td style="width:60px">' + (it.thumb ? '<img alt="码" src="' + escAttr(it.thumb) + '" style="width:48px;height:48px;object-fit:contain;cursor:pointer" data-cs-act="detail" data-i="' + i + '" />' : '<span class="mn-hint">无图</span>') + '</td>' +
+        '<td style="max-width:320px;word-break:break-all">' + esc(short) + ' ' + tag + '</td>' +
+        (byUser ? '<td>' + esc(it.user_id) + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' : '') +
+        '<td style="white-space:nowrap"><strong>' + it.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
+        '<td style="white-space:nowrap">' + it.groups + ' 群 / ' + it.users + ' 人</td>' +
+        '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
+        '<td><div style="display:flex;gap:4px;flex-wrap:wrap">' + acts + '</div></td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '这段时间没有识别到码' : '码记录已关闭') + '</p>';
+  var pages = Math.max(1, Math.ceil((d.total || 0) / CS.pageSize));
+  $('#csPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 项，第 ' + CS.page + ' / ' + pages + ' 页</span>' +
+    '<button class="btn btn-ghost btn-sm" id="csPrev"' + (CS.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+    '<button class="btn btn-ghost btn-sm" id="csNext"' + (CS.page >= pages ? ' disabled' : '') + '>下一页</button>';
+  bindIfExists('csPrev', function() { CS.page -= 1; csLoadStats(); });
+  bindIfExists('csNext', function() { CS.page += 1; csLoadStats(); });
+}
+async function csLoadLists() {
+  var res = await safeGet('minimal/codes/lists');
+  if (isApiError(res)) return;
+  var d = mnData(res);
+  codeListsApply(d.allow, d.block);
+  csRenderLists();
+}
+function csRenderLists() {
+  var render = function(kind, items, box, count) {
+    $(count).textContent = items.length + ' 个';
+    $(box).innerHTML = items.length ? items.map(function(t, i) {
+      return '<div class="mn-rule"><span class="mn-val" style="word-break:break-all">' + esc(t) + '</span>' +
+        '<button class="btn btn-ghost btn-sm" data-cs-list="' + kind + '" data-i="' + i + '">' + (kind === 'allow' ? '移出' : '解除') + '</button></div>';
+    }).join('') : '<p class="mn-hint">空</p>';
+  };
+  render('allow', CB.allowed, '#csAllowList', '#csAllowCount');
+  render('block', CB.blocked, '#csBlockList', '#csBlockCount');
+}
+async function csAfterListChange() { csRenderLists(); csLoadStats(); }
+async function csShowDetail(it) {
+  var res = await safeGet('minimal/codes/detail', { code_hash: it.code_hash, user_id: it.user_id || '' });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var d = mnData(res);
+  var names = {}; mnGroups().forEach(function(g) { names[g.group_id] = g.group_name; });
+  var imgs = (d.images || []).map(function(m) {
+    return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">' +
+      (m.orig ? '<a href="' + escAttr(m.orig) + '" target="_blank" rel="noopener"><img alt="原图" src="' + escAttr(m.orig) + '" style="max-width:260px;max-height:260px" /></a>' : '<span class="mn-hint">原图已清理</span>') +
+      (m.crop ? '<img alt="裁剪图" src="' + escAttr(m.crop) + '" style="max-width:160px;max-height:160px;background:#fff" />' : '') +
+      '<div class="mn-hint">' + esc(mnTime(m.ts)) + '<br>' + esc(names[m.group_id] || m.group_id) + '<br>' + esc(m.user_id) + '</div></div>';
+  }).join('');
+  var sends = (d.sends || []).map(function(r) {
+    var bad = r.outcome === 'limit' || r.outcome === 'rule';
+    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(names[r.group_id] || '') + '<span class="mn-hint">（' + esc(r.group_id) + '）</span></td>' +
+      '<td>' + esc(r.user_id) + (r.user_name ? '<span class="mn-hint"> ' + esc(r.user_name) + '</span>' : '') + '</td>' +
+      '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.outcome_label) + '</td></tr>';
+  }).join('');
+  showModal('码详情',
+    '<div style="word-break:break-all;margin-bottom:8px"><strong>' + esc(d.text) + '</strong></div>' +
+    '<p class="mn-hint" style="margin-bottom:6px">图片（同一张图只显示一次，最多 8 组；保留 ' + d.ttl_hours + ' 小时）</p>' +
+    (imgs ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">' + imgs + '</div>' : '<p class="mn-hint">没有保存的图片</p>') +
+    '<p class="mn-hint" style="margin:6px 0">最近的发送记录</p><table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>',
+    '<button class="btn btn-primary btn-sm" id="csDetailClose">关闭</button>');
+  $('#csDetailClose').addEventListener('click', closeModal);
+}
+function csOnClick(e) {
+  var btn = e.target.closest('[data-cs-act]');
+  if (btn) {
+    var it = CS.items[Number(btn.getAttribute('data-i'))];
+    if (!it) return;
+    var act = btn.getAttribute('data-cs-act');
+    if (act === 'detail') csShowDetail(it);
+    else if (act === 'copy') cbCopy(it.text);
+    else codeListSet(act.indexOf('allow') >= 0 ? 'allow' : 'block', it.text, act.indexOf('un') !== 0).then(function(ok) { if (ok) csAfterListChange(); });
+    return;
+  }
+  var lb = e.target.closest('[data-cs-list]');
+  if (lb) {
+    var kind = lb.getAttribute('data-cs-list');
+    var t = (kind === 'allow' ? CB.allowed : CB.blocked)[Number(lb.getAttribute('data-i'))];
+    if (t) codeListSet(kind, t, false).then(function(ok) { if (ok) csAfterListChange(); });
+  }
+}
 async function clSave() {
   var h = Number($('#clHours').value), m = Number($('#clMax').value);
   if (!(h >= 1 && h <= 168) || Math.floor(h) !== h || !(m >= 1 && m <= 1000) || Math.floor(m) !== m) {
     toast('小时填 1–168，次数填 1–1000 的整数', 'warning'); return;
   }
-  var scope = ($('input[name=clScope]:checked') || {}).value || 'global';
-  var values = { code_limit_scope: scope, code_limit_window_hours: h, code_limit_max: m };
+  var values = { code_limit_scope: ($('input[name=clScope]:checked') || {}).value || 'global',
+    code_limit_count_by: ($('input[name=clBy]:checked') || {}).value || 'code',
+    code_limit_window_hours: h, code_limit_max: m };
   var tpl = $('#clTpl').value.trim();
   if (tpl) values.code_limit_warn_template = tpl;
-  mnSaveConfig(values, '已保存');
-}
-async function clLoadTop() {
-  var box = $('#clTop');
-  box.innerHTML = '<p class="mn-hint">加载中...</p>';
-  var res = await safeGet('minimal/codelimit/top', { limit: 30 });
-  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
-  var d = mnData(res), items = d.items || [];
-  box.innerHTML = items.length ? '<p class="mn-hint" style="margin:6px 0">最近 ' + d.hours + ' 小时（只统计没被规则撤回的码）</p><table class="mn-table"><thead><tr><th>码内容</th><th>次数</th><th>群数</th><th>人数</th><th>最近</th></tr></thead><tbody>' +
-    items.map(function(it) {
-      return '<tr><td style="max-width:320px;word-break:break-all">' + esc(it.text) + '</td><td><strong>' + it.count + '</strong></td><td>' + it.groups + '</td><td>' + it.users + '</td><td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="mn-hint" style="margin-top:6px">最近没有记录（功能开启后才开始计次）</p>';
+  if (await mnSaveConfig(values, '已保存')) csLoadStats();
 }
 
 async function mnAddRule(kind) {
@@ -4575,7 +4748,7 @@ function liveSetView(view) {
 }
 
 /* ---- 二维码看板 ---- */
-var CB = { epoch: 0, seq: 0, map: {}, ids: [], blocked: [], blockedSet: {}, names: {}, timer: null, inflight: false, enabled: true };
+var CB = { epoch: 0, seq: 0, map: {}, ids: [], blocked: [], blockedSet: {}, allowed: [], allowedSet: {}, names: {}, timer: null, inflight: false, enabled: true };
 function cbActive() {
   var p = $('#tab-livelog');
   return !!(p && p.classList.contains('active') && !document.hidden && LIVE_VIEW === 'board');
@@ -4598,8 +4771,7 @@ async function cbPoll() {
     if (d.reset) CB.map = {};
     CB.epoch = d.epoch; CB.seq = d.seq; CB.ids = d.ids || []; CB.enabled = d.enabled !== false;
     CB.wxEnabled = d.wxcode_enabled !== false;
-    CB.blocked = d.blocked || [];
-    CB.blockedSet = {}; CB.blocked.forEach(function(t) { CB.blockedSet[t] = true; });
+    codeListsApply(d.allowed || [], d.blocked || []);
     Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) CB.names[k] = d.group_names[k]; });
     (d.items || []).forEach(function(e) {
       var old = CB.map[e.id];
@@ -4653,16 +4825,20 @@ function cbCardHtml(e) {
   var orig = e.orig ? '<div class="cb-orig" data-cb-zoom="orig" data-id="' + e.id + '"><img alt="原图缩略图" src="' + escAttr(e.orig) + '" /></div>' : '';
   var codes = (e.codes || []).map(function(c, i) {
     var blocked = c.text && CB.blockedSet[c.text.trim()];
+    var allowed = c.text && CB.allowedSet[c.text.trim()];
     var meta = '<span class="cb-num ' + escAttr(c.state) + '">' + c.idx + '</span>' +
       '<span>' + esc(c.label) + (c.score != null ? '（' + Number(c.score).toFixed(2) + '）' : '') + '</span>' +
       (c.code_type ? '<span>' + esc(c.code_type) + '</span>' : '') +
       (blocked ? '<span class="cb-tag blocked">已拉黑</span>' : '') +
+      (allowed ? '<span class="cb-tag allowed">白名单</span>' : '') +
       (c.hit ? '<span class="cb-tag">命中 ' + esc(c.hit) + '</span>' : '');
     var body = c.decoded
       ? '<div class="cb-text" data-cb-text="' + e.id + '-' + i + '">' + esc(c.text) + (c.is_base64 ? ' <span class="mn-hint">（无法转成文字，显示的是 base64）</span>' : '') + '</div>'
       : '<div class="cb-text err">' + esc(c.error || '未能解出') + '</div>';
     var acts = c.decoded ? '<div class="cb-acts">' +
       '<button class="btn btn-ghost btn-sm" data-cb-act="copy" data-id="' + e.id + '" data-i="' + i + '">复制</button>' +
+      (allowed ? '<button class="btn btn-outline btn-sm" data-cb-act="unallow" data-id="' + e.id + '" data-i="' + i + '">移出白名单</button>'
+        : '<button class="btn btn-outline btn-sm" data-cb-act="allow" data-id="' + e.id + '" data-i="' + i + '">加白名单</button>') +
       (blocked ? '<button class="btn btn-outline btn-sm" data-cb-act="unblock" data-id="' + e.id + '" data-i="' + i + '">解除拉黑</button>'
         : '<button class="btn btn-danger btn-sm" data-cb-act="block" data-id="' + e.id + '" data-i="' + i + '">拉黑该码</button>') +
       (c.text.length > 120 ? '<button class="btn btn-ghost btn-sm" data-cb-act="expand" data-id="' + e.id + '" data-i="' + i + '">展开</button>' : '') +
@@ -4699,17 +4875,31 @@ async function cbCopy(text) {
   var box = $('#cbCopyBox'); if (box) { box.focus(); box.select(); }
   $('#cbCopyClose').addEventListener('click', closeModal);
 }
-async function cbSetBlocked(text, block) {
-  var short = text.length > 120 ? text.slice(0, 120) + '…' : text;
-  if (!(await mnConfirm((block ? '拉黑这个码？以后任何群里解出完全相同内容的码都会被撤回并备份。' : '解除拉黑这个码？') + '\n\n' + short,
-    { title: block ? '拉黑该码' : '解除拉黑', okText: block ? '拉黑' : '解除拉黑', danger: block }))) return;
-  var res = await safePost('minimal/codeboard/block', { text: text, block: block });
-  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
-  var d = mnData(res) || {};
-  CB.blocked = d.blocked || [];
+// 码白名单 / 黑名单（看板和「码管理」共用）：同一个码只能在其中一个名单里
+function codeListsApply(allowed, blocked) {
+  CB.allowed = allowed || []; CB.blocked = blocked || [];
+  CB.allowedSet = {}; CB.allowed.forEach(function(t) { CB.allowedSet[t] = true; });
   CB.blockedSet = {}; CB.blocked.forEach(function(t) { CB.blockedSet[t] = true; });
-  toast(block ? '已拉黑该码' : '已解除拉黑', 'success');
-  cbRender();
+}
+var CODE_LIST_TEXT = {
+  allow: { on: ['加白名单', '把这个码加入白名单？以后解出完全相同内容的码一律放行：不按正则规则撤回、也不计发送次数。（会同时从黑名单移除）', '已加入白名单'],
+           off: ['移出白名单', '把这个码移出白名单？之后按正常规则处理。', '已移出白名单'] },
+  block: { on: ['拉黑该码', '拉黑这个码？以后任何群里解出完全相同内容的码都会被撤回并备份。（会同时从白名单移除）', '已拉黑该码'],
+           off: ['解除拉黑', '解除拉黑这个码？', '已解除拉黑'] }
+};
+async function codeListSet(kind, text, on, skipConfirm) {
+  var t = CODE_LIST_TEXT[kind][on ? 'on' : 'off'];
+  var short = text.length > 120 ? text.slice(0, 120) + '…' : text;
+  if (!skipConfirm && !(await mnConfirm(t[1] + '\n\n' + short, { title: t[0], okText: t[0], danger: kind === 'block' && on }))) return false;
+  var res = await safePost('minimal/codes/list', { kind: kind, text: text, on: on });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return false; }
+  var d = mnData(res) || {};
+  codeListsApply(d.allow, d.block);
+  toast(t[2], 'success');
+  return true;
+}
+async function cbSetBlocked(text, block) {
+  if (await codeListSet('block', text, block)) cbRender();
 }
 function cbShowBlocked() {
   if (!CB.blocked.length) { toast('还没有拉黑的码', 'info'); return; }
@@ -4747,6 +4937,7 @@ function cbOnClick(e) {
   if (act === 'copy') cbCopy(c.text);
   else if (act === 'block') cbSetBlocked(c.text, true);
   else if (act === 'unblock') cbSetBlocked(c.text, false);
+  else if (act === 'allow' || act === 'unallow') codeListSet('allow', c.text, act === 'allow').then(function(ok) { if (ok) cbRender(); });
   else if (act === 'expand') {
     var box = $('[data-cb-text="' + btn.getAttribute('data-id') + '-' + btn.getAttribute('data-i') + '"]');
     if (box) { box.classList.toggle('open'); btn.textContent = box.classList.contains('open') ? '收起' : '展开'; }
@@ -5045,7 +5236,21 @@ function initMinimalPages() {
   bindIfExists('btnMmLoad', mmLoad);
   bindIfExists('mmValue', function() { $('#mmWarn').style.display = $('#mmValue').value === '3' ? '' : 'none'; }, 'change');
   bindIfExists('btnMmSave', function() { mnSaveConfig({ auto_msg_mask_value: Number($('#mmValue').value) }, '已保存'); });
-  bindIfExists('btnClTop', clLoadTop);
+  bindIfExists('btnCodesRefresh', function() { loadCodes(); });
+  bindIfExists('btnCsFilter', function() { CS.page = 1; csLoadStats(); });
+  bindIfExists('csBy', function() { CS.page = 1; csLoadStats(); }, 'change');
+  bindIfExists('csHours', function() { CS.page = 1; csLoadStats(); }, 'change');
+  bindIfExists('csGroup', function() { CS.page = 1; csLoadStats(); }, 'change');
+  bindIfExists('csKeyword', function(e) { if (e.key === 'Enter') { CS.page = 1; csLoadStats(); } }, 'keydown');
+  bindIfExists('btnCsSave', function() {
+    var kb = Number($('#csMaxKb').value);
+    if (!(kb >= 50 && kb <= 5000) || Math.floor(kb) !== kb) { toast('填 50–5000 的整数', 'warning'); return; }
+    mnSaveConfig({ code_image_max_kb: kb }, '已保存');
+  });
+  bindIfExists('btnCsAllowAdd', function() { var t = $('#csAllowAdd').value.trim(); if (!t) return; codeListSet('allow', t, true, true).then(function(ok) { if (ok) { $('#csAllowAdd').value = ''; csAfterListChange(); } }); });
+  bindIfExists('btnCsBlockAdd', function() { var t = $('#csBlockAdd').value.trim(); if (!t) return; codeListSet('block', t, true, true).then(function(ok) { if (ok) { $('#csBlockAdd').value = ''; csAfterListChange(); } }); });
+  var tabCodes = document.getElementById('tab-codes');
+  if (tabCodes) tabCodes.addEventListener('click', csOnClick);
   bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
   bindIfExists('btnLlFilter', function() { loadLeaveLog(1); });
   bindIfExists('btnLlUserClose', function() { $('#llUserCard').style.display = 'none'; });

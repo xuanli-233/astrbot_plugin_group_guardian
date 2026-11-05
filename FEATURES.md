@@ -127,7 +127,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ keyword_guard.py   关键词撤回 → 葵花码 / 二维码识别 → OCR 文字（_run_hit_guards）
 ├─ code_pipeline.py   二维码 / 葵花码两阶段识别（定位服务 → 裁剪 → 解码服务）
 ├─ code_board.py      二维码看板 + 码内容拉黑
-├─ code_limit.py      同一个码的发送次数限制（滑动窗口）
+├─ code_limit.py      码记录（统计 + 保存图片）、同一个码的发送次数限制（按码 / 按人，滑动窗口）
 ├─ card_parse.py      小程序 / 分享卡片解析（文字、appid、链接、封面图）
 ├─ image_recognizer.py / message_backup.py   识别器接口、备份到指定群
 ├─ membership.py      加群申请审核（通过词 / 拒绝词 / 默认动作）
@@ -169,7 +169,9 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 9 | 解析消息链、合并转发内容（含图片） | `scan_forward_msg` | 启用 | — |
 | 9.5 | **小程序 / 分享卡片**（`card_parse.py`）：微信小程序 / QQ 小程序 / 链接分享等卡片拆出小程序名、标题、appid、跳转链接，拼成一行文字并入消息；封面图加入待识别图片 | `card_parse_enabled`、`card_scan_preview` | 启用 | — |
 | 10 | **关键词撤回 → 葵花码 / 二维码识别 → OCR 文字**（`keyword_guard.py`，见第零节） | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回，可选禁言（`hit_mute_enabled`，时长 `moderation_ban_duration`） |
-| 10.5 | **同一个码的发送次数**：解出的码没命中规则时按内容计次，`code_limit_window_hours` 小时内超过 `code_limit_max` 次撤回（`code_limit.py`，计次存 SQLite `code_sends`） | `code_limit_enabled`、`code_limit_scope`（global 所有群合计 / group 每群单独）、`code_limit_warn_enabled` + `code_limit_warn_template` | 默认关；5 小时 3 次，警告开 | 同上，另发警告 |
+| 10.5 | **码白名单**：`wxcode_allow_codes` 里的码（内容完全一致）一律放行，不按正则撤回、不计次；与黑名单 `wxcode_block_codes` 互斥 | — | 空 | 放行 |
+| 10.6 | **同一个码的发送次数**：解出的码没命中规则时计次，`code_limit_window_hours` 小时内超过 `code_limit_max` 次撤回（`code_limit.py`） | `code_limit_enabled`、`code_limit_scope`（global 所有群合计 / group 每群单独）、`code_limit_count_by`（code 按码 / user 按人）、`code_limit_warn_enabled` + `code_limit_warn_template` | 默认关；5 小时 3 次，按码，警告开 | 同上，另发警告 |
+| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_limit_window_hours × 2` 后自动删除；WebUI「码管理」查看 | `code_store_enabled`、`code_image_max_kb` | 开；500KB | — |
 
 每一步都会写入实时日志（`live_log.py`）。
 
