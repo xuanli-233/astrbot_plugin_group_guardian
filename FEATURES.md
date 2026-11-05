@@ -1,19 +1,20 @@
 # 功能地图（二次开发参考）
 
 本插件功能、入口、开关与代码位置一览，用于判断哪些功能可以屏蔽、怎么屏蔽。
-状态说明：**启用**＝默认开启；**默认关**＝有开关但默认关闭；**已停用**＝AI 总闸已强制关闭。
+状态说明：**启用**＝默认开启；**默认关**＝有开关但默认关闭。
 
-屏蔽一个功能有三种方式，按改动从小到大：
+屏蔽一个功能有两种方式：
 
-1. **改配置**：插件 WebUI「设置」或 AstrBot 配置面板里关掉对应开关（可在「群配置」按群覆盖）。不改代码，随时恢复。
-2. **加入 AI 总闸那样的强制关闭**：把开关名加进 `constants.py` 的 `AI_FEATURE_KEYS`（或仿照它新建一个集合），`UtilitiesMixin._cfg` 会让它永远返回 False。适合“不想让任何人再打开”的功能。
-3. **删除注册入口**：删掉 `main.py` 里对应的 `@filter.command` / 事件监听方法。指令或事件从此不再触发，业务代码可以留着也可以一起删。
+1. **改配置**：插件 WebUI「设置」或 AstrBot 配置面板里关掉对应开关（可在「多群配置」按群覆盖）。不改代码，随时恢复。
+2. **删除注册入口**：删掉 `main.py` 里对应的 `@filter.command` / 事件监听方法。指令或事件从此不再触发。
+
+原版插件的 AI 审核、防刷屏、内置规则库 / 外置词库、名片监控、刷屏申诉、词库自学习、远程群管等功能已从代码中删除，见第九节。
 
 ---
 
 ## 零、最小化插件（当前默认配置）
 
-对接后端：LuckyLilliaBot（LLBot，OneBot 11）。默认只开启下面这些功能；内置脏话 / 广告规则、外置词库、防刷屏、组合消息检测、Base 解码、QQ 收藏撤回都已改为默认关闭，群管指令全部保留。
+对接后端：LuckyLilliaBot（LLBot，OneBot 11）。默认只开启下面这些功能；原版群管指令全部保留但默认关闭。
 
 > 默认值只对新安装生效。已经装过插件的，AstrBot 会保留已保存的配置，需要在设置里手动关闭这些项，或删除插件配置后重载。
 
@@ -31,7 +32,7 @@
 | 操作记录 | 插件执行的所有写操作，可按操作类型、来源、QQ 号 / 群号 / 原因筛选 |
 | 群成员缓存 | 各群缓存状态、手动刷新、缓存有效期与接口间隔设置、查找某个 QQ 号在哪些群 |
 
-插件自带的规则库在「更多（内置功能，默认关闭）→ 内置规则库」，与自己的规则互不影响。新功能的配置项不在「设置 → 全量配置」中显示（列表在那里按逗号拆分保存，会拆坏正则里的逗号）。接口见 `web_minimal.py`。
+新功能的配置项不在「设置 → 全量配置」中显示（列表在那里按逗号拆分保存，会拆坏正则里的逗号）。接口见 `web_minimal.py`。
 
 ### 快速配置
 
@@ -71,8 +72,6 @@
 - **实时更新**：入群、退群、被踢、管理员任免、改名片的通知直接更新缓存；机器人踢人成功、改群名成功后也会同步。
 - **后台补齐**：每 5 分钟最多刷新 2 个过期的群（`directory_background_refresh_enabled`）。
 - **使用方**：跨群踢人（机器人自己的身份也从成员缓存读取，不再单独查询）、批量公告和群名任务的目标群、管理页面的群列表、判断发言人是否管理员。
-
-插件原有的「更多 → 群管理」页面和名片监控仍有各自的短时缓存，没有接入这套缓存。
 
 ### 二维码 / 葵花码两阶段识别（`code_pipeline.py`）
 
@@ -122,33 +121,27 @@
 
 ```
 main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / 事件监听 / WebUI 路由
-├─ moderation.py      消息审核主流程（_handle_message）+ 规则处罚
-│  ├─ moderation_context.py   审核上下文、组合消息检测的消息缓存
-│  ├─ image_audit.py          图片：二维码解码（本地）、OCR（AI，已停用）
-│  ├─ encoded_content.py / text_obfuscation.py   Base 编码解码、混淆网址还原
-│  ├─ automaton.py            AC 自动机 + 正则回退匹配器
-│  ├─ link_whitelist.py       链接白名单
-│  └─ ai_relay.py             「AI 中转」特殊数字检测（正则，不调用 AI）
-├─ anti_flood.py      防刷屏（频率 / 重复 / 长文本 / 夜间限速）
-├─ membership.py      加群申请审核
-├─ group_blacklist.py 跨群踢人 / 踢黑 / 退群自动拉黑（二次开发新增）
-├─ leave_recall.py 退群 / 被踢后撤回近期消息（二次开发新增）
-├─ live_log.py 实时日志：内存环形缓冲 + 处理步骤（二次开发新增）
-├─ batch_queue.py 批量任务队列：逐项执行、间隔 + 抖动、自动 / 手动（二次开发新增）
-├─ code_board.py 二维码看板 + 码内容拉黑（二次开发新增）
-├─ auto_accept.py 自动同意好友申请 / 进群邀请（二次开发新增）
-├─ card_monitor.py    名片监控、名片保护、管理员任免记录
-├─ appeal.py          刷屏申诉（AI 裁决，已停用）
-├─ lexicon_learn.py   词库自学习（AI，已停用）
-├─ moderation_review*.py  AI 误判复盘（已停用）
-├─ llm_stream.py      大模型流式调用工具（只被 AI 代码使用）
-├─ commands.py        群管指令的业务实现
-├─ remote.py          WebUI 远程执行群管操作（批量禁言 / 踢人 / 改名片…）
-├─ scheduler.py       后台任务：定时解禁、申诉超时、名片同步（+ 学习 / 复盘，已停用）
+├─ moderation.py      消息审核主流程（_handle_message）：预检、去重、解析消息链与合并转发
+│  └─ image_audit.py          图片下载：公网地址校验、本地临时文件读取、共享 HTTP 会话
+├─ keyword_guard.py   关键词撤回 → 葵花码 / 二维码识别 → OCR 文字（_run_hit_guards）
+├─ code_pipeline.py   二维码 / 葵花码两阶段识别（定位服务 → 裁剪 → 解码服务）
+├─ code_board.py      二维码看板 + 码内容拉黑
+├─ image_recognizer.py / message_backup.py   识别器接口、备份到指定群
+├─ membership.py      加群申请审核（通过词 / 拒绝词 / 默认动作）
+├─ group_blacklist.py 跨群踢人 / 踢黑 / 退群自动拉黑
+├─ leave_recall.py    退群 / 被踢后撤回近期消息
+├─ auto_accept.py     自动同意好友申请 / 进群邀请
+├─ live_log.py        实时日志：内存环形缓冲 + 处理步骤
+├─ batch_queue.py     批量任务队列：逐项执行、间隔 + 抖动、自动 / 手动
+├─ group_broadcast.py / group_name_task.py   批量公告 / 待办、群名后缀 / 倒计时
+├─ group_directory.py / duplicate_members.py 群与成员本地缓存、重复成员
+├─ operation_log.py   操作记录、黑名单原因
+├─ commands.py        原版群管指令的业务实现
+├─ scheduler.py       后台任务：定时解禁、群名任务、成员缓存补齐、批量任务执行器
 ├─ onebot.py          OneBot 接口封装、权限判定（_is_admin）、踢人 / 禁言底层
-├─ web.py + pages/dashboard/index.html   WebUI 管理面板（API + 前端）
-├─ storage.py / storage_group.py / lexicon_migration.py   SQLite 存储、按群配置、词库迁移
-└─ utils.py / constants.py / single_flight.py   配置读取（_cfg）、AI 总闸、并发合并
+├─ web.py + web_minimal.py + pages/dashboard/index.html   WebUI 管理面板（API + 前端）
+├─ storage.py / storage_group.py   SQLite 存储、按群配置
+└─ utils.py / constants.py / single_flight.py   配置读取（_cfg）、常量、并发合并
 ```
 
 所有功能共用的前置门槛：`enabled`（插件总开关）、`disclaimer_agreed`（同意免责声明），以及群白名单 / 群黑名单（`group_white_list` / `group_black_list`，在 WebUI「名单管理」维护）。
@@ -161,30 +154,24 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 | # | 步骤 | 开关 | 默认 | 命中后 |
 | --- | --- | --- | --- | --- |
-| 1 | 预检：用户白名单、群黑白名单、插件总开关 | `user_white_list` 等 | — | 白名单用户 / 非管理群直接跳过 |
-| 2 | QQ 开放平台机器人豁免 | `official_bot_exempt_enabled` | 默认关 | 跳过 |
-| 3 | 机器人不是管理员时跳过 | `moderation_require_bot_admin` | 启用 | 跳过（无法撤回 / 禁言） |
-| 4 | **防刷屏**（见第四节） | `anti_flood_enabled` | 默认关 | 禁言 / 撤回 |
+| 1 | 预检：插件总开关、免责声明、用户白名单、群黑白名单 | `enabled`、`user_white_list` 等 | — | 白名单用户 / 非管理群直接跳过 |
+| 2 | 备份群 / 转发群本身不审核 | `backup_group_id`、`wxcode_forward_group_id` | — | 跳过 |
+| 3 | QQ 开放平台机器人豁免 | `official_bot_exempt_enabled` | 默认关 | 跳过 |
+| 4 | 机器人不是管理员时跳过 | `moderation_require_bot_admin` | 启用 | 跳过（无法撤回 / 禁言） |
 | 5 | 管理员内容豁免 | `moderation_admin_exempt` | 默认关 | 跳过 |
-| 6 | **用户黑名单**：发言即踢出并 QQ 拉黑 | `user_black_list`、`blacklist_native_block_enabled` | 启用 | 踢出 + 禁言 |
+| 6 | **用户黑名单**：发言即踢出并 QQ 拉黑 | `user_black_list`、`blacklist_native_block_enabled` | 启用 | 踢出 |
 | 7 | 自动审核总开关（可按群） | `auto_moderate_enabled` | 启用 | 关闭则后面全部不做 |
-| 8 | 解析消息链、合并转发内容 | `scan_forward_msg` | 启用 | — |
-| 8.5 | **关键词撤回 → 葵花码识别 → OCR 文字**（`keyword_guard.py`，见第零节） | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回 |
-| 9 | QQ 收藏转发撤回 | `recall_qq_favorite_enabled` | 默认关 | 撤回 |
-| 10 | AI 中转特殊数字检测（正则） | `ai_relay_mode_enabled` + 三步风险确认 | 默认关 | 只撤回 |
-| 11 | 图片二维码解码（本地 OpenCV / pyzbar） | `qrcode_decode_enabled` | 默认关 | 解出的文本参与后续规则 |
-| 12 | 混淆网址还原（随广告检测）/ Base 编码解码 | `scan_ad` / `base_decode_enabled` | 默认关 | 混淆网址直接处罚 |
-| 13 | **内置规则初筛**：脏话、广告、自定义词、外置词库 8 类、链接白名单（词库中的脏话 / 广告分类跟随 `scan_swear` / `scan_ad`） | `scan_swear`、`scan_ad`、`custom_*_keywords`、`lexicon_*_enabled`、`link_whitelist` | 默认关 | 进入处罚 |
-| 14 | 组合消息检测（防把违禁词拆成多条发） | `combine_detect_enabled` | 默认关 | 合并命中则一起撤回 |
-| 15 | **规则处罚**：撤回 + 禁言 + 群内提示 + 登记定时解禁 | `moderation_ban_duration`(1800 秒)、`auto_moderate_notice`、`ban_notice` | 启用 | — |
+| 8 | 同一条消息 60 秒内只处理一次 | — | — | 跳过重复事件 |
+| 9 | 解析消息链、合并转发内容（含图片） | `scan_forward_msg` | 启用 | — |
+| 10 | **关键词撤回 → 葵花码 / 二维码识别 → OCR 文字**（`keyword_guard.py`，见第零节） | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回，可选禁言（`hit_mute_enabled`，时长 `moderation_ban_duration`） |
 
-> **注意**：第 12–15 步现在默认关闭。如果手动打开，因为 AI 已停用，命中内置规则会**直接撤回并禁言 30 分钟**，不再经过 AI 复核。外置词库约 6.7 万词，误伤较多，建议只开需要的分类，并先在一个群观察审核日志。
+每一步都会写入实时日志（`live_log.py`）。
 
 ---
 
 ## 三、群管指令
 
-所有指令都需要“群操作权限”（插件管理员、群超管，或群主 / 群管理员，见第八节）。注册位置均在 `main.py`，业务在 `commands.py`（标注了的除外）。
+所有指令都需要“群操作权限”（插件管理员、群超管，或群主 / 群管理员，见第六节）。注册位置均在 `main.py`，业务在 `commands.py`（标注了的除外）。
 
 > 下表的原有群管指令开关**默认全部关闭**，在 WebUI「设置 → 功能开关」里按需打开。二次开发新增的功能（`/全群踢人` `/全群踢黑` `/批量踢黑`、批量公告 / 待办、群名后缀 / 倒计时、WebUI 踢人与重复成员处理）不受这些开关影响，只检查插件总开关、免责声明和权限。已经安装过的实例保留原来保存的开关值。
 
@@ -207,37 +194,17 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | `/成员列表` `/搜索成员` `/禁言列表` | 查询 | `member_list_enabled` / `banned_list_enabled` |
 | `/群统计` `/字数统计` | 统计（字数统计默认关） | `group_stats_enabled` / `word_count_enabled` |
 | `/自动审核` | 开关本群自动审核 | `auto_moderate_enabled` |
-| `/添加违禁词` `/删除违禁词` `/查看违禁词` | 维护自定义违禁词 | — |
 | `/设置管理插件` | 管理插件管理员名单（仅插件管理员） | — |
-| `/群管理授权` `/移除群管权限` `/恢复群管权限` | 权限管理（见第八节） | `group_admin_grant_enabled` |
-
-> 空开关：`group_honor_enabled`、`at_all_remain_enabled`、`ignore_requests_enabled`、`group_msg_history_enabled`、`group_portrait_enabled`、`group_sign_enabled` 在配置里存在，但代码中没有任何功能使用它们（原版就如此），可以无视或从 `_conf_schema.json` 删除。
+| `/群管理授权` `/移除群管权限` `/恢复群管权限` | 权限管理（见第六节） | `group_admin_grant_enabled` |
 
 ---
 
-## 四、防刷屏（`anti_flood.py`）
-
-总开关 `anti_flood_enabled`（**默认关**，下面的子功能默认值只在打开总开关后生效；重复消息、长文本、刷屏撤回也已默认关），在审核流水线第 4 步执行，管理员始终豁免。
-
-| 子功能 | 开关 / 参数 | 默认 |
-| --- | --- | --- |
-| 频率限制（滑动窗口：1 秒 / 1 分钟 / 1 小时） | `anti_flood_rate_per_second/minute/hour` | 5 / 20 / 60 条 |
-| 夜间独立限速 | `anti_flood_night_enabled` + 时段与阈值 | 默认关 |
-| 重复消息检测 | `repeat_detect_enabled`、窗口 / 次数 | 启用，120 秒内 3 次 |
-| 长文本检测 | `long_text_detect_enabled`、`long_text_threshold` | 启用，500 字 |
-| 处罚：禁言 | `anti_flood_mute_duration` | 300 秒 |
-| 处罚：批量撤回 | `anti_flood_recall_enabled`、`anti_flood_recall_threshold` | 启用，20 条 |
-| 刷屏申诉 | `appeal_enabled` | **已停用**（AI 裁决） |
-
----
-
-## 五、入群与黑名单
+## 四、入群与黑名单
 
 | 功能 | 位置 | 开关 | 默认 |
 | --- | --- | --- | --- |
-| 加群申请自动审核：通过词 / 拒绝词（`=` 开头为精确匹配）/ 词库过滤 / 默认动作 | `membership.py`，规则在 WebUI「入群审核」页按群配置 | `join_audit_enabled`、`join_reject_use_lexicon`、`join_accept_overrides_lexicon`、`join_default_action` | 默认关 |
+| 加群申请自动审核：通过词 / 拒绝词（`=` 开头为精确匹配）/ 默认动作 | `membership.py`，规则在 WebUI「入群审核」页按群配置 | `join_audit_enabled`、`join_accept_overrides_lexicon`（精确通过词优先于拒绝词）、`join_default_action` | 默认关 |
 | 审核结果群内通知 | 同上 | `join_audit_notify` | 启用 |
-| 入群 AI 语义审核 / 搜索增强 | 同上 | `join_llm_*` | **已停用** |
 | 用户黑名单：申请自动拒绝（无需开入群审核） | `membership.py` | `blacklist_reject_join_enabled` | 启用 |
 | 黑名单用户入群即踢 | `group_blacklist.py` | `blacklist_kick_on_join` | 启用 |
 | 踢黑名单时 QQ 原生拉黑 | `onebot.py:_kick_member` | `blacklist_native_block_enabled` | 启用 |
@@ -249,34 +216,18 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 ---
 
-## 六、名片监控（`card_monitor.py`，总开关默认关）
-
-总开关 `card_monitor_enabled`。依赖协议端上报 `group_card` / `group_increase` / `group_admin` 通知。
-
-| 子功能 | 开关 | 默认 |
-| --- | --- | --- |
-| 名片变更 / 管理员任免记日志 | `card_log_enabled` | 启用 |
-| 周期同步兜底（协议端不上报时轮询） | `card_sync_enabled`、`card_sync_interval` | 启用，120 秒 |
-| 违规名片审核（规则初筛，命中即还原） | `card_audit_enabled`、`card_audit_link_only`、`card_audit_admin_exempt` | 默认关 |
-| 名片保护名单（被改就还原） | `card_protect_enabled` | 默认关 |
-| 名片还原群内通知 | `card_monitor_notify` | 启用 |
-| 管理员任免群内通知 | `admin_change_notify_enabled` | 默认关 |
-| 名片 AI 判定 | `card_audit_llm_always` | **已停用**（只按规则判定） |
-
----
-
-## 七、后台任务（`scheduler.py`）
+## 五、后台任务（`scheduler.py`）
 
 | 任务 | 开关 | 默认 |
 | --- | --- | --- |
 | 定时自动解禁（插件发起的禁言到期解除，失败退避重试） | `auto_unban_enabled`、`auto_unban_scan_interval`、`auto_unban_permanent_hours` | 默认关 |
-| 申诉超时清理 | 随申诉 | 已停用 |
-| 名片周期同步 | `card_sync_enabled` | 随名片监控 |
-| 词库自学习 / AI 误判复盘 | — | **已停用**（AI 总闸关闭时不启动） |
+| 群名定时改名 / 倒计时每日更新 | 随群名任务 | 每分钟检查 |
+| 群成员缓存后台补齐 | `directory_background_refresh_enabled` | 启用 |
+| 批量任务执行器 | `batch_*` | 常驻 |
 
 ---
 
-## 八、权限体系（`onebot.py:_is_admin`）
+## 六、权限体系（`onebot.py:_is_admin`）
 
 判定顺序：① 群级 bot 权限黑名单（`/移除群管权限`，最高优先）→ ② 插件管理员（`admin_list` + AstrBot 全局管理员）→ ③ 群超管（WebUI「权限」页按群设置）→ ④ 群主 / 群管理员（受 `group_admin_grant_enabled` 动态授权、`legacy_role_admin_enabled` 与 `strict_permission_enabled` 控制）。
 
@@ -286,7 +237,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 ---
 
-## 批量任务（`batch_queue.py`）
+## 七、批量任务（`batch_queue.py`）
 
 所有「多个群 / 多个人」的写操作都先创建批量任务，每一项 = 群 + 行为 + 对象，由后台执行器逐项执行：
 
@@ -308,44 +259,36 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 - `broadcast_interval_seconds` 已停用（由上面的间隔取代）。
 - WebUI 右侧固定一列「批量任务」栏（所有页面可见，可折叠，折叠状态记在浏览器里；宽度不足 1280 时默认折叠，不足 900 时隐藏）：执行器状态、最近 20 个任务的进度和快捷操作，点任务打开「批量任务」页的明细。刷新频率：自动任务执行中 2 秒，有待手动 / 暂停的任务 8 秒，空闲或折叠 20 秒，页面在后台时不刷新。
 
-## 九、WebUI 管理面板（`web.py` + `pages/dashboard/index.html`）
+## 八、WebUI 管理面板（`web.py` + `web_minimal.py` + `pages/dashboard/index.html`）
 
-| 页面 | 内容 | 状态 |
-| --- | --- | --- |
-| 总览 | 拦截统计、趋势、分布、排行 | 启用 |
-| 群管理 | 群列表、成员列表、远程禁言 / 踢人 / 改名片等（`remote.py`） | 启用 |
-| 违规记录 | 被撤回用户、审核日志 | 启用；其中「AI 误判复盘」卡片已隐藏 |
-| 防刷屏 | 实时追踪状态 | 启用 |
-| 规则中心 | 脏话 / 广告规则、外置词库维护（热更新） | 启用 |
-| 入群审核 | 按群配置通过 / 拒绝词 | 启用 |
-| 权限 | 群超管、动态授权、群权限黑名单 | 启用 |
-| 群配置 | 按群覆盖任意配置项 | 启用（AI 配置项已不显示） |
-| 申诉 / 解禁 | 申诉记录、定时解禁计划 | 申诉记录已隐藏 |
-| 名片监控 | 开关、保护名单、变更记录 | 启用 |
-| 词库学习 | 自学习候选词审批 | **已隐藏** |
-| 设置 | 全部开关、名单管理、SQLite 迁移助手 | OCR 分区与 AI 配置项已隐藏 |
+「常用功能」的页面见第零节。「更多」分组：
+
+| 页面 | 内容 |
+| --- | --- |
+| 违规记录 | 被撤回用户、审核日志、导出 CSV |
+| 设置 | 全部开关、名单管理、SQLite 迁移助手（导入旧审核日志 JSON） |
+| 入群审核 | 按群配置通过 / 拒绝词 |
+| 权限管理 | 插件管理员、群超管、动态授权、群权限黑名单 |
+| 多群配置 | 按群覆盖任意配置项 |
+| 定时解禁 | 定时解禁计划 |
+
+插件页面运行在 AstrBot 的沙箱 iframe 里，原生 `confirm` / `alert` / `prompt` 不可用，统一用页面内的弹窗。
 
 ---
 
-## 十、AI 功能（已停用）
+## 九、已删除的原版功能
 
-由 `constants.py` 的 `AI_FEATURES_ENABLED = False` 统一关闭：
+以下原版功能与现行功能冲突或不再需要，代码、配置项、WebUI 页面和接口都已删除（需要时可从 git 历史找回）：
 
-- **强制关闭的开关**（`AI_FEATURE_KEYS`）：配置里打开也无效。
-- **界面隐藏**（`AI_CONFIG_KEYS`）：AstrBot 配置面板（schema 中标记为 `invisible`，说明前加了“[AI 已停用]”）、插件 WebUI 和多群配置都不显示。已保存的值保留不动。
-- **接口停用**：`/providers`、`/moderation_review/run`、`/moderation_review/suggestions/apply`、`/lexicon_learn/run`、`/lexicon_learn/config/set` 直接返回“AI 功能已停用”。
-- **已删除**：24 个大模型群管工具（`llm_tools.py`）和提示词注入（`on_llm_request`）。
+| 功能 | 原代码 |
+| --- | --- |
+| AI 消息审核 / 全量 AI 审核、OCR 识图、入群 AI 审核、名片 AI 判定、AI 误判复盘、大模型群管工具与提示词注入 | `moderation.py` 中的 LLM 调用、`llm_stream.py`、`moderation_review*.py`、`membership.py` 中的入群 LLM |
+| 防刷屏（频率 / 夜间限速 / 重复消息 / 长文本）、刷屏申诉 | `anti_flood.py`、`appeal.py` |
+| 内置脏话 / 广告规则、外置词库（`lexicon.db`）、自定义违禁词指令、组合消息检测、Base 解码、混淆网址还原、链接白名单、QQ 收藏撤回、AI 中转数字检测 | `automaton.py`、`lexicon_migration.py`、`encoded_content.py`、`text_obfuscation.py`、`link_whitelist.py`、`ai_relay.py`、`moderation_context.py` |
+| 本地二维码解码（OpenCV / pyzbar） | `image_audit.py`（已由 `code_pipeline.py` 两阶段识别取代） |
+| 名片监控 / 名片保护 / 管理员任免通知、词库自学习 | `card_monitor.py`、`lexicon_learn.py` |
+| 「群管理」页与远程群管（WebUI 里直接禁言 / 踢人 / 改名片） | `remote.py`（跨群踢人、重复成员等改走批量任务） |
+| 踢人时撤回近期消息（`kick_recall_*`） | 由「退群撤回」（`leave_recall.py`）取代 |
+| AI 总闸（`AI_FEATURES_ENABLED`） | `constants.py`（没有 AI 代码后不再需要） |
 
-| AI 功能 | 原开关 | 代码（仍在，但不会执行） |
-| --- | --- | --- |
-| 消息 AI 二审 / 全量 AI 审核 | `llm_moderation_enabled`、`llm_moderation_always` | `moderation.py` 中 `_call_llm*`、`_execute_llm_penalty` |
-| OCR 识图 / 表情包识别 | `ocr_enabled`、`scan_sticker_enabled` | `image_audit.py`（二维码解码部分仍在用） |
-| 入群 AI 审核 | `join_llm_moderation_enabled`、`join_llm_web_search_enabled` | `membership.py` 中 `_call_llm_for_join_request` |
-| 名片 AI 判定 | `card_audit_llm_always` | `card_monitor.py:_card_llm_violation`（已回退为规则判定） |
-| 刷屏申诉 | `appeal_enabled` | `appeal.py` |
-| 词库自学习 | `lexicon_learn_*` | `lexicon_learn.py` |
-| AI 误判复盘 | `moderation_review_*` | `moderation_review.py`、`moderation_review_storage.py` |
-
-恢复 AI：把 `AI_FEATURES_ENABLED` 改为 True，并从 git 历史恢复 `llm_tools.py` 与 `main.py` 中的工具注册。
-
-如果以后要把这些代码彻底删掉，耦合点主要在：`ModerationMixin` 继承 `ImageAuditMixin`（二维码解码在里面，不能整个删）、`web.py` 中复盘 / 学习 / 申诉相关的路由与处理函数、`storage.py` 中的申诉 / 复盘 / 学习表、`scheduler.py` 中对应的 loop、前端对应页面，以及 `tests/` 里的相关测试。
+保留：定时自动解禁（原生 `/禁言` 会用到）、入群审核的通过词 / 拒绝词、原版群管指令（默认关闭）。旧版本留在 `group_guardian.db` 里的词库 / 规则 / 申诉 / 名片 / 学习表不再创建也不读取，原样保留。

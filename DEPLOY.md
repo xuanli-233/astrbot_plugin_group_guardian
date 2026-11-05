@@ -92,7 +92,7 @@ git clone https://github.com/xuanli-233/astrbot_plugin_group_guardian.git
 uv pip install -r data/plugins/astrbot_plugin_group_guardian/requirements.txt
 ```
 
-依赖：`pyahocorasick`、`opencv-python-headless`、`numpy`、`Pillow`（AstrBot 本身已带 Pillow）。
+依赖：`Pillow`（AstrBot 本身已带）。
 
 最后重启 AstrBot，或在管理面板「插件管理」里找到本插件，点右上角「…」→「重载插件」。
 
@@ -110,7 +110,7 @@ https://github.com/xuanli-233/astrbot_plugin_group_guardian
 
 1. **先备份**：插件数据目录 `data/plugin_data/astrbot_plugin_group_guardian/`（数据库 `group_guardian.db`）以及 AstrBot 保存的插件配置（通常在 `data/config/` 下，文件名含 `astrbot_plugin_group_guardian`）。
 2. 删除 `data/plugins/astrbot_plugin_group_guardian/` 这个目录，再按方式一克隆本仓库。数据目录和配置不受影响，黑名单、日志都会保留。
-3. **原有配置不会被改成本版的默认值**。本版默认关闭了防刷屏、内置脏话 / 广告规则、外置词库、原有群管指令（/禁言 /踢人 /发公告 等）等，升级过来的需要在「设置」里手动关闭不需要的功能。AI 功能无论配置如何都已强制关闭。
+3. **原有配置不会被改成本版的默认值**。原版群管指令（/禁言 /踢人 /发公告 等）在本版默认关闭，升级过来的需要在「设置 → 功能开关」里手动关闭不需要的。原版的 AI 审核、防刷屏、内置规则库 / 词库、名片监控、刷屏申诉等已删除，旧配置里的这些项不再生效，数据库里的旧表原样保留。
 4. 以后**不要在插件市场里「更新」**，否则会被换回原版；更新方法见第 8 节。
 
 ## 5. 首次配置
@@ -118,7 +118,7 @@ https://github.com/xuanli-233/astrbot_plugin_group_guardian
 打开 AstrBot 管理面板 →「插件管理」→ 本插件 → 管理页面：
 
 1. **同意免责声明**：「设置」顶部。未同意时插件所有功能都不生效。
-2. **插件管理员**：「设置」→「名单管理」→ 管理员。AstrBot 全局管理员会自动同步过来。跨群踢人、批量公告、群名任务等指令只有插件管理员能用。
+2. **插件管理员**：「权限管理」→ 插件管理员。AstrBot 全局管理员会自动同步过来。跨群踢人、批量公告、群名任务等指令只有插件管理员能用。
 3. **备份群与关键词**：「关键词与识别」→ 选择备份群 → 添加关键词规则（包含 / 完全相同 / 正则）→ 用测试框确认命中效果。
 4. **群成员缓存**：「群成员缓存」→「全部刷新」。跨群踢人、重复成员检测都依赖它；之后有人进退群会自动更新。
 5. **按需打开**：「踢人与黑名单」里的退群自动拉黑、退群撤回（都默认关）；「设置 → 功能开关」里需要的原有群管指令（默认全部关闭，例如 /禁言 /踢人 /发公告；全群踢人、批量公告等新功能不受影响）；群白名单（「设置」→「名单管理」，留空表示机器人所在的所有群都管理）。
