@@ -384,6 +384,28 @@ class LeaveThresholdTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await self._leave(harness, 2))
         self.assertEqual(harness._ll_count("111", "kick"), 1)
 
+    async def test_leave_reported_with_other_operator_does_not_count(self):
+        harness = self._harness(times=2)
+        for gid in (1, 2):  # 协议端把被踢报成 leave（操作人是管理员 222）
+            event = _notice("group_decrease", "leave", group_id=gid)
+            event.raw_event["operator_id"] = 222
+            await harness._handle_leave_log(event)
+            self.assertFalse(await harness._handle_member_leave_blacklist(event))
+        self.assertEqual(harness._ll_count("111", "leave"), 0)
+        self.assertEqual(harness._ll_count("111", "kick"), 2)
+        self.assertEqual(harness._user_black_set, set())
+
+    async def test_duplicate_leave_notice_counts_once(self):
+        harness = self._harness(times=2)
+        event = _notice("group_decrease", "leave", group_id=1)
+        event.raw_event["time"] = int(__import__("time").time())
+        await harness._handle_leave_log(event)
+        self.assertFalse(await harness._handle_member_leave_blacklist(event))
+        await harness._handle_leave_log(event)  # 同一次退群重复上报
+        self.assertFalse(await harness._handle_member_leave_blacklist(event))
+        self.assertEqual(harness._ll_count("111", "leave"), 1)
+        self.assertEqual(harness._user_black_set, set())
+
     async def test_old_leaves_outside_window_do_not_count(self):
         import time as _time
         harness = self._harness(times=2, days=7)

@@ -75,6 +75,20 @@ def _leave(sub_type="leave", operator=None, uid=UID):
             "operator_id": int(operator if operator is not None else uid), "time": int(time.time())}
 
 
+class DecreaseKindTests(unittest.TestCase):
+    def test_kinds(self):
+        kind = leave_log.decrease_kind
+        self.assertEqual(kind({"sub_type": "leave", "user_id": 5, "operator_id": 5}), "leave")
+        self.assertEqual(kind({"sub_type": "leave", "user_id": 5, "operator_id": 0}), "leave")
+        self.assertEqual(kind({"sub_type": "leave", "user_id": 5}), "leave")
+        # 主动退群却带着别人的操作人：按被踢算
+        self.assertEqual(kind({"sub_type": "leave", "user_id": 5, "operator_id": 6}), "kick")
+        self.assertEqual(kind({"sub_type": "kick", "user_id": 5, "operator_id": 6}), "kick")
+        self.assertEqual(kind({"sub_type": "kick_me", "user_id": 9}), "kick_me")
+        self.assertEqual(kind({"sub_type": "other"}), "")
+        self.assertEqual(kind(None), "")
+
+
 class SummaryTests(unittest.TestCase):
     def test_segments_become_placeholders(self):
         text = leave_log.LeaveLogMixin._ll_summarize([
@@ -127,6 +141,23 @@ class LeaveLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(i["operator_id"] for i in items), ["888", "机器人"])
         self.assertEqual(items[0]["nickname"], "缓存名片")  # 没说过话时用成员缓存里的名片
         self.assertEqual(h._ll_count(UID, "kick"), 2)
+
+    async def test_duplicate_notice_is_recorded_once(self):
+        h = _Harness()
+        event = _leave()
+        first = await h._handle_leave_log(event)
+        self.assertEqual(await h._handle_leave_log(dict(event)), first)  # 协议端重复上报
+        self.assertEqual(h._ll_count(UID, "leave"), 1)
+        # 时间不同就是另一次退群（退群后马上再进群、再退群也要计次）
+        later = dict(event, time=event["time"] + leave_log.LEAVE_LOG_DEDUP_SECONDS + 1)
+        self.assertNotEqual(await h._handle_leave_log(later), first)
+        self.assertEqual(h._ll_count(UID, "leave"), 2)
+
+    async def test_leave_with_foreign_operator_is_recorded_as_kick(self):
+        h = _Harness()
+        await h._handle_leave_log(_leave("leave", operator="888"))
+        self.assertEqual(h._ll_count(UID, "leave"), 0)
+        self.assertEqual(h._ll_count(UID, "kick"), 1)
 
     async def test_ignored_when_disabled_or_bot_itself(self):
         h = _Harness({"leave_log_enabled": False})

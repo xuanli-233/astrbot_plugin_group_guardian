@@ -26,6 +26,11 @@ from typing import Dict, List, Optional, Tuple
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 
+try:
+    from .leave_log import decrease_kind
+except ImportError:  # 单元测试直接加载本文件
+    from leave_log import decrease_kind
+
 
 class GroupBlacklistMixin:
     # 单次指令最多处理的目标人数（跨群时总调用量 = 群数 × 命中人数，需要防限频）
@@ -388,7 +393,8 @@ class GroupBlacklistMixin:
         if not self._notice_of(raw, "group_decrease"):
             return False
         # leave=主动退群；kick=被管理员踢；kick_me=机器人被踢。只处理主动退群。
-        if raw.get("sub_type") != "leave":
+        # decrease_kind：sub_type=leave 但操作人是别人时按被踢算，不计入主动退群次数。
+        if decrease_kind(raw) != "leave":
             return False
         group_id = str(raw.get("group_id", "") or "")
         user_id = str(raw.get("user_id", "") or "")

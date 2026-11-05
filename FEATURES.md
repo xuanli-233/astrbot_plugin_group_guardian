@@ -218,7 +218,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 用户黑名单：申请自动拒绝（无需开入群审核） | `membership.py` | `blacklist_reject_join_enabled` | 启用 |
 | 黑名单用户入群即踢 | `group_blacklist.py` | `blacklist_kick_on_join` | 启用 |
 | 踢黑名单时 QQ 原生拉黑 | `onebot.py:_kick_member` | `blacklist_native_block_enabled` | 启用 |
-| 退群自动拉黑（全群通用）：`leave_auto_blacklist_days` 天内主动退群达到 `leave_auto_blacklist_times` 次才拉黑（按退群记录计次，被踢不算；次数 1 = 一退群就拉黑） | `group_blacklist.py` | `leave_auto_blacklist_enabled`、`_times`、`_days` | 默认关；30 天 3 次 |
+| 退群自动拉黑（全群通用）：`leave_auto_blacklist_days` 天内主动退群达到 `leave_auto_blacklist_times` 次才拉黑（按退群记录计次，被踢不算；次数 1 = 一退群就拉黑。协议端上报为主动退群但操作人是别人时按被踢算；同一次退群的重复通知——同群、同人、同操作人、同一秒——只记一次） | `group_blacklist.py` | `leave_auto_blacklist_enabled`、`_times`、`_days` | 默认关；30 天 3 次 |
 | 退群记录：主动退群 / 被踢时记录时间、群、方式、操作人和退群前最近 N 条消息（摘要只存内存，不足时群历史兜底），WebUI「退群记录」按 QQ / 群查询、看某人汇总 | `leave_log.py`（表 `leave_logs`，保留 5 万条） | `leave_log_enabled`、`leave_log_msg_count`、`leave_log_use_history` | 默认开，10 条 |
 | 自动同意好友申请 / 自动接受进群邀请 | `auto_accept.py`（main `_on_friend_request`、`_on_group_request` 先于入群审核处理 invite） | `auto_accept_friend_enabled` / `_friend_scope`（all / admin）、`auto_accept_invite_enabled` / `_invite_scope`（admin / all）、`auto_accept_delay_seconds` | 都默认关；邀请默认仅接受插件管理员的；黑名单用户好友申请拒绝、邀请不接受；不在范围内的留给人工 |
 | 二维码看板：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |

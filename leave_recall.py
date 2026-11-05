@@ -26,6 +26,11 @@ from typing import Dict, List, Tuple
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 
+try:
+    from .leave_log import decrease_kind
+except ImportError:  # 单元测试直接加载本文件
+    from leave_log import decrease_kind
+
 
 class LeaveRecallMixin:
     LEAVE_RECALL_MAX = 100
@@ -263,7 +268,7 @@ class LeaveRecallMixin:
         if not (isinstance(raw, dict) and raw.get("post_type") == "notice"
                 and raw.get("notice_type") == "group_decrease"):
             return False
-        sub_type = raw.get("sub_type")
+        sub_type = decrease_kind(raw)  # 与退群记录 / 退群拉黑同一套判断
         if sub_type == "leave":
             trigger, switch = "主动退群", "leave_recall_on_leave"
         elif sub_type == "kick":

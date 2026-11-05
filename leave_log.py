@@ -28,6 +28,29 @@ from astrbot.api.event import AstrMessageEvent
 KIND_LEAVE = "leave"
 KIND_KICK = "kick"
 KIND_LABEL = {KIND_LEAVE: "主动退群", KIND_KICK: "被踢出"}
+# 协议端断线重连补发等重复上报的退群通知：同群、同人、同方式、同操作人，且通知时间（秒）相差不超过这么多秒
+# 才算重复。重复上报的 time 字段相同，取 0；放宽会把「退群→马上再进群→再退群」误当成重复而少算次数。
+LEAVE_LOG_DEDUP_SECONDS = 0
+
+
+def decrease_kind(raw) -> str:
+    """group_decrease 通知的退群方式：leave 主动退群 / kick 被踢 / kick_me 机器人被踢 / "" 其他。
+
+    退群记录、退群自动拉黑、退群撤回都用这里的结果，保证三处判断一致。
+    按 OneBot 规范，主动退群时 operator_id 就是本人（或 0）；sub_type=leave 但 operator_id 是别人时，
+    按被踢处理，避免协议端误报把被踢计入「主动退群次数」而被自动拉黑。
+    """
+    if not isinstance(raw, dict):
+        return ""
+    sub = str(raw.get("sub_type") or "")
+    if sub == KIND_LEAVE:
+        operator = str(raw.get("operator_id") or "").strip()
+        if operator and operator not in ("0", str(raw.get("user_id") or "").strip()):
+            return KIND_KICK
+        return KIND_LEAVE
+    if sub in (KIND_KICK, "kick_me"):
+        return sub
+    return ""
 
 _SEGMENT_LABEL = {
     "image": "[图片]", "face": "[表情]", "mface": "[表情]", "bface": "[表情]", "sface": "[表情]",
@@ -249,6 +272,17 @@ class LeaveLogMixin:
                          (json.dumps(messages, ensure_ascii=False), msg_source, int(row_id)))
             conn.commit()
 
+    def _ll_find_recent(self, group_id: str, user_id: str, kind: str, ts: int, operator: str = "") -> int:
+        """同群、同人、同方式、同操作人，且时间相差不超过 LEAVE_LOG_DEDUP_SECONDS 秒的退群记录 ID，没有返回 0。"""
+        self._ll_init_db()
+        with self._storage._connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM leave_logs WHERE group_id=? AND user_id=? AND kind=? AND operator_id=? AND ts BETWEEN ? AND ? "
+                "ORDER BY id DESC LIMIT 1",
+                (str(group_id), str(user_id), kind, str(operator or ""), int(ts) - LEAVE_LOG_DEDUP_SECONDS, int(ts) + LEAVE_LOG_DEDUP_SECONDS),
+            ).fetchone()
+        return int(row["id"]) if row else 0
+
     def _ll_count(self, user_id: str, kind: str = KIND_LEAVE, since: int = 0) -> int:
         self._ll_init_db()
         with self._storage._connect() as conn:
@@ -340,8 +374,8 @@ class LeaveLogMixin:
         if not (isinstance(raw, dict) and raw.get("post_type") == "notice"
                 and raw.get("notice_type") == "group_decrease"):
             return None
-        kind = {"leave": KIND_LEAVE, "kick": KIND_KICK}.get(raw.get("sub_type"))
-        if not kind:
+        kind = decrease_kind(raw)
+        if kind not in (KIND_LEAVE, KIND_KICK):
             return None
         group_id = str(raw.get("group_id", "") or "")
         user_id = str(raw.get("user_id", "") or "")
@@ -364,6 +398,11 @@ class LeaveLogMixin:
             ts = int(raw.get("time") or time.time())
         except (TypeError, ValueError):
             ts = int(time.time())
+        # 重复上报的同一次退群只记一次，否则退群自动拉黑会多算次数
+        dup = self._ll_find_recent(group_id, user_id, kind, ts, operator)
+        if dup:
+            logger.debug(f"[GroupMgr] 重复的退群通知，已忽略：群 {group_id} 成员 {user_id}（记录 {dup}）")
+            return dup
         row_id = self._ll_insert(
             group_id=group_id, user_id=user_id, kind=kind, operator_id=operator, messages=messages,
             msg_source="本地" if messages else "", ts=ts, nickname=self._ll_member_name(group_id, user_id),
