@@ -184,7 +184,7 @@ class AutoAcceptTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await h._handle_friend_request(_friend("333", flag="d")))  # 不在白名单：留给人工
         await _drain(h)
         self.assertEqual(len(h.calls), 3)
-        self.assertIn("白名单群 900", [kw["reason"] for a, kw in h.ops if kw["target"] == "222"][0])
+        self.assertIn("成员来源群 900", [kw["reason"] for a, kw in h.ops if kw["target"] == "222"][0])
 
     async def test_whitelist_refreshes_stale_group_once(self):
         h = _WlHarness({"auto_accept_friend_enabled": True, "auto_accept_friend_scope": "whitelist"},

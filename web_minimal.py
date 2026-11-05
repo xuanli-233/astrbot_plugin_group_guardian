@@ -527,7 +527,7 @@ class MinimalWebMixin:
     # 批量任务（batch_queue.py）
     # ------------------------------------------------------------------
     async def _web_minimal_accept_check(self):
-        """测试某个 QQ 能否通过好友申请 / 进群邀请的自动处理范围（会按需刷新白名单群成员）。"""
+        """测试某个 QQ 能否通过好友申请 / 进群邀请的自动处理范围（会按需刷新成员来源群的成员）。"""
         data = await self._minimal_body()
         kind = "invite" if str(data.get("kind") or "") == "invite" else "friend"
         uid = str(data.get("user_id") or "").strip()

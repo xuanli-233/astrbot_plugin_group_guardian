@@ -14,9 +14,10 @@ OneBot 事件：
 
 白名单（好友申请、进群邀请各一套，互不影响）：
   auto_accept_{friend,invite}_wl_users   白名单 QQ 号
-  auto_accept_{friend,invite}_wl_groups  白名单群：这些群的群成员都算白名单
+  auto_accept_{friend,invite}_wl_groups  成员来源群：从这些群提取群成员，都算白名单
+  这里的白名单只决定好友申请 / 进群邀请是否自动通过，与管理范围的群白名单 / 群黑名单（managed_lists）无关。
   插件管理员始终在白名单内。判断群成员先看本地群成员缓存（group_directory.py，入群 / 退群通知实时更新）；
-  缓存里没有这个人时，把距上次拉取超过 AA_WL_REFRESH_SECONDS 秒的白名单群重新拉一次成员列表再比对
+  缓存里没有这个人时，把距上次拉取超过 AA_WL_REFRESH_SECONDS 秒的成员来源群重新拉一次成员列表再比对
   （「刚进群就加好友 / 拉机器人」也能通过）。每个群在这个间隔内最多拉一次，陌生人反复申请也不会刷接口。
   auto_accept_delay_seconds    处理前等待的秒数（再随机加 0~50%），默认 5，避免秒同意被风控
 插件用户黑名单里的人：好友申请自动拒绝，邀请不接受（留给人工）。不在范围内的申请 / 邀请不处理，
@@ -37,7 +38,7 @@ from astrbot.api.event import AstrMessageEvent
 
 class AutoAcceptMixin:
     AUTO_ACCEPT_DELAY_MAX = 600
-    # 白名单群成员缓存里找不到申请人时，距上次拉取超过这么多秒的群重新拉一次成员列表
+    # 成员来源群的成员缓存里找不到申请人时，距上次拉取超过这么多秒的群重新拉一次成员列表
     AA_WL_REFRESH_SECONDS = 60
     # 一次申请最多为此重新拉取几个群（其余只看缓存）
     AA_WL_REFRESH_MAX_GROUPS = 10
@@ -74,7 +75,7 @@ class AutoAcceptMixin:
         return str(user_id) in {str(x) for x in (self._get_all_admin_ids() or set())}
 
     def _aa_wl_list(self, kind: str, what: str) -> list:
-        """白名单 QQ（what=users）或白名单群（what=groups），只保留数字、去重。"""
+        """白名单 QQ（what=users）或成员来源群（what=groups），只保留数字、去重。"""
         raw = self.config.get(f"auto_accept_{kind}_wl_{what}") or []
         if isinstance(raw, str):
             raw = re.split(r"[\s,，;；]+", raw)
@@ -86,7 +87,7 @@ class AutoAcceptMixin:
         return out
 
     def _aa_wl_group_hit(self, user_id: str, groups: list) -> str:
-        """在白名单群的成员缓存里找申请人，返回所在的群号（没有返回空串）。"""
+        """在成员来源群的成员缓存里找申请人，返回所在的群号（没有返回空串）。"""
         cached = getattr(self, "_dir_cached_member", None)
         if not callable(cached):
             return ""
@@ -96,7 +97,7 @@ class AutoAcceptMixin:
         return ""
 
     async def _aa_whitelisted(self, kind: str, user_id: str, client=None) -> tuple:
-        """白名单判断，返回 (是否通过, 说明)。缓存里没找到时按需刷新白名单群成员后再比对一次。"""
+        """白名单判断，返回 (是否通过, 说明)。缓存里没找到时按需刷新成员来源群的成员后再比对一次。"""
         uid = str(user_id)
         if self._aa_is_admin(uid):
             return True, "插件管理员"
@@ -105,11 +106,11 @@ class AutoAcceptMixin:
         groups = self._aa_wl_list(kind, "groups")
         hit = self._aa_wl_group_hit(uid, groups)
         if hit:
-            return True, f"是白名单群 {hit} 的成员"
+            return True, f"是成员来源群 {hit} 的成员"
         members_fn = getattr(self, "_dir_members", None)
         if not groups or not client or not callable(members_fn):
             return False, "不在白名单中"
-        # 动态更新：缓存可能还没收到这个人的入群通知，重新拉取较久没更新的白名单群
+        # 动态更新：缓存可能还没收到这个人的入群通知，重新拉取较久没更新的成员来源群
         state = self._dir() if hasattr(self, "_dir") else {"members_ts": {}}
         now = time.time()
         stale = [g for g in groups if now - (state.get("members_ts") or {}).get(g, 0) >= self.AA_WL_REFRESH_SECONDS]
@@ -117,10 +118,10 @@ class AutoAcceptMixin:
             try:
                 members = await members_fn(client, gid, force=True)
             except Exception as e:
-                logger.debug(f"[GroupMgr] 刷新白名单群 {gid} 成员失败: {e}")
+                logger.debug(f"[GroupMgr] 刷新成员来源群 {gid} 成员失败: {e}")
                 continue
             if members and uid in members:
-                return True, f"是白名单群 {gid} 的成员（刚刷新成员列表）"
+                return True, f"是成员来源群 {gid} 的成员（刚刷新成员列表）"
         return False, "不在白名单中"
 
     async def _aa_allowed(self, kind: str, user_id: str, client=None) -> tuple:

@@ -1145,27 +1145,27 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             <div class="mn-row"><label style="width:150px">好友申请：同意谁</label>
               <label><input type="radio" name="aaFriendScope" value="all" /> 所有人</label>
               <label><input type="radio" name="aaFriendScope" value="admin" /> 仅插件管理员</label>
-              <label><input type="radio" name="aaFriendScope" value="whitelist" /> 白名单</label>
+              <label><input type="radio" name="aaFriendScope" value="whitelist" /> 白名单（指定 QQ + 成员来源群）</label>
             </div>
             <div class="aa-wl" id="aaFriendWl" style="display:none">
               <div class="mn-row" style="align-items:flex-start"><label style="width:150px">好友申请白名单 QQ</label><textarea class="input-md" id="aaFriendWlUsers" rows="2" style="flex:1;min-width:220px" placeholder="多个 QQ 号用逗号、空格或换行分隔"></textarea></div>
-              <div class="mn-row"><label style="width:150px">好友申请白名单群</label><span class="mn-hint">勾选的群里的群成员都算白名单（机器人需在群内）</span><button class="btn btn-ghost btn-sm" data-aa-all="aaFriendWlGroups">全选</button><button class="btn btn-ghost btn-sm" data-aa-none="aaFriendWlGroups">全不选</button></div>
+              <div class="mn-row"><label style="width:150px">好友申请成员来源群</label><span class="mn-hint">从勾选的群提取群成员，这些人加好友自动通过（机器人需在群内）。只用于自动同意，与「设置 → 名单管理」的管理范围无关</span><button class="btn btn-ghost btn-sm" data-aa-all="aaFriendWlGroups">全选</button><button class="btn btn-ghost btn-sm" data-aa-none="aaFriendWlGroups">全不选</button></div>
               <div class="gp-grid" id="aaFriendWlGroups"></div>
             </div>
             <div class="mn-row"><label style="width:150px">进群邀请：接受谁的</label>
               <label><input type="radio" name="aaInviteScope" value="admin" /> 仅插件管理员（推荐）</label>
               <label><input type="radio" name="aaInviteScope" value="all" /> 任何人</label>
-              <label><input type="radio" name="aaInviteScope" value="whitelist" /> 白名单</label>
+              <label><input type="radio" name="aaInviteScope" value="whitelist" /> 白名单（指定 QQ + 成员来源群）</label>
             </div>
             <div class="aa-wl" id="aaInviteWl" style="display:none">
               <div class="mn-row" style="align-items:flex-start"><label style="width:150px">进群邀请白名单 QQ</label><textarea class="input-md" id="aaInviteWlUsers" rows="2" style="flex:1;min-width:220px" placeholder="多个 QQ 号用逗号、空格或换行分隔"></textarea></div>
-              <div class="mn-row"><label style="width:150px">进群邀请白名单群</label><span class="mn-hint">勾选的群里的群成员都算白名单（机器人需在群内）</span><button class="btn btn-ghost btn-sm" data-aa-all="aaInviteWlGroups">全选</button><button class="btn btn-ghost btn-sm" data-aa-none="aaInviteWlGroups">全不选</button></div>
+              <div class="mn-row"><label style="width:150px">进群邀请成员来源群</label><span class="mn-hint">从勾选的群提取群成员，这些人邀请机器人进群自动接受（机器人需在群内）。只用于自动接受，与「设置 → 名单管理」的管理范围无关</span><button class="btn btn-ghost btn-sm" data-aa-all="aaInviteWlGroups">全选</button><button class="btn btn-ghost btn-sm" data-aa-none="aaInviteWlGroups">全不选</button></div>
               <div class="gp-grid" id="aaInviteWlGroups"></div>
             </div>
             <div class="mn-row"><label style="width:150px">处理前等待（秒）</label><input type="number" min="0" max="600" class="input-sm" id="aaDelay" style="width:100px" /><span class="mn-hint">再随机加 0~50%，避免秒同意被风控</span></div>
-            <p class="mn-hint" id="aaInviteWarn" style="display:none;color:var(--warning)">「任何人」的邀请都接受时：没设群白名单的话，被拉进的陌生群也会成为管理范围，会收到全群公告、参与全群踢人。建议在「设置 → 名单管理」配置群白名单。</p>
+            <p class="mn-hint" id="aaInviteWarn" style="display:none;color:var(--warning)">「任何人」的邀请都接受时：被拉进的陌生群也会成为管理范围，会收到全群公告、参与全群踢人。不想管理的群可以在「设置 → 名单管理」加入群黑名单；也可以改选「白名单」，只接受指定 QQ 和成员来源群里的人的邀请。</p>
             <p class="mn-hint">插件黑名单里的人：好友申请自动拒绝，邀请不接受。不在范围内的申请 / 邀请不处理，留在 QQ 里人工决定。每次处理都写进操作记录。</p>
-            <p class="mn-hint">白名单 = 插件管理员 + 白名单 QQ + 白名单群的群成员。好友申请和进群邀请各用各的白名单。群成员先查本地缓存（入群 / 退群实时更新）；缓存里没有这个人时，会把超过 1 分钟没更新的白名单群重新拉一次成员列表再比对，所以刚进群的人也能通过。</p>
+            <p class="mn-hint">白名单 = 插件管理员 + 白名单 QQ + 成员来源群的群成员，只决定好友申请 / 进群邀请是否自动通过，不在白名单的不做处理；不影响审核，也不改变管理范围（管理群聊仍按「设置 → 名单管理」的群黑 / 白名单）。好友申请和进群邀请各用各的白名单。群成员先查本地缓存（入群 / 退群实时更新）；缓存里没有这个人时，会把超过 1 分钟没更新的成员来源群重新拉一次成员列表再比对，所以刚进群的人也能通过。</p>
             <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnAaSave">保存</button></div>
             <div class="mn-row"><label style="width:150px">测试</label><select class="input-sm" id="aaTestKind" style="width:110px"><option value="friend">好友申请</option><option value="invite">进群邀请</option></select><input class="input-sm" id="aaTestUid" placeholder="QQ 号" style="width:140px" /><button class="btn btn-outline btn-sm" id="btnAaTest">测试</button><span class="mn-hint" id="aaTestResult">按已保存的设置判断</span></div>
           </div>
@@ -4085,7 +4085,7 @@ function aaSyncWlVisible() {
 async function aaTest() {
   var uid = $('#aaTestUid').value.trim(), out = $('#aaTestResult');
   if (!/^\d+$/.test(uid)) { toast('请填写 QQ 号', 'warning'); return; }
-  out.textContent = '判断中...（可能会刷新白名单群成员）';
+  out.textContent = '判断中...（可能会刷新成员来源群的成员）';
   out.style.color = '';
   var res = await safePost('minimal/accept/check', { kind: $('#aaTestKind').value, user_id: uid }, 60000);
   if (isApiError(res)) { out.textContent = mnErr(res); out.style.color = 'var(--danger)'; return; }
