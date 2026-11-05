@@ -508,6 +508,65 @@ class GroupNameTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.groups["10001"]["name"], "交流群")
         self.assertIsNone(h._load_name_tasks()["10001"]["countdown"])
 
+    async def test_countdown_stops_and_is_deleted_when_name_changed_by_others(self):
+        client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}})
+        h = _Harness(client, cfg={"countdown_update_time": "00:05"})
+        ops = []
+        h._record_op = lambda action, **kw: ops.append((action, kw))
+        h._save_name_tasks({"10001": {"base": "交流群", "suffix": "", "applied": "交流群",
+                                      "countdown": {"target": "2026-11-20", "template": "|{days}天",
+                                                    "last_date": "2026-11-03"}}})
+        await h._group_name_tick(datetime(2026, 11, 4, 0, 6))
+        await h._bq_drain()
+        self.assertEqual(client.groups["10001"]["name"], "交流群|16天")
+        client.groups["10001"]["name"] = "别人改的群名"  # 这期间有人改了群名
+        renames = len(client.actions("set_group_name"))
+        await h._group_name_tick(datetime(2026, 11, 5, 0, 6))
+        await h._bq_drain()
+        self.assertEqual(client.groups["10001"]["name"], "别人改的群名")       # 没有再改名
+        self.assertEqual(len(client.actions("set_group_name")), renames)
+        self.assertNotIn("10001", h._load_name_tasks())                     # 任务已删除
+        stop = [kw for a, kw in ops if a == "群名倒计时终止"]
+        self.assertEqual(len(stop), 1)
+        self.assertIn("别人改的群名", stop[0]["detail"])
+        items = h._bq_job(h._bq_jobs()[0][0]["id"])["items"]
+        self.assertEqual(items[0]["status"], "skipped")
+        self.assertIn("已终止并删除", items[0]["result"])
+
+    async def test_manual_refresh_also_stops_tampered_countdown(self):
+        client = _Client(groups={"10001": {"name": "别人改的", "bot": "admin"}})
+        h = _Harness(client)
+        h._save_name_tasks({"10001": {"base": "交流群", "suffix": "|3天", "applied": "交流群|3天",
+                                      "countdown": {"target": "2030-01-01", "template": "|{days}天",
+                                                    "last_date": "2000-01-01"}}})
+        done, failed = await h._name_refresh_countdown(client, ["10001"])
+        self.assertEqual(done, [])
+        self.assertIn("已终止并删除", failed["10001"])
+        self.assertEqual(client.groups["10001"]["name"], "别人改的")
+        self.assertNotIn("10001", h._load_name_tasks())
+
+    async def test_manual_rename_keeps_countdown_running(self):
+        client = _Client(groups={"10001": {"name": "交流群|5天", "bot": "admin"}})
+        h = _Harness(client, cfg={"countdown_update_time": "00:05", "group_name_max_length": 30})
+        h._save_name_tasks({"10001": {"base": "交流群", "suffix": "|5天", "applied": "交流群|5天",
+                                      "countdown": {"target": "2026-11-09", "template": "|{days}天",
+                                                    "last_date": "2026-11-03"}}})
+        ok, info = await h._name_manual_rename(client, "10001", "新名字|5天")
+        self.assertTrue(ok)
+        self.assertEqual(client.groups["10001"]["name"], "新名字|5天")
+        record = h._load_name_tasks()["10001"]
+        self.assertEqual((record["base"], record["applied"]), ("新名字", "新名字|5天"))
+        # 插件自己改的名字不算「被别人改过」：第二天照常更新
+        await h._group_name_tick(datetime(2026, 11, 5, 0, 6))
+        await h._bq_drain()
+        self.assertEqual(client.groups["10001"]["name"], "新名字|4天")
+        self.assertIsNotNone(h._load_name_tasks()["10001"]["countdown"])
+        bad, why = await h._name_manual_rename(client, "10001", "x" * 31)
+        self.assertFalse(bad)
+        self.assertIn("最长 30 字", why)
+        empty, why = await h._name_manual_rename(client, "10001", "  ")
+        self.assertFalse(empty)
+
     async def test_countdown_not_requeued_while_waiting_in_queue(self):
         client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}})
         h = _Harness(client)

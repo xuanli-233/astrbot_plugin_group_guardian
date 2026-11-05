@@ -1008,6 +1008,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="card-header"><h2>码统计</h2>
             <div class="header-actions">
               <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
+              <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
               <select class="input-sm" id="csHours" style="width:150px"></select>
               <select class="input-sm" id="csGroup" style="width:180px"><option value="">所有群</option></select>
               <input class="input-sm" id="csKeyword" placeholder="码内容 / QQ号 / 昵称" style="width:170px" />
@@ -1075,8 +1076,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         <div class="page-header"><h1>群名任务</h1><button class="btn btn-ghost btn-sm" id="btnNamesRefresh">刷新</button></div>
         <p class="mn-intro">群名 = 基础名 + 后缀。改后缀时总是在基础名后面拼接，后缀不会越加越长；有人手动改了群名，会以新名字为基础名。每次改群名 QQ 都会在群里显示一条系统提示，这是 QQ 的行为，无法屏蔽。</p>
         <div class="card">
-          <div class="card-header"><h2>各群群名</h2>
-            <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnNamesAll">全选</button><button class="btn btn-ghost btn-sm" id="btnNamesNone">全不选</button></div></div>
+          <div class="card-header"><h2>各群群名</h2><span class="rules-subtle" id="nmGroupsUpdated"></span>
+            <div class="header-actions"><button class="btn btn-outline btn-sm" id="btnNamesReloadGroups" title="重新从 QQ 拉取群列表，获取所有群的最新群名（平时群名读本地缓存，最多 1 小时更新一次）">刷新群列表</button><button class="btn btn-ghost btn-sm" id="btnNamesAll">全选</button><button class="btn btn-ghost btn-sm" id="btnNamesNone">全不选</button></div></div>
           <div class="log-container" id="namesTable"><p class="empty">加载中...</p></div>
         </div>
         <div class="mn-grid">
@@ -3907,7 +3908,7 @@ async function loadCodes(page) {
 async function csLoadStats() {
   var loadEp = beginLoad('codes-stats');
   var hoursSel = $('#csHours');
-  var res = await safeGet('minimal/codes', { by: $('#csBy').value, hours: hoursSel.value || '', group_id: $('#csGroup').value,
+  var res = await safeGet('minimal/codes', { by: $('#csBy').value, sort: $('#csSort').value, hours: hoursSel.value || '', group_id: $('#csGroup').value,
     keyword: $('#csKeyword').value.trim(), page: CS.page, page_size: CS.pageSize });
   if (!isCurrentLoad('codes-stats', loadEp)) return;
   if (isApiError(res)) { $('#csTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
@@ -4170,16 +4171,28 @@ function mnUpdateCountdownPreview() {
   text = days === 0 ? (text.indexOf('{days}天') >= 0 ? text.replace('{days}天', '今天') : text.replace('{days}', '0')) : text.replace('{days}', String(days));
   $('#nmPreview').textContent = '今天显示为：基础名' + text;
 }
-async function loadNames() {
+// opts.refresh === true：「刷新群列表」按钮，强制重新拉群列表拿最新群名（按钮点击传进来的是事件对象，不算）
+async function loadNames(opts) {
+  var refresh = !!(opts && opts.refresh === true);
   var loadEp = beginLoad('names');
   if (!MN.overview) await mnLoadOverview();
   var box = $('#namesTable');
-  var res = await safeGet('minimal/names');
+  var btn = $('#btnNamesReloadGroups');
+  if (refresh && btn) { btn.disabled = true; btn.textContent = '刷新中...'; }
+  var res = await safeGet('minimal/names', refresh ? { refresh: 1 } : {});
+  if (refresh && btn) { btn.disabled = false; btn.textContent = '刷新群列表'; }
   if (!isCurrentLoad('names', loadEp)) return;
   if (isApiError(res)) { box.innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   MN.names = d.groups || [];
-  $('#nmUpdateTime').textContent = '每天 ' + d.update_time + ' 自动更新 · 群名最长 ' + d.max_length + ' 字';
+  $('#nmGroupsUpdated').textContent = d.groups_updated_at ? '群名更新于 ' + mnTime(d.groups_updated_at) : '';
+  if (refresh) {
+    if (d.refreshed) toast('已获取最新群名（共 ' + MN.names.length + ' 个群）', 'success');
+    else toast('从 QQ 获取群列表失败，显示的是之前缓存的群名', 'warning');
+    mnLoadOverview();  // 其他页面的群名一起更新
+  }
+  MN.nameMax = d.max_length || 30;
+  $('#nmUpdateTime').textContent = '每天 ' + d.update_time + ' 自动更新 · 群名最长 ' + d.max_length + ' 字 · 群名被别人改过时自动终止并删除倒计时';
   if (!$('#nmTarget').value) { var t = new Date(); t.setDate(t.getDate() + 30); $('#nmTarget').value = t.getFullYear() + '-' + mnPad(t.getMonth() + 1) + '-' + mnPad(t.getDate()); }
   mnUpdateCountdownPreview();
   var checked = {}; $$('#namesTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
@@ -4191,9 +4204,26 @@ async function loadNames() {
       var sched = (g.scheduled || []).map(function(s) { return esc(s.at) + ' →「' + esc(s.suffix || '清除') + '」'; }).join('<br>') || '<span class="mn-hint">—</span>';
       var isChecked = Object.keys(checked).length ? checked[g.group_id] : !backups[g.group_id];
       return '<tr data-gsearch="' + escAttr(mnGroupSearchKey(g.group_id, g.name)) + '"><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (isChecked ? ' checked' : '') + ' /></td><td>' +
-        mnGroupCell(g.group_id, g.name, backups[g.group_id] ? ' <span class="mn-tag">备份群</span>' : '') + '</td><td>' + (esc(g.suffix) || '<span class="mn-hint">—</span>') + '</td><td>' + cd + '</td><td>' + sched + '</td></tr>';
+        '<div style="display:flex;align-items:center;gap:6px">' + mnGroupCell(g.group_id, g.name, backups[g.group_id] ? ' <span class="mn-tag">备份群</span>' : '') +
+        '<button class="btn btn-ghost btn-sm" data-nm-rename="' + escAttr(g.group_id) + '" title="直接修改这个群的群名" style="flex:none">改名</button></div></td><td>' + (esc(g.suffix) || '<span class="mn-hint">—</span>') + '</td><td>' + cd + '</td><td>' + sched + '</td></tr>';
     }).join('') + '</tbody></table>';
   mnGroupFilter('#namesTable');
+}
+// 直接修改某个群的当前群名。插件会同步记下新群名，倒计时不会把这次修改当成「被别人改过」
+async function nmRename(gid) {
+  var row = (MN.names || []).filter(function(g) { return g.group_id === gid; })[0] || {};
+  var max = MN.nameMax || 30;
+  var hint = row.countdown ? '这个群有倒计时：改名后倒计时会接在新群名后面继续（新群名带着当前倒计时后缀时，去掉后缀后作为基础名）。' : '';
+  var name = await promptModal({ title: '修改群名 · ' + gid, label: '新群名（最长 ' + max + ' 字）' + (hint ? '。' + hint : ''), value: row.name || '', okText: '修改' });
+  if (name === null) return;
+  name = name.trim();
+  if (!name) { toast('群名不能为空', 'warning'); return; }
+  if (name.length > max) { toast('群名最长 ' + max + ' 字（当前 ' + name.length + ' 字）', 'warning'); return; }
+  if (name === row.name) return;
+  var res = await safePost('minimal/names/rename', { group_id: gid, name: name });
+  if (isApiError(res)) { toast('修改失败：' + mnErr(res), 'error'); return; }
+  toast('群名已改为「' + name + '」', 'success');
+  loadNames();
 }
 // 批量任务已创建：显示编号、项数、执行方式，并提供跳转到「批量任务」页面的按钮
 // 提示框右上角的 ×：点了就移除整个提示框
@@ -5528,6 +5558,12 @@ function initMinimalPages() {
   bindIfExists('btnTodoStatus', mnTodoStatus);
 
   bindIfExists('btnNamesRefresh', loadNames);
+  bindIfExists('btnNamesReloadGroups', function() { loadNames({ refresh: true }); });
+  var namesTable = document.getElementById('namesTable');
+  if (namesTable) namesTable.addEventListener('click', function(e) {
+    var b = e.target.closest('[data-nm-rename]');
+    if (b) nmRename(b.getAttribute('data-nm-rename'));
+  });
   bindIfExists('btnNamesAll', function() { mnSetGroupChecks('#namesTable', true); });
   bindIfExists('btnNamesNone', function() { mnSetGroupChecks('#namesTable', false); });
   bindIfExists('nmTarget', mnUpdateCountdownPreview, 'input');
@@ -5630,6 +5666,9 @@ function initMinimalPages() {
   bindIfExists('bqFollow', function(e) { bqSetFollow(e.target.checked); }, 'change');
   bindIfExists('btnCsFilter', function() { CS.page = 1; csLoadStats(); });
   bindIfExists('csBy', function() { CS.page = 1; csLoadStats(); }, 'change');
+  // 排列顺序记在本地，下次打开保持
+  (function() { var sel = $('#csSort'); if (!sel) return; try { var v = localStorage.getItem('gg_cs_sort'); if (v && sel.querySelector('option[value=' + v + ']')) sel.value = v; } catch (e) { /* 存储不可用时用默认 */ } })();
+  bindIfExists('csSort', function(e) { try { localStorage.setItem('gg_cs_sort', e.target.value); } catch (err) { /* 忽略 */ } CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csHours', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csGroup', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csKeyword', function(e) { if (e.key === 'Enter') { CS.page = 1; csLoadStats(); } }, 'keydown');

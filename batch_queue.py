@@ -688,12 +688,16 @@ class BatchQueueMixin:
                     cd.pop("queued", None)
                     if not params.get("force") and cd.get("last_date") == today.isoformat():
                         return ITEM_SKIPPED, "今天已经更新过"
+                    # 这期间群名被别人改过：终止并删除倒计时，不再改名
+                    current, stopped = await self._countdown_tampered(client, gid, tasks, log=log)
+                    if stopped:
+                        return ITEM_SKIPPED, stopped
                     target = datetime.strptime(cd["target"], "%Y-%m-%d").date()
                     suffix = self._render_countdown(cd["template"], target, today)
                     expired = suffix is None
                     ok, info = await self._apply_group_suffix(
                         client, gid, "" if expired else suffix, tasks, cd["template"],
-                        log=dict(log, action="群名倒计时更新"))
+                        log=dict(log, action="群名倒计时更新"), current=current)
                     if not ok:
                         cd["retry_after"] = int(time.time()) + self.COUNTDOWN_RETRY_SECONDS
                         return ITEM_FAILED, info

@@ -190,6 +190,22 @@ class CheckTests(unittest.TestCase):
         detail = h._cs_detail(by["hot"]["code_hash"])
         self.assertEqual([r["outcome"] for r in detail["sends"]], ["limit", "pass"])
 
+    def test_stats_sort_orders(self):
+        import time as _t
+        h = _Harness({"code_limit_max": 100})
+        now = int(_t.time())
+        # many：同一个人发 3 次；crowd：3 个人各发 1 次（人数最多）；fresh：最近才出现 1 次
+        for i in range(3):
+            h._cl_process("1", "a", ["many"], now=now - 300 + i)
+        for i, uid in enumerate(("b", "c", "d")):
+            h._cl_process("1", uid, ["crowd"], now=now - 200 + i)
+        h._cl_process("1", "e", ["fresh"], now=now - 10)
+        order = lambda sort: [i["text"] for i in h._cs_stats(hours=5, sort=sort)[0]]
+        self.assertEqual(order("count")[:2], ["crowd", "many"])  # 次数同为 3：最近的在前
+        self.assertEqual(order("users")[0], "crowd")
+        self.assertEqual(order("recent"), ["fresh", "crowd", "many"])
+        self.assertEqual(order("bogus"), order("count"))          # 未知值按出现次数
+
     def test_store_disabled_and_limit_disabled_records_nothing(self):
         h = _Harness({"code_limit_enabled": False, "code_store_enabled": False})
         self.assertEqual(h._cl_process("1", "a", ["x"], now=T0), (None, {}))

@@ -454,9 +454,17 @@ class CodeLimitMixin:
     # ------------------------------------------------------------------
     # 统计（WebUI「码管理」）
     # ------------------------------------------------------------------
+    # 码统计的排序方式 → ORDER BY（只用这里的固定写法，不拼接用户输入）
+    CS_SORTS = {
+        "count": "total DESC, last_ts DESC",          # 出现次数从多到少
+        "users": "users DESC, total DESC, last_ts DESC",  # 发送人数从多到少
+        "recent": "last_ts DESC, total DESC",         # 最近出现的在前
+    }
+
     def _cs_stats(self, hours: int = 0, keyword: str = "", group_id: str = "", by: str = "code",
-                  page: int = 1, page_size: int = 50) -> Tuple[List[dict], int]:
-        """窗口内按码（或按「码 + 人」）汇总。keyword 匹配码内容、QQ 号或昵称。"""
+                  page: int = 1, page_size: int = 50, sort: str = "count") -> Tuple[List[dict], int]:
+        """窗口内按码（或按「码 + 人」）汇总。keyword 匹配码内容、QQ 号或昵称。
+        sort：count 出现次数 / users 发送人数 / recent 最近出现（见 CS_SORTS），未知值按 count。"""
         self._cl_init_db()
         hours = int(hours or 0) or min(max(self._cfg_int("code_limit_window_hours", 5), 1), CODE_LIMIT_WINDOW_MAX_HOURS)
         since = int(time.time()) - min(hours, self._cs_ttl_hours()) * 3600
@@ -472,6 +480,7 @@ class CodeLimitMixin:
         page = max(1, int(page or 1))
         page_size = min(max(int(page_size or 50), 1), 200)
         cond = " AND ".join(where)
+        order = self.CS_SORTS.get(str(sort or ""), self.CS_SORTS["count"])
         with self._storage._connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) AS c FROM (SELECT 1 FROM code_sends s WHERE {cond} "
                                      f"GROUP BY {group_by})", args).fetchone()["c"] or 0)
@@ -482,7 +491,7 @@ class CodeLimitMixin:
                 f"COUNT(DISTINCT s.group_id) AS groups, COUNT(DISTINCT s.user_id) AS users, "
                 f"MAX(s.ts) AS last_ts, MIN(s.ts) AS first_ts, MAX(s.user_id) AS user_id, MAX(s.user_name) AS user_name, "
                 f"MAX(CASE WHEN s.crop_hash != '' THEN s.crop_hash END) AS crop_hash "
-                f"FROM code_sends s WHERE {cond} GROUP BY {group_by} ORDER BY total DESC, last_ts DESC LIMIT ? OFFSET ?",
+                f"FROM code_sends s WHERE {cond} GROUP BY {group_by} ORDER BY {order} LIMIT ? OFFSET ?",
                 args + [page_size, (page - 1) * page_size]).fetchall()
             hashes = [r["crop_hash"] for r in rows if r["crop_hash"]]
             thumbs = {}

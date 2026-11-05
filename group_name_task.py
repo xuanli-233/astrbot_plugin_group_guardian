@@ -11,6 +11,8 @@
   /群名倒计时 <YYYY-MM-DD> <模板> [群号,群号]      每天自动更新，模板里用 {days} 表示剩余天数、{date} 表示目标日期
   /群名倒计时 列表 | 停止 [群号,群号] | 立即更新
 倒计时：到期当天 {days}天 显示为「今天」，过期后自动去掉后缀并停止。
+倒计时更新时如果当前群名 ≠ 插件上次改出的群名（这期间被别人改过），不再改名，终止并删除该群的倒计时
+（_countdown_tampered）。WebUI「改名」（_name_manual_rename）会同步记下新群名，不算被别人改过。
 每天在 countdown_update_time（默认 00:05，服务器本地时间）之后刷新一次；重启后会补上当天的更新。
 任务存在 SQLite meta 表（键 GROUP_NAME_META_KEY，JSON）。
 注意：每次改群名 QQ 都会在群里显示一条系统提示，这是 QQ 的行为，插件无法屏蔽。
@@ -117,15 +119,46 @@ class GroupNameTaskMixin:
             return None
         return str(data.get("group_name") or "")
 
+    async def _countdown_tampered(self, client, gid: str, tasks: Dict[str, dict],
+                                  log: Optional[dict] = None) -> Tuple[Optional[str], Optional[str]]:
+        """倒计时更新前检查群名有没有被别人改过。返回 (当前群名, 终止说明)。
+
+        当前群名 ≠ 插件上次改出的群名（record["applied"]）= 这期间有人改过群名：不再改名，
+        终止并删除该群的倒计时，写操作记录。终止说明为 None 表示没被改过（或读不到群名 / 没有记录，照常处理）。
+        """
+        current = await self._get_group_name(client, gid)
+        record = tasks.get(gid) or {}
+        expected = record.get("applied")
+        if current is None or not expected or current == expected or not record.get("countdown"):
+            return current, None
+        cd = record["countdown"]
+        record["countdown"] = None
+        # 后缀记录也作废：下次改后缀时以别人改的新群名为基础名
+        for key in ("base", "suffix", "applied"):
+            record.pop(key, None)
+        if not record.get("scheduled"):
+            tasks.pop(gid, None)
+        log = dict(log or {})
+        log.pop("action", None)
+        log.setdefault("source", "自动")
+        self._record_op("群名倒计时终止", group_id=gid, result="已停止并删除倒计时",
+                        reason="群名被他人修改", detail=f"预期「{expected}」，实际「{current}」；"
+                                                     f"原倒计时：目标 {cd.get('target')}，模板 {cd.get('template')}", **log)
+        logger.info(f"[GroupMgr] 群 {gid} 的群名被改为「{current}」（预期「{expected}」），倒计时已终止并删除")
+        return current, f"群名已被改为「{current}」（预期「{expected}」），倒计时已终止并删除"
+
     async def _apply_group_suffix(self, client, gid: str, suffix: str, tasks: Dict[str, dict],
-                                  template: str = "", log: Optional[dict] = None) -> Tuple[bool, str]:
+                                  template: str = "", log: Optional[dict] = None,
+                                  current: Optional[str] = None) -> Tuple[bool, str]:
         """把群名改成「基础名 + suffix」，更新 tasks[gid]。返回 (成功, 说明)。
 
         log：操作记录上下文 {"action", "source", "operator", "reason"}，每次改名记一条（旧名 → 新名）。
+        current：调用方刚读到的群名（省一次接口调用）；不传则实时读取。
         """
         log = dict(log or {})
         action = log.pop("action", "") or "修改群名"
-        current = await self._get_group_name(client, gid)
+        if current is None:
+            current = await self._get_group_name(client, gid)
         if current is None:
             self._record_op(action, group_id=gid, result="失败：获取群名失败", **log)
             return False, "获取群名失败"
@@ -149,6 +182,46 @@ class GroupNameTaskMixin:
                 setter(gid, new_name)
         record.update({"base": base, "suffix": suffix, "applied": new_name})
         tasks[gid] = record
+        return True, new_name
+
+    async def _name_manual_rename(self, client, gid: str, new_name: str,
+                                  log: Optional[dict] = None) -> Tuple[bool, str]:
+        """手动把群名改成 new_name（WebUI「群名任务」直接编辑）。返回 (成功, 新群名或失败原因)。
+
+        同步更新插件记下的群名（applied / base），这次修改不会被倒计时当成「被别人改过」：
+        新名字仍以当前后缀结尾时去掉后缀当基础名，否则整个当基础名，之后改后缀 / 倒计时更新在它后面拼接。
+        """
+        new_name = str(new_name or "").strip()
+        max_len = self._cfg_int("group_name_max_length", 30)
+        if not new_name:
+            return False, "群名不能为空"
+        if len(new_name) > max_len:
+            return False, f"群名最长 {max_len} 字（当前 {len(new_name)} 字）"
+        log = dict(log or {})
+        async with self._name_task_lock():
+            tasks = self._load_name_tasks()
+            current = await self._get_group_name(client, gid)
+            if current == new_name:
+                return True, new_name
+            ok, err = await self._call_group_api(
+                client, "set_group_name", "修改群名", group_id=self._safe_int(gid, 0), group_name=new_name,
+            )
+            self._record_op("手动修改群名", group_id=gid, result="成功" if ok else f"失败：{err or '修改失败'}",
+                            detail=f"{current if current is not None else '（未知）'} → {new_name}", **log)
+            if not ok:
+                return False, err or "修改失败"
+            setter = getattr(self, "_dir_set_group_name", None)
+            if callable(setter):
+                setter(gid, new_name)
+            record = tasks.get(gid)
+            if record:
+                suffix = record.get("suffix") or ""
+                if suffix and new_name.endswith(suffix) and len(new_name) > len(suffix):
+                    record["base"] = new_name[: -len(suffix)]
+                else:
+                    record["base"], record["suffix"] = new_name, ""
+                record["applied"] = new_name
+                self._save_name_tasks(tasks)
         return True, new_name
 
     async def _apply_to_groups(self, client, groups: List[str], tasks: Dict[str, dict], suffix_for,
@@ -506,6 +579,15 @@ class GroupNameTaskMixin:
                 due.append(gid)
         if not due:
             return [], {}
+        # 群名被别人改过的群：终止并删除倒计时，不再改名
+        stopped: Dict[str, str] = {}
+        for gid in list(due):
+            _cur, why = await self._countdown_tampered(client, gid, tasks, log=log)
+            if why:
+                stopped[gid] = why
+                due.remove(gid)
+        if not due:
+            return [], stopped
         expired: List[str] = []
 
         def suffix_for(gid):
@@ -530,6 +612,7 @@ class GroupNameTaskMixin:
                 self._record_op("群名倒计时结束", group_id=gid, source="自动", detail="目标日期已过，已去掉后缀")
             else:
                 tasks[gid]["countdown"]["last_date"] = today.isoformat()
+        failed.update(stopped)
         return done, failed
 
     async def _group_name_tick(self, now: Optional[datetime] = None) -> None:

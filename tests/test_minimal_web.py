@@ -333,6 +333,24 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
                               {"action": "settings", "job_id": job_id, "interval": "5", "jitter": ""})
         self.assertEqual(settings["status"], "success")
 
+    async def test_names_refresh_fetches_latest_group_names(self):
+        web_minimal.quart_request.args = {}
+        await call(self.h._web_minimal_names)  # 群列表进缓存
+        self.client.groups["10001"]["name"] = "在 QQ 里改过的新群名"
+        cached = await call(self.h._web_minimal_names)
+        row = [g for g in cached["data"]["groups"] if g["group_id"] == "10001"][0]
+        self.assertNotEqual(row["name"], "在 QQ 里改过的新群名")  # 平时读缓存
+        self.assertIsNone(cached["data"]["refreshed"])
+        web_minimal.quart_request.args = {"refresh": "1"}
+        out = await call(self.h._web_minimal_names)
+        web_minimal.quart_request.args = {}
+        row = [g for g in out["data"]["groups"] if g["group_id"] == "10001"][0]
+        self.assertEqual(row["name"], "在 QQ 里改过的新群名")
+        self.assertTrue(out["data"]["refreshed"])
+        self.assertTrue(out["data"]["groups_updated_at"])
+        forced = [kw for kw in self.client.actions("get_group_list") if kw.get("no_cache")]
+        self.assertEqual(len(forced), 1)
+
     async def test_batch_note_is_saved_and_listed(self):
         out = await call(self.h._web_minimal_broadcast, {"groups": ["10001"], "content": "说明测试"})
         job_id = out["data"]["job"]["id"]

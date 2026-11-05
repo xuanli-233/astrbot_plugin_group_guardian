@@ -678,6 +678,7 @@ class WebMixin:
                 ("/minimal/todo_status", self._web_minimal_todo_status, ["GET"], "待办公告确认情况"),
                 ("/minimal/names", self._web_minimal_names, ["GET"], "群名任务总览"),
                 ("/minimal/names/suffix", self._web_minimal_names_suffix, ["POST"], "批量改群名后缀"),
+                ("/minimal/names/rename", self._web_minimal_names_rename, ["POST"], "直接修改群名"),
                 ("/minimal/names/countdown", self._web_minimal_names_countdown, ["POST"], "设置群名倒计时"),
                 ("/minimal/names/stop", self._web_minimal_names_stop, ["POST"], "停止倒计时 / 取消定时"),
                 ("/minimal/names/refresh", self._web_minimal_names_refresh, ["POST"], "立即刷新倒计时"),

@@ -202,7 +202,9 @@ class GroupDirectoryMixin:
         async with self._dir_lock("groups"):
             if not force and self._dir_groups_fresh():  # 等锁期间别人已刷新
                 return list(state["groups"].values()), ""
-            ok, data, err = await self._dir_call(client, "get_group_list", "获取群列表")
+            # 强制刷新时带 no_cache：让协议端也跳过自己的缓存，拿到最新群名（不认识该参数的实现会忽略）
+            ok, data, err = await self._dir_call(client, "get_group_list", "获取群列表",
+                                                 **({"no_cache": True} if force else {}))
             if not ok:
                 if state["groups"]:
                     logger.warning(f"[GroupMgr] 获取群列表失败，使用缓存: {err}")

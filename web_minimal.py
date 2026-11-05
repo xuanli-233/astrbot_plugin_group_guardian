@@ -247,13 +247,37 @@ class MinimalWebMixin:
         client = await self._get_client()
         if not client:
             return self._minimal_error("无法获取QQ客户端")
+        # refresh=1：「刷新群列表」按钮。强制重新拉群列表，拿到所有群的最新群名
+        refreshed = None
+        if str(quart_request.args.get("refresh", "")).lower() in ("1", "true", "yes"):
+            started = int(time.time())
+            await self._dir_groups(client, force=True)
+            # 拉取失败时 _dir_groups 会退回旧缓存（更新时间不变），用更新时间判断这次是否真的刷新了
+            refreshed = int(self._dir()["groups_ts"] or 0) >= started
         groups, err = await self._list_managed_groups(client)
         rows = await self._name_overview(client, groups)
         return jsonify({"status": "success", "data": {
-            "groups": rows, "error": err,
+            "groups": rows, "error": err, "refreshed": refreshed,
+            "groups_updated_at": int(self._dir()["groups_ts"] or 0),
             "update_time": self._countdown_update_time(),
             "max_length": self._cfg_int("group_name_max_length", 30),
         }})
+
+    async def _web_minimal_names_rename(self):
+        """直接修改某个群的当前群名。"""
+        data = await self._minimal_body()
+        gid = str(data.get("group_id") or "").strip()
+        if not gid.isdigit():
+            return self._minimal_error("请指定群号")
+        client, targets, err = await self._minimal_name_targets({"groups": [gid]})
+        if err:
+            return self._minimal_error(err)
+        if gid not in targets:
+            return self._minimal_error("这个群不在可管理的范围内")
+        ok, info = await self._name_manual_rename(client, gid, data.get("name"), log=WEB_LOG)
+        if not ok:
+            return self._minimal_error(info)
+        return jsonify({"status": "success", "data": {"group_id": gid, "name": info}})
 
     async def _web_minimal_names_suffix(self):
         data = await self._minimal_body()
@@ -489,10 +513,13 @@ class MinimalWebMixin:
             hours=self._safe_int(args.get("hours", 0), 0), keyword=str(args.get("keyword", "") or ""),
             group_id=str(args.get("group_id", "") or "").strip(), by=by,
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+            sort=str(args.get("sort", "") or "count"),
         )
         window = min(max(self._cfg_int("code_limit_window_hours", 5), 1), 168)
         return jsonify({"status": "success", "data": {
-            "items": items, "total": total, "by": by, "window_hours": window, "ttl_hours": self._cs_ttl_hours(), "ttl_custom": self._cfg_int("code_store_ttl_hours", 0),
+            "items": items, "total": total, "by": by,
+            "sort": str(args.get("sort", "") or "count") if str(args.get("sort", "") or "count") in self.CS_SORTS else "count",
+            "window_hours": window, "ttl_hours": self._cs_ttl_hours(), "ttl_custom": self._cfg_int("code_store_ttl_hours", 0),
             "store_enabled": bool(self._cfg("code_store_enabled", True)),
         }})
 
