@@ -333,7 +333,8 @@ class FakeOneBot:
     def _member_dict(self, gid, uid, m):
         return {"group_id": gid, "user_id": uid, "nickname": m["nickname"], "card": m["card"],
                 "role": m["role"], "title": m["title"], "shut_up_timestamp": m["shut_until"],
-                "join_time": 1700000000, "last_sent_time": int(time.time())}
+                "join_time": 1700000000, "last_sent_time": int(time.time()),
+                "level": str(m.get("level", 1 + uid % 50))}  # LLBot 的群等级是字符串
 
     def act_get_group_member_list(self, group_id, **_):
         gid = int(group_id)

@@ -109,6 +109,7 @@ class DuplicateMemberMixin:
                     "group_id": gid, "group_name": group.get("group_name", ""),
                     "role": m.get("role", "member"), "card": m.get("card", ""), "nickname": m.get("nickname", ""),
                     "join_time": int(m.get("join_time") or 0), "last_sent_time": int(m.get("last_sent_time") or 0),
+                    "level": int(m.get("level") or 0),
                 })
         keyword = str(keyword or "").strip().casefold()
         items = []

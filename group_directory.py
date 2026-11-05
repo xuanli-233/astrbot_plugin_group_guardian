@@ -47,6 +47,10 @@ class GroupDirectoryMixin:
                 "PRIMARY KEY (group_id, user_id))"
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_dir_members_user ON dir_members(user_id)")
+            # 群等级（活跃等级，协议端 level 字段）：旧库补列
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(dir_members)").fetchall()}
+            if "level" not in cols:
+                conn.execute("ALTER TABLE dir_members ADD COLUMN level INTEGER NOT NULL DEFAULT 0")
             conn.commit()
         self._dir_db_ready = True
 
@@ -71,6 +75,7 @@ class GroupDirectoryMixin:
                         "user_id": row["user_id"], "nickname": row["nickname"], "card": row["card"],
                         "role": row["role"], "title": row["title"], "join_time": row["join_time"],
                         "last_sent_time": row["last_sent_time"],
+                        "level": int(row["level"] or 0) if "level" in row.keys() else 0,
                     }
         except Exception as e:
             logger.warning(f"[GroupMgr] 载入群成员缓存失败，将重新拉取: {e}")
@@ -108,9 +113,10 @@ class GroupDirectoryMixin:
                 conn.execute("DELETE FROM dir_members WHERE group_id=?", (gid,))
                 conn.executemany(
                     "INSERT INTO dir_members(group_id, user_id, nickname, card, role, title, join_time, "
-                    "last_sent_time, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    "last_sent_time, updated_at, level) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     [(gid, uid, m.get("nickname", ""), m.get("card", ""), m.get("role", "member"),
-                      m.get("title", ""), int(m.get("join_time") or 0), int(m.get("last_sent_time") or 0), now)
+                      m.get("title", ""), int(m.get("join_time") or 0), int(m.get("last_sent_time") or 0), now,
+                      int(m.get("level") or 0))
                      for uid, m in members.items()],
                 )
                 g = self._dir()["groups"].get(gid) or {"group_id": gid, "group_name": ""}
@@ -134,10 +140,10 @@ class GroupDirectoryMixin:
                 else:
                     conn.execute(
                         "INSERT OR REPLACE INTO dir_members(group_id, user_id, nickname, card, role, title, "
-                        "join_time, last_sent_time, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                        "join_time, last_sent_time, updated_at, level) VALUES(?,?,?,?,?,?,?,?,?,?)",
                         (gid, uid, member.get("nickname", ""), member.get("card", ""), member.get("role", "member"),
                          member.get("title", ""), int(member.get("join_time") or 0),
-                         int(member.get("last_sent_time") or 0), int(time.time())),
+                         int(member.get("last_sent_time") or 0), int(time.time()), int(member.get("level") or 0)),
                     )
                 conn.execute("UPDATE dir_groups SET member_count=? WHERE group_id=?",
                              (len(self._dir()["members"].get(gid, {})), gid))
@@ -256,6 +262,7 @@ class GroupDirectoryMixin:
                     "title": str(item.get("title") or ""),
                     "join_time": int(item.get("join_time") or 0),
                     "last_sent_time": int(item.get("last_sent_time") or 0),
+                    "level": self._dir_level(item.get("level")),
                 }
             state["members"][gid] = members
             state["members_ts"][gid] = now
@@ -328,6 +335,14 @@ class GroupDirectoryMixin:
         if gid in state["groups"]:
             state["groups"][gid]["member_count"] = len(state["members"][gid])
         self._dir_save_member_row(gid, uid, member)
+
+    @staticmethod
+    def _dir_level(value) -> int:
+        """协议端的群等级（LLBot 是字符串 "35"；取不到时为 0）。"""
+        try:
+            return max(0, int(str(value or "0").strip() or 0))
+        except (TypeError, ValueError):
+            return 0
 
     def _dir_remove_member(self, gid, uid) -> None:
         gid, uid = str(gid), str(uid)

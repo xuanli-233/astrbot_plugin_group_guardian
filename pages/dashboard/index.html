@@ -3941,7 +3941,7 @@ function dupAvatar(it, size) {
 }
 function dupGroupText(g) {
   return esc(g.group_name || '未命名') + '<span class="mn-hint">（' + esc(g.group_id) + '）' + esc(DUP_ROLES[g.role] || g.role) +
-    (g.card ? ' · ' + esc(g.card) : '') + (g.join_time ? ' · ' + esc(mnDate(g.join_time)) + ' 入群' : '') + '</span>';
+    (g.level ? ' · Lv.' + esc(g.level) : '') + (g.card ? ' · ' + esc(g.card) : '') + (g.join_time ? ' · ' + esc(mnDate(g.join_time)) + ' 入群' : '') + '</span>';
 }
 function dupRenderScope(c) {
   var all = c.scope_all || [];

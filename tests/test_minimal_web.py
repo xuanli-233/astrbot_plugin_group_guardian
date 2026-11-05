@@ -105,7 +105,8 @@ class _Client:
             return {"status": "ok", "retcode": 0, "data": {"group_name": self.groups[str(kw["group_id"])]["name"]}}
         if action == "get_group_member_list":
             members = self.groups[str(kw["group_id"])].get("members", {})
-            return {"status": "ok", "retcode": 0, "data": [{"user_id": int(u), "role": r} for u, r in members.items()]}
+            return {"status": "ok", "retcode": 0, "data": [{"user_id": int(u), "role": r, "level": str(int(u) % 97)}
+                                                          for u, r in members.items()]}
         if action == "get_group_member_info":
             g = self.groups.get(str(kw["group_id"]), {})
             if str(kw["user_id"]) == str(BOT):
@@ -426,6 +427,30 @@ class DirectoryCacheTests(unittest.IsolatedAsyncioTestCase):
         calls = len(self.client.calls)
         await fresh._dir_members(self.client, "10001")
         self.assertEqual(len(self.client.calls), calls)  # 从 SQLite 载入，未过期不调接口
+
+    async def test_group_level_is_cached_and_survives_restart(self):
+        await self.h._dir_groups(self.client)
+        await self.h._dir_members(self.client, "10001")
+        uid = next(u for u in self.h._dir()["members"]["10001"] if u != str(BOT))
+        self.assertEqual(self.h._dir()["members"]["10001"][uid]["level"], int(uid) % 97)
+        fresh = _Harness(self.client, storage=self.h._storage)
+        self.assertEqual(fresh._dir()["members"]["10001"][uid]["level"], int(uid) % 97)
+        for raw, want in (("35", 35), (12, 12), ("", 0), (None, 0), ("abc", 0), ("-3", 0)):
+            self.assertEqual(self.h._dir_level(raw), want)
+
+    async def test_old_member_table_gets_level_column(self):
+        with self.h._storage._connect() as conn:
+            conn.execute("CREATE TABLE dir_members (group_id TEXT NOT NULL, user_id TEXT NOT NULL, "
+                         "nickname TEXT NOT NULL DEFAULT '', card TEXT NOT NULL DEFAULT '', role TEXT NOT NULL DEFAULT 'member', "
+                         "title TEXT NOT NULL DEFAULT '', join_time INTEGER NOT NULL DEFAULT 0, "
+                         "last_sent_time INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0, "
+                         "PRIMARY KEY (group_id, user_id))")
+            conn.execute("INSERT INTO dir_members(group_id, user_id) VALUES('10001', '30001')")
+            conn.commit()
+        fresh = _Harness(self.client, storage=self.h._storage)
+        self.assertEqual(fresh._dir()["members"]["10001"]["30001"]["level"], 0)
+        await fresh._dir_members(self.client, "10002")
+        self.assertIn("10002", fresh._dir()["members"])
 
     async def test_kick_uses_cache_and_removes_member(self):
         result = await self.h._kick_users_across_groups(self.client, ["30001"], False, groups=["10001"])
