@@ -1045,6 +1045,12 @@
         "default": true,
         "hint": "保持历史行为：白名单内（或未设白名单且非黑名单）群的群主/管理员默认可用群管命令（仅本群，非插件全局管理员）。若只想用F5按群精细授权，可关闭此项"
     },
+    "strict_permission_enabled": {
+        "description": "严格权限：群管理员不再自动拥有指令权限",
+        "type": "bool",
+        "default": true,
+        "hint": "默认开启。开启后只有 WebUI 手动设置的插件管理员 / 群超管，以及各群群主能使用群管指令；QQ 群管理员需要在 WebUI 单独设置（或用 F5 动态授权）。关闭后恢复为群主和群管理员都自动拥有本群权限"
+    },
     "card_monitor_enabled": {
         "description": "名片监控总开关",
         "type": "bool",

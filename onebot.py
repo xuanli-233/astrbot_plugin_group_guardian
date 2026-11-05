@@ -212,7 +212,13 @@ class OneBotMixin:
                     return True
                 return False  # 该群已显式配置授权，但当前角色不在授权范围
         # 老行为兼容：未配置 F5 时，允许范围内的 owner/admin 默认拥有群操作权限（可由开关关闭）
-        return self._cfg("legacy_role_admin_enabled", True)
+        if not self._cfg("legacy_role_admin_enabled", True):
+            return False
+        # 严格权限（默认开）：只有群主自动获得本群权限；群管理员需在 WebUI 手动设为
+        # 插件管理员 / 群超管，或通过 F5 动态授权显式授予。
+        if self._cfg("strict_permission_enabled", True):
+            return role == "owner"
+        return True
 
     async def _is_plugin_admin(self, event: AstrMessageEvent) -> bool:
         """"插件全局管理员"判定：仅认全局插件管理员名单 + AstrBot 全局 admin_id。

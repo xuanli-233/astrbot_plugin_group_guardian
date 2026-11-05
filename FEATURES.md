@@ -267,9 +267,11 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 ## 八、权限体系（`onebot.py:_is_admin`）
 
-判定顺序：① 群级 bot 权限黑名单（`/移除群管权限`，最高优先）→ ② 插件管理员（`admin_list` + AstrBot 全局管理员）→ ③ 群超管（WebUI「权限」页按群设置）→ ④ 群主 / 群管理员（受 `group_admin_grant_enabled` 动态授权与 `legacy_role_admin_enabled` 控制）。
+判定顺序：① 群级 bot 权限黑名单（`/移除群管权限`，最高优先）→ ② 插件管理员（`admin_list` + AstrBot 全局管理员）→ ③ 群超管（WebUI「权限」页按群设置）→ ④ 群主 / 群管理员（受 `group_admin_grant_enabled` 动态授权、`legacy_role_admin_enabled` 与 `strict_permission_enabled` 控制）。
 
-两个严格模式：`member_action_require_group_role`（群管指令只允许本群群主 / 管理员）、`set_admin_require_owner`（任免管理员只允许群主）。默认都关。
+**严格权限 `strict_permission_enabled`（默认开）**：第 ④ 步只放行群主，QQ 群管理员不再自动获得指令权限，需要在 WebUI 设为插件管理员 / 群超管，或用 F5 动态授权为该群显式授予。关闭后恢复为群主和群管理员都自动拥有本群权限。
+
+另外两个严格模式：`member_action_require_group_role`（群管指令只允许本群群主 / 管理员）、`set_admin_require_owner`（任免管理员只允许群主）。默认都关。
 
 ---
 

@@ -2553,7 +2553,7 @@ class WebMixin:
         "moderation_llm_provider_id", "ocr_provider_id", "llm_max_concurrency",
         "join_accept_keywords", "join_reject_keywords",
         "auto_unban_scan_interval", "card_sync_interval",
-        "group_admin_grant_enabled", "legacy_role_admin_enabled",
+        "group_admin_grant_enabled", "legacy_role_admin_enabled", "strict_permission_enabled",
         "moderation_review_enabled", "moderation_review_interval",
         "moderation_review_min_samples", "llm_moderation_review_guidance",
         "group_white_list", "group_black_list", "user_black_list", "user_white_list", "admin_list",

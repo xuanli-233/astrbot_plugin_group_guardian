@@ -3039,6 +3039,7 @@ var FEATURE_TOGGLES = [
   { key: 'auto_unban_enabled', label: '定时自动解禁' },
   { key: 'group_admin_grant_enabled', label: '群管理员动态授权' },
   { key: 'legacy_role_admin_enabled', label: '兼容群管授权' },
+  { key: 'strict_permission_enabled', label: '严格权限', desc: '默认开：只有手动设置的插件管理员 / 群超管和群主能用指令，群管理员需单独设置' },
 ];
 var RULES_STATE = { category: 'swear', q: '', enabled: '', page: 1, pageSize: 20 };
 // Issue #95：勾选本页全选后可进一步「选中全部 N 条」，批量操作按当前筛选条件跨分页执行。
@@ -3188,6 +3189,7 @@ var MANUAL_SETTING_KEYS = {
   auto_unban_enabled: true,
   group_admin_grant_enabled: true,
   legacy_role_admin_enabled: true,
+  strict_permission_enabled: true,
   moderation_ban_duration: true,
   moderation_llm_provider_id: true,
   ban_notice: true,
