@@ -228,35 +228,50 @@ class KeywordGuardMixin:
             if driver == "two_stage" and callable(getattr(self, "_code_scan_images", None)):
                 # 两阶段：定位服务 → 扩大框裁剪 → 解码服务（code_pipeline.py）
                 # 命中即停：解出一个码就匹配规则，命中后不再解码剩下的码 / 图，尽快撤回
-                scans = await self._code_scan_images(
-                    image_urls,
-                    stop_when=lambda t: bool(self._match_rules(t, "wxcode_regex_rules", regex_only=True)),
-                )
-                joined = "\n".join(self._code_texts(scans))
+                # 命中 = 已拉黑的码（完全一致）或码内容正则规则（code_board._code_rule_hit）
+                hit_rule = getattr(self, "_code_rule_hit", None)
+                if not callable(hit_rule):
+                    hit_rule = lambda t: self._match_rules(t, "wxcode_regex_rules", regex_only=True)  # noqa: E731
+                collected = [] if self._cfg("code_board_enabled", True) else None
+                scans = await self._code_scan_images(image_urls, stop_when=lambda t: bool(hit_rule(t)),
+                                                     collect=collected)
+                texts = self._code_texts(scans)
+                joined = "\n".join(texts)
                 summary = self._code_describe(scans)
                 live_lines = getattr(self, "_code_live_lines", None)
                 if callable(live_lines):
-                    live_detail(live_lines(scans, hit_rule=lambda t: self._match_rules(
-                        t, "wxcode_regex_rules", regex_only=True)))
-                rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                    live_detail(live_lines(scans, hit_rule=hit_rule))
+                rule = next((r for r in (hit_rule(t) for t in texts) if r), None) or \
+                    self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
                 reason = f"码内容规则: {rule}" if rule else ""
                 if not rule and self._code_undecoded(scans) and \
                         self._cfg_str("code_undecoded_action", "pass", group_id=group_id) == "recall":
                     labels = "、".join(sorted({c["label"] for c in self._code_undecoded(scans)}))
                     reason = f"检测到{labels}但无法解码"
+                notice = None
                 if reason:
                     notice = await self._execute_hit_action(
                         event, group_id, user_id, user_name, text or "[图片]", reason,
                         kind="wxcode", extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
                     )
+                # 二维码看板：撤回之后再在后台生成缩略图
+                schedule = getattr(self, "_cb_schedule", None)
+                if callable(schedule) and collected:
+                    schedule(collected, group_id, user_id, user_name, text, reason)
+                if reason:
                     return True, notice
             else:
                 live_stage("识别葵花码")
                 texts = await self._recognize_images(image_urls, "wxcode")
                 joined = "\n".join(texts)
-                rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
-                live_detail([f"码内容：{t}" + (f" ← 命中规则 {rule}" if rule and self._match_rules(
-                    t, "wxcode_regex_rules", regex_only=True) else "") for t in texts] or ["识别模块未返回码内容"])
+                hit_rule = getattr(self, "_code_rule_hit", None)
+                if not callable(hit_rule):
+                    hit_rule = lambda t: self._match_rules(t, "wxcode_regex_rules", regex_only=True)  # noqa: E731
+                per_text = [(t, hit_rule(t)) for t in texts]
+                rule = next((r for _t, r in per_text if r), None) or \
+                    self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                live_detail([f"码内容：{t}" + (f" ← 命中规则 {r}" if r else "") for t, r in per_text]
+                            or ["识别模块未返回码内容"])
                 if rule:
                     notice = await self._execute_hit_action(
                         event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",

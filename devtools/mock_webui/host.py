@@ -570,6 +570,26 @@ def _mock_code_png(content: str) -> bytes:
     from PIL import Image
     digest = hashlib.sha1(content.encode("utf-8")).digest()
     image = Image.new("RGB", (400, 300), (240, 240 - digest[0] % 40, 240 - digest[1] % 40))
+    # 在模拟定位服务返回的位置画出像二维码的黑白方块（与 _mock_code_http_post 的 bbox 一致）
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(image)
+    parts = [p for p in content.split("||") if p] or ["NOCODE"]
+    for i, part in enumerate(parts):
+        x0, y0 = 10 + (i % 3) * 130, 10 + (i // 3) * 140
+        draw.rectangle([x0, y0, x0 + 110, y0 + 110], fill=(255, 255, 255))
+        seed = hashlib.sha1(part.encode("utf-8")).digest() * 4
+        cell = 10
+        for gy in range(11):
+            for gx in range(11):
+                corner = (gx < 3 and gy < 3) or (gx > 7 and gy < 3) or (gx < 3 and gy > 7)
+                on = (gx in (0, 2) or gy in (0, 2) or (gx == 1 and gy == 1)) if corner and (gx < 3 and gy < 3) else \
+                    (seed[(gy * 11 + gx) % len(seed)] & 1)
+                if corner:
+                    lx, ly = gx % 8 if gx > 7 else gx, gy % 8 if gy > 7 else gy
+                    on = lx in (0, 2) or ly in (0, 2) or (lx == 1 and ly == 1)
+                if on:
+                    draw.rectangle([x0 + 5 + gx * cell, y0 + 5 + gy * cell,
+                                    x0 + 5 + gx * cell + cell - 1, y0 + 5 + gy * cell + cell - 1], fill=(0, 0, 0))
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     data = buf.getvalue()

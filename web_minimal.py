@@ -43,6 +43,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
     "live_log_enabled", "live_log_show_text", "live_log_size",
+    "code_board_enabled", "code_board_size",
     "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
@@ -355,10 +356,11 @@ class MinimalWebMixin:
         if len(image) > 20 * 1024 * 1024:
             return self._minimal_error("测试图片不能超过 20 MiB")
         # 与群消息处理一致：命中即停
-        scan = await self._code_scan_bytes(
-            image, stop_when=lambda t: bool(self._match_rules(t, "wxcode_regex_rules", regex_only=True)))
+        scan = await self._code_scan_bytes(image, stop_when=lambda t: bool(self._code_rule_hit(t)))
         texts = self._code_texts([scan])
         hits = self._match_all_rules("\n".join(texts), "wxcode_regex_rules", regex_only=True) if texts else []
+        if any(t.strip() in self._code_block_set() for t in texts):
+            hits = ["已拉黑的码"] + hits
         undecoded = self._code_undecoded([scan])
         would_recall = bool(hits) or (bool(undecoded) and self._cfg_str("code_undecoded_action", "pass") == "recall")
         return jsonify({"status": "success", "data": {
@@ -481,6 +483,33 @@ class MinimalWebMixin:
         if not status:
             return self._minimal_error(msg)
         return jsonify({"status": "success", "data": {"result": status, "message": msg}})
+
+    # ------------------------------------------------------------------
+    # 二维码看板（code_board.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_codeboard(self):
+        args = quart_request.args
+        snap = self._cb_snapshot(since=self._safe_int(args.get("since", 0), 0),
+                                 epoch=self._safe_int(args.get("epoch", 0), 0))
+        snap["enabled"] = bool(self._cfg("code_board_enabled", True))
+        snap["wxcode_enabled"] = bool(self._cfg("wxcode_enabled", False))
+        snap["blocked"] = self._code_block_list()
+        names = {}
+        try:
+            names = {gid: (g or {}).get("group_name") or "" for gid, g in self._dir()["groups"].items()}
+        except Exception:
+            names = {}
+        snap["group_names"] = {gid: names.get(gid, "") for gid in {i["group_id"] for i in snap["items"]}}
+        return jsonify({"status": "success", "data": snap})
+
+    async def _web_minimal_codeboard_block(self):
+        data = await self._minimal_body()
+        text = str(data.get("text") or "")
+        block = bool(data.get("block", True))
+        err = self._code_set_blocked(text, block, **WEB_LOG)
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"blocked": self._code_block_list(), "block": block}})
 
     async def _web_minimal_livelog(self):
         """实时日志：?since=上次的 seq&epoch=上次的 epoch，只返回变化的记录（live_log.py）。"""

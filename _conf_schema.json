@@ -322,6 +322,24 @@
         "default": true,
         "hint": "通过群指令创建的批量任务完成后，在该群发一条成功 / 失败汇总；WebUI 创建的任务不通知"
     },
+    "code_board_enabled": {
+        "description": "二维码看板：保留识别过的图片和码",
+        "type": "bool",
+        "default": true,
+        "hint": "WebUI「实时日志 → 二维码看板」显示原图缩略图、每个码的裁剪图和识别结果。只存在内存里（重启清空），关闭后不保留任何图片"
+    },
+    "code_board_size": {
+        "description": "二维码看板：保留最近几张图",
+        "type": "int",
+        "default": 30,
+        "hint": "范围 5–200。每张图约几十 KB（缩略图）"
+    },
+    "wxcode_block_codes": {
+        "description": "已拉黑的码（码内容完全一致即命中）",
+        "type": "list",
+        "default": [],
+        "hint": "在二维码看板上点「拉黑该码」添加。任何群里解出与这里完全相同内容的二维码 / 葵花码，都按命中处理（撤回 + 备份）"
+    },
     "live_log_enabled": {
         "description": "实时日志：记录近期消息的处理进度",
         "type": "bool",

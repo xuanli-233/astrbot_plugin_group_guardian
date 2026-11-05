@@ -427,6 +427,36 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
     .mn-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--primary-light);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)}
     .mn-steps{margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.9}
+    /* 实时日志：视图切换 + 二维码看板 */
+    .seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    .seg-btn{border:none;background:var(--surface);color:var(--text-secondary);font-size:12px;padding:5px 12px;cursor:pointer}
+    .seg-btn+.seg-btn{border-left:1px solid var(--border)}
+    .seg-btn.active{background:var(--primary-light);color:var(--primary);font-weight:500}
+    .cb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-top:10px}
+    .cb-card{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
+    .cb-card.hit{border-color:var(--danger)}
+    .cb-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-secondary)}
+    .cb-head b{color:var(--text-primary);font-weight:500}
+    .cb-orig{display:flex;justify-content:center;background:var(--info-light);padding:6px;cursor:zoom-in}
+    .cb-orig img{max-width:100%;max-height:240px;border-radius:4px}
+    .cb-codes{padding:4px 10px 8px}
+    .cb-code{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
+    .cb-code:first-child{border-top:none}
+    .cb-crop{width:84px;height:84px;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--info-light);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in}
+    .cb-crop img{max-width:100%;max-height:100%;image-rendering:pixelated}
+    .cb-num{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;font-size:11px;color:#fff;padding:0 5px}
+    .cb-num.hit{background:var(--danger)}.cb-num.ok{background:var(--success)}.cb-num.bad{background:var(--warning)}
+    .cb-info{flex:1;min-width:0;font-size:12px}
+    .cb-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;color:var(--text-muted)}
+    .cb-text{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all;margin:4px 0;color:var(--text-primary);max-height:4.8em;overflow:hidden;line-height:1.6}
+    .cb-text.open{max-height:none}
+    .cb-text.err{color:var(--warning);font-family:inherit}
+    .cb-acts{display:flex;gap:4px;flex-wrap:wrap}
+    .cb-acts .btn{padding:2px 8px;font-size:11px}
+    .cb-tag{font-size:11px;padding:0 6px;border-radius:9px;background:var(--danger-light);color:var(--danger)}
+    .cb-tag.blocked{background:var(--text-primary);color:var(--surface)}
+    .cb-foot{padding:6px 10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted)}
+    .cb-zoom img{max-width:100%;image-rendering:pixelated}
     /* 全局右侧批量任务栏 */
     .taskbar{width:290px;flex-shrink:0;background:var(--sidebar-bg);border-left:1px solid var(--sidebar-border);display:flex;flex-direction:column;min-height:0;transition:width .2s}
     .tb-head{display:flex;align-items:center;gap:8px;padding:14px 12px 10px;border-bottom:1px solid var(--border)}
@@ -1273,10 +1303,38 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
       <div class="tab-panel" id="tab-livelog">
         <div class="page-header"><h1>实时日志</h1>
           <div class="header-actions">
-            <button class="btn btn-outline btn-sm" id="btnLivePause">暂停</button>
-            <button class="btn btn-ghost btn-sm" id="btnLiveClear">清空显示</button>
+            <div class="seg" role="tablist">
+              <button class="seg-btn active" data-live-view="messages" role="tab">消息处理</button>
+              <button class="seg-btn" data-live-view="board" role="tab">二维码看板</button>
+            </div>
+            <button class="btn btn-outline btn-sm lv-view" id="btnLivePause">暂停</button>
+            <button class="btn btn-ghost btn-sm lv-view" id="btnLiveClear">清空显示</button>
           </div>
         </div>
+
+        <div id="cbView" style="display:none">
+          <p class="mn-intro">每张经过二维码 / 葵花码识别的群图片一张卡片：原图上用编号框标出每个码（红 = 命中规则，绿 = 已解出，橙 = 解不出），下面逐个列出码的裁剪图和识别内容。「拉黑该码」后，任何群里再解出完全相同内容的码都会按命中处理（撤回 + 备份）；「解除拉黑」即恢复。图片只在内存里保留最近几十张，重启清空。</p>
+          <div id="cbNotice" class="mn-banner" style="display:none"></div>
+          <div class="card">
+            <div class="card-header"><h2>识别记录</h2>
+              <div class="header-actions">
+                <select class="input-sm" id="cbFilter" style="width:130px">
+                  <option value="">全部</option><option value="hit">命中处理</option><option value="code">有码</option><option value="blocked">含已拉黑的码</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" id="btnCbBlocked">已拉黑的码</button>
+              </div></div>
+            <div class="mn-body"><div class="mn-hint" id="cbStats">加载中...</div><div class="cb-grid" id="cbGrid"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>设置</h2></div>
+            <div class="settings-list" id="cbSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:150px">保留最近几张图</label><input type="number" min="5" max="200" class="input-sm" id="cbSize" style="width:120px" /><button class="btn btn-primary btn-sm" id="btnCbSize">保存</button><span class="mn-hint">5–200，默认 30</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="lvView">
         <p class="mn-intro">近期进入审核流程的群消息和处理进度：收到 → 检查关键词 → 下载图片 / 定位 / 解码 → 结果（撤回、放行、跳过、出错）和耗时。识别服务较慢时可以看到消息卡在哪一步。数据只在内存里（重启清空），页面打开且在前台时才轮询，每次只取回有变化的记录；离开本页或切到后台就停止。点一行可展开每一步的耗时。</p>
         <div id="liveDisabled" class="mn-banner" style="display:none"><span>实时日志记录已关闭，新消息不会出现在这里。</span><button class="btn btn-primary btn-sm" id="btnLiveEnable">开启</button></div>
         <div class="card">
@@ -1297,6 +1355,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="mn-body">
             <div class="mn-row"><label style="width:150px">保留最近几条</label><input type="number" min="50" max="2000" class="input-sm" id="liveSize" style="width:120px" /><button class="btn btn-primary btn-sm" id="btnLiveSize">保存</button><span class="mn-hint">50–2000，默认 300</span></div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -3314,6 +3373,9 @@ var MANUAL_SETTING_KEYS = {
   batch_jitter_seconds: true,
   batch_default_mode: true,
   batch_notify_enabled: true,
+  code_board_enabled: true,
+  code_board_size: true,
+  wxcode_block_codes: true,
   live_log_enabled: true,
   live_log_show_text: true,
   live_log_size: true,
@@ -5000,6 +5062,9 @@ var MN_SWITCHES = {
     { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
     { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
   ],
+  cbSwitches: [
+    { key: 'code_board_enabled', label: '保留识别图片（二维码看板）', desc: '关闭后不保留任何图片，看板为空；码内容拉黑仍然有效' }
+  ],
   liveSwitches: [
     { key: 'live_log_enabled', label: '记录实时日志', desc: '只在内存里保留最近几百条，不写数据库、不调用接口' },
     { key: 'live_log_show_text', label: '显示消息内容', desc: '关闭后只显示群、发送者和处理结果（最多保留前 80 个字）' }
@@ -5870,13 +5935,202 @@ var LIVE = { epoch: 0, seq: 0, size: 300, map: {}, names: {}, open: {}, timer: n
 var LIVE_LABELS = { running: '处理中', hit: '命中处理', pass: '放行', skip: '跳过', error: '出错' };
 function liveActive() {
   var p = $('#tab-livelog');
-  return !!(p && p.classList.contains('active') && !document.hidden);
+  return !!(p && p.classList.contains('active') && !document.hidden && LIVE_VIEW !== 'board');
+}
+var LIVE_VIEW = 'messages';
+function liveSetView(view) {
+  LIVE_VIEW = view === 'board' ? 'board' : 'messages';
+  $$('[data-live-view]').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-live-view') === LIVE_VIEW); });
+  $('#cbView').style.display = LIVE_VIEW === 'board' ? '' : 'none';
+  $('#lvView').style.display = LIVE_VIEW === 'board' ? 'none' : '';
+  $$('#tab-livelog .lv-view').forEach(function(el) { el.style.display = LIVE_VIEW === 'board' ? 'none' : ''; });
+  if (LIVE_VIEW === 'board') { clearTimeout(LIVE.timer); loadCodeBoard(); } else { clearTimeout(CB.timer); livePoll(); }
+}
+
+/* ---- 二维码看板 ---- */
+var CB = { epoch: 0, seq: 0, map: {}, ids: [], blocked: [], blockedSet: {}, names: {}, timer: null, inflight: false, enabled: true };
+function cbActive() {
+  var p = $('#tab-livelog');
+  return !!(p && p.classList.contains('active') && !document.hidden && LIVE_VIEW === 'board');
+}
+async function loadCodeBoard() {
+  if (!MN.overview) await mnLoadOverview();
+  mnRenderSwitches('cbSwitches');
+  var size = mnCfg('code_board_size');
+  $('#cbSize').value = (size === undefined || size === null || size === '') ? 30 : size;
+  cbPoll();
+}
+async function cbPoll() {
+  clearTimeout(CB.timer); CB.timer = null;
+  if (!cbActive() || CB.inflight) return;
+  CB.inflight = true;
+  try {
+    var res = await safeGet('minimal/codeboard', { since: CB.seq, epoch: CB.epoch });
+    if (isApiError(res)) { $('#cbStats').textContent = '获取失败：' + mnErr(res); return; }
+    var d = mnData(res) || {};
+    if (d.reset) CB.map = {};
+    CB.epoch = d.epoch; CB.seq = d.seq; CB.ids = d.ids || []; CB.enabled = d.enabled !== false;
+    CB.wxEnabled = d.wxcode_enabled !== false;
+    CB.blocked = d.blocked || [];
+    CB.blockedSet = {}; CB.blocked.forEach(function(t) { CB.blockedSet[t] = true; });
+    Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) CB.names[k] = d.group_names[k]; });
+    (d.items || []).forEach(function(e) {
+      var old = CB.map[e.id];
+      if (old && !e.orig) {  // 只传了变化的字段：保留已有图片
+        e.orig = old.orig;
+        (e.codes || []).forEach(function(c, i) { if (old.codes[i]) c.crop = old.codes[i].crop; });
+      }
+      CB.map[e.id] = e;
+    });
+    var keep = {}; CB.ids.forEach(function(id) { keep[id] = true; });
+    Object.keys(CB.map).forEach(function(id) { if (!keep[id]) delete CB.map[id]; });
+    cbRender();
+  } finally {
+    CB.inflight = false;
+    if (cbActive()) CB.timer = setTimeout(cbPoll, 3000);
+  }
+}
+function cbEntryBlocked(e) { return (e.codes || []).some(function(c) { return c.text && CB.blockedSet[c.text.trim()]; }); }
+function cbRender() {
+  var notice = $('#cbNotice');
+  var msg = !CB.enabled ? '二维码看板已关闭，新识别的图片不会显示（可在下方「设置」打开）。'
+    : (!CB.wxEnabled ? '葵花码 / 二维码识别还没有开启（「关键词与识别」页面），群图片不会被识别。' : '');
+  notice.style.display = msg ? '' : 'none'; notice.textContent = msg;
+  var all = CB.ids.slice().reverse().map(function(id) { return CB.map[id]; }).filter(Boolean);
+  var f = $('#cbFilter').value;
+  var rows = all.filter(function(e) {
+    if (f === 'hit') return e.outcome === 'hit';
+    if (f === 'code') return (e.codes || []).length > 0;
+    if (f === 'blocked') return cbEntryBlocked(e);
+    return true;
+  });
+  var codes = all.reduce(function(n, e) { return n + (e.codes || []).length; }, 0);
+  var hits = all.filter(function(e) { return e.outcome === 'hit'; }).length;
+  $('#cbStats').textContent = '最近 ' + all.length + ' 张图（共 ' + codes + ' 个码，命中处理 ' + hits + ' 张）· 已拉黑的码 ' + CB.blocked.length + ' 个 · 每 3 秒更新';
+  $('#btnCbBlocked').textContent = '已拉黑的码（' + CB.blocked.length + '）';
+  if (!rows.length) {
+    $('#cbGrid').innerHTML = '<div class="mn-empty" style="grid-column:1/-1">' + (all.length ? '没有符合筛选条件的图片' : '还没有识别记录。群里有人发图片并经过二维码 / 葵花码识别后，会出现在这里。') + '</div>';
+    return;
+  }
+  $('#cbGrid').innerHTML = rows.map(cbCardHtml).join('');
+}
+function cbCardHtml(e) {
+  var gname = CB.names[e.group_id];
+  var outcome = e.outcome === 'hit'
+    ? '<span class="lv-badge hit">命中处理</span>' : '<span class="lv-badge pass">放行</span>';
+  var head = '<span>' + esc(liveTime(e.ts)) + '</span><b>' + esc(gname || e.group_id) + '</b>' +
+    '<span>' + esc(e.user_name || e.user_id) + (e.user_name ? '（' + esc(e.user_id) + '）' : '') + '</span>' +
+    (e.image_count > 1 ? '<span>图 ' + e.image_index + '/' + e.image_count + '</span>' : '') +
+    (e.cached ? '<span title="同一张图 10 分钟内只识别一次">缓存结果</span>' : '') +
+    '<span style="margin-left:auto">' + outcome + '</span>';
+  var orig = e.orig ? '<div class="cb-orig" data-cb-zoom="orig" data-id="' + e.id + '"><img alt="原图缩略图" src="' + escAttr(e.orig) + '" /></div>' : '';
+  var codes = (e.codes || []).map(function(c, i) {
+    var blocked = c.text && CB.blockedSet[c.text.trim()];
+    var meta = '<span class="cb-num ' + escAttr(c.state) + '">' + c.idx + '</span>' +
+      '<span>' + esc(c.label) + (c.score != null ? '（' + Number(c.score).toFixed(2) + '）' : '') + '</span>' +
+      (c.code_type ? '<span>' + esc(c.code_type) + '</span>' : '') +
+      (blocked ? '<span class="cb-tag blocked">已拉黑</span>' : '') +
+      (c.hit ? '<span class="cb-tag">命中 ' + esc(c.hit) + '</span>' : '');
+    var body = c.decoded
+      ? '<div class="cb-text" data-cb-text="' + e.id + '-' + i + '">' + esc(c.text) + (c.is_base64 ? ' <span class="mn-hint">（无法转成文字，显示的是 base64）</span>' : '') + '</div>'
+      : '<div class="cb-text err">' + esc(c.error || '未能解出') + '</div>';
+    var acts = c.decoded ? '<div class="cb-acts">' +
+      '<button class="btn btn-ghost btn-sm" data-cb-act="copy" data-id="' + e.id + '" data-i="' + i + '">复制</button>' +
+      (blocked ? '<button class="btn btn-outline btn-sm" data-cb-act="unblock" data-id="' + e.id + '" data-i="' + i + '">解除拉黑</button>'
+        : '<button class="btn btn-danger btn-sm" data-cb-act="block" data-id="' + e.id + '" data-i="' + i + '">拉黑该码</button>') +
+      (c.text.length > 120 ? '<button class="btn btn-ghost btn-sm" data-cb-act="expand" data-id="' + e.id + '" data-i="' + i + '">展开</button>' : '') +
+      '</div>' : '';
+    var crop = c.crop ? '<img alt="码 ' + c.idx + ' 裁剪图" src="' + escAttr(c.crop) + '" />' : '<span class="mn-hint">无图</span>';
+    return '<div class="cb-code"><div class="cb-crop" data-cb-zoom="crop" data-id="' + e.id + '" data-i="' + i + '">' + crop + '</div>' +
+      '<div class="cb-info"><div class="cb-meta">' + meta + '</div>' + body + acts + '</div></div>';
+  }).join('');
+  var foot = [];
+  if (e.error) foot.push(e.error);
+  else if (!(e.codes || []).length) foot.push(e.has_code ? '检测到码，但不属于要解码的类别' : '未发现码');
+  if (e.over_limit) foot.push('另有 ' + e.over_limit + ' 个码超过每张图上限，未解码');
+  if (e.reason) foot.push('处理原因：' + e.reason);
+  if (e.text) foot.push('消息：' + e.text);
+  return '<div class="cb-card' + (e.outcome === 'hit' ? ' hit' : '') + '"><div class="cb-head">' + head + '</div>' + orig +
+    (codes ? '<div class="cb-codes">' + codes + '</div>' : '') +
+    (foot.length ? '<div class="cb-foot">' + foot.map(esc).join('<br>') + '</div>' : '') + '</div>';
+}
+function cbCode(id, i) { var e = CB.map[id]; return e && e.codes ? e.codes[Number(i)] : null; }
+async function cbCopy(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); toast('已复制', 'success'); return; }
+  } catch (err) { /* 沙箱 iframe 里可能没有剪贴板权限，下面回退 */ }
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+  document.body.removeChild(ta);
+  if (ok) { toast('已复制', 'success'); return; }
+  // 仍然不行：弹出可手动复制的文本框
+  showModal('复制码内容', '<p class="mn-hint" style="margin-bottom:6px">浏览器不允许自动复制，请按 Ctrl+C 手动复制：</p><textarea class="input-md" id="cbCopyBox" rows="5" style="width:100%">' + esc(text) + '</textarea>',
+    '<button class="btn btn-primary btn-sm" id="cbCopyClose">关闭</button>');
+  var box = $('#cbCopyBox'); if (box) { box.focus(); box.select(); }
+  $('#cbCopyClose').addEventListener('click', closeModal);
+}
+async function cbSetBlocked(text, block) {
+  var short = text.length > 120 ? text.slice(0, 120) + '…' : text;
+  if (!(await mnConfirm((block ? '拉黑这个码？以后任何群里解出完全相同内容的码都会被撤回并备份。' : '解除拉黑这个码？') + '\n\n' + short,
+    { title: block ? '拉黑该码' : '解除拉黑', okText: block ? '拉黑' : '解除拉黑', danger: block }))) return;
+  var res = await safePost('minimal/codeboard/block', { text: text, block: block });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var d = mnData(res) || {};
+  CB.blocked = d.blocked || [];
+  CB.blockedSet = {}; CB.blocked.forEach(function(t) { CB.blockedSet[t] = true; });
+  toast(block ? '已拉黑该码' : '已解除拉黑', 'success');
+  cbRender();
+}
+function cbShowBlocked() {
+  if (!CB.blocked.length) { toast('还没有拉黑的码', 'info'); return; }
+  showModal('已拉黑的码（' + CB.blocked.length + '）',
+    '<div style="max-height:420px;overflow:auto">' + CB.blocked.map(function(t, i) {
+      return '<div class="mn-rule"><span class="mn-val">' + esc(t) + '</span><button class="btn btn-ghost btn-sm" data-cb-unblock="' + i + '">解除拉黑</button></div>';
+    }).join('') + '</div>', '<button class="btn btn-primary btn-sm" id="cbBlockedClose">关闭</button>');
+  $('#cbBlockedClose').addEventListener('click', closeModal);
+  $$('[data-cb-unblock]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var t = CB.blocked[Number(btn.getAttribute('data-cb-unblock'))];
+      closeModal();
+      await cbSetBlocked(t, false);
+    });
+  });
+}
+function cbOnClick(e) {
+  var zoom = e.target.closest('[data-cb-zoom]');
+  if (zoom) {
+    var entry = CB.map[zoom.getAttribute('data-id')];
+    var src = zoom.getAttribute('data-cb-zoom') === 'orig' ? (entry && entry.orig) : ((cbCode(zoom.getAttribute('data-id'), zoom.getAttribute('data-i')) || {}).crop);
+    if (src) {
+      showModal(zoom.getAttribute('data-cb-zoom') === 'orig' ? '原图（缩略图）' : '码裁剪图',
+        '<div class="cb-zoom" style="text-align:center"><img alt="放大查看" src="' + escAttr(src) + '" style="width:' + (zoom.getAttribute('data-cb-zoom') === 'orig' ? '100%' : '320px') + '" /></div>',
+        '<button class="btn btn-primary btn-sm" id="cbZoomClose">关闭</button>');
+      $('#cbZoomClose').addEventListener('click', closeModal);
+    }
+    return;
+  }
+  var btn = e.target.closest('[data-cb-act]');
+  if (!btn) return;
+  var c = cbCode(btn.getAttribute('data-id'), btn.getAttribute('data-i'));
+  if (!c) return;
+  var act = btn.getAttribute('data-cb-act');
+  if (act === 'copy') cbCopy(c.text);
+  else if (act === 'block') cbSetBlocked(c.text, true);
+  else if (act === 'unblock') cbSetBlocked(c.text, false);
+  else if (act === 'expand') {
+    var box = $('[data-cb-text="' + btn.getAttribute('data-id') + '-' + btn.getAttribute('data-i') + '"]');
+    if (box) { box.classList.toggle('open'); btn.textContent = box.classList.contains('open') ? '收起' : '展开'; }
+  }
 }
 function liveSchedule(ms) {
   clearTimeout(LIVE.timer);
   LIVE.timer = setTimeout(livePoll, ms);
 }
 async function loadLive() {
+  if (LIVE_VIEW === 'board') { loadCodeBoard(); return; }
   if (!MN.overview) await mnLoadOverview();
   mnRenderSwitches('liveSwitches');
   var size = mnCfg('live_log_size');
@@ -6119,6 +6373,16 @@ function initMinimalPages() {
   });
 
   tbInit();
+  $$('[data-live-view]').forEach(function(b) { b.addEventListener('click', function() { liveSetView(b.getAttribute('data-live-view')); }); });
+  bindIfExists('cbGrid', cbOnClick, 'click');
+  bindIfExists('cbFilter', cbRender, 'change');
+  bindIfExists('btnCbBlocked', cbShowBlocked);
+  bindIfExists('btnCbSize', function() {
+    var n = Number($('#cbSize').value);
+    if (!(n >= 5 && n <= 200) || Math.floor(n) !== n) { toast('请填写 5–200 的整数', 'warning'); return; }
+    mnSaveConfig({ code_board_size: n }, '已保存');
+  });
+  document.addEventListener('visibilitychange', function() { if (cbActive()) cbPoll(); });
   bindIfExists('btnBqRefresh', function() { bqPoll(true); });
   bindIfExists('btnBqSave', bqSaveDefaults);
   document.addEventListener('visibilitychange', function() { if (bqActive()) bqPoll(); });

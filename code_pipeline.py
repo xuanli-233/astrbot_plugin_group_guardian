@@ -326,12 +326,16 @@ class CodePipelineMixin:
             return str(d["text"])
         return str(d.get("payload_base64") or "")
 
-    async def _code_scan_images(self, image_urls: list, stop_when=None) -> List[dict]:
+    async def _code_scan_images(self, image_urls: list, stop_when=None, collect: Optional[list] = None) -> List[dict]:
         """识别消息里的图片（最多 RECOGNIZE_MAX_IMAGES 张），同一图片内容 CODE_CACHE_TTL 秒内只识别一次。
 
         stop_when 见 _code_scan_bytes：某张图里有码命中后，后面的图也不再识别。
         缓存里「命中即停」的结果没有解完所有码：如果按现在的规则已不再命中（规则改过），重新完整识别。
+        collect：传入列表时，每张图追加 {"url", "data", "scan"}（二维码看板用；图片字节不进识别缓存）。
         """
+        def keep(url, data, scan):
+            if collect is not None:
+                collect.append({"url": url, "data": data, "scan": scan})
         cache = getattr(self, "_code_cache", None)
         if cache is None:
             cache = self._code_cache = {}
@@ -357,6 +361,7 @@ class CodePipelineMixin:
                 live_stage(f"{label}下载失败")
                 self._code_warn_download(reason)
                 results.append({"url": url, "has_code": False, "codes": [], "error": f"图片下载失败：{reason}"})
+                keep(url, None, results[-1])
                 continue
             key = hashlib.sha1(data).hexdigest()
             hit = cache.get(key)
@@ -366,6 +371,7 @@ class CodePipelineMixin:
                     self._safe_stop(stop_when, self._code_item_text(c)) for c in cached["codes"] if c.get("decoded"))
                 if not cached.get("stopped_early") or still_hits:
                     results.append(dict(cached, url=url, cached=True, stopped_early=still_hits))
+                    keep(url, data, results[-1])
                     continue
             scanned = await self._code_scan_bytes(data, stop_when=stop_when, label=label)
             if scanned["error"]:
@@ -375,6 +381,7 @@ class CodePipelineMixin:
                     cache.clear()
                 cache[key] = (time.time(), scanned)
             results.append(dict(scanned, url=url))
+            keep(url, data, results[-1])
         return results
 
     @staticmethod
