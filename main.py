@@ -30,6 +30,7 @@ from .leave_recall import LeaveRecallMixin
 from .live_log import LiveLogMixin
 from .batch_queue import BatchQueueMixin
 from .code_board import CodeBoardMixin
+from .auto_accept import AutoAcceptMixin
 from .message_backup import MessageBackupMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
@@ -44,7 +45,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -458,11 +459,27 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         if not self._is_group_request_event(event):
             return
         try:
+            # 机器人被邀请进群（sub_type=invite）：开启自动接受时由 auto_accept.py 处理，不走入群审核
+            if await AutoAcceptMixin._handle_group_invite(self, event):
+                event.stop_event()
+                return
             handled = await MembershipMixin._handle_group_request(self, event)
             if handled:
                 event.stop_event()
         except Exception as e:
             logger.warning(f"[GroupMgr] 入群审核出错: {e}")
+
+    # 自动同意好友申请（auto_accept.py，默认关闭）
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_friend_request(self, event: AiocqhttpMessageEvent):
+        if not AutoAcceptMixin._aa_is_friend_request(self, event):
+            return
+        try:
+            if await AutoAcceptMixin._handle_friend_request(self, event):
+                event.stop_event()
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 处理好友申请出错: {e}")
 
     # 名片监控：监听 group_card（名片变更）通知事件（与其它 ALL 监听互不干扰）。
     @filter.event_message_type(filter.EventMessageType.ALL)

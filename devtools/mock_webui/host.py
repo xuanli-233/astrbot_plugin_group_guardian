@@ -840,10 +840,39 @@ def _notice_event(raw):
     return SimEvent(raw, [], "")
 
 
+SIM_DECISIONS = []  # 模拟环境：自动同意的结果（后台延迟完成后写入）
+
+
 def sim_member(payload_json: str) -> str:
     """成员主动退群 / 申请入群 / 被邀请入群。"""
     p = json.loads(payload_json)
-    gid, uid, action = int(p["group_id"]), int(p["user_id"]), p["action"]
+    action = p["action"]
+    if action in ("friend_request", "bot_invite"):
+        # 加机器人好友 / 邀请机器人进群：交给自动同意（auto_accept.py），处理在后台延迟后完成
+        uid = int(p["user_id"])
+        flag = f"{action}-{uid}-{time.time()}"
+        decided = {}
+
+        def on_friend(flag=None, approve=True, **_):
+            decided.update(kind="friend", approve=approve)
+            return _ok(None)
+
+        def on_invite(flag=None, sub_type=None, approve=True, **_):
+            decided.update(kind="invite", approve=approve)
+            return _ok(None)
+        BOT.act_set_friend_add_request = on_friend
+        BOT.act_set_group_add_request = on_invite
+        if action == "friend_request":
+            raw = {"post_type": "request", "request_type": "friend", "user_id": uid,
+                   "comment": p.get("comment", ""), "flag": flag}
+            _run_handler("_on_friend_request", _notice_event(raw))
+        else:
+            raw = {"post_type": "request", "request_type": "group", "sub_type": "invite",
+                   "group_id": int(p.get("group_id") or 0), "user_id": uid, "flag": flag}
+            _run_handler("_on_group_request", _notice_event(raw))
+        SIM_DECISIONS.append(decided)
+        return json.dumps({"ok": True, "flag": flag})
+    gid, uid = int(p["group_id"]), int(p["user_id"])
     g = BOT.groups[gid]
     if action == "leave":
         m = g["members"].pop(uid, None)

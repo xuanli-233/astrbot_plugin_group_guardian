@@ -1210,6 +1210,24 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><h2>好友申请与进群邀请</h2></div>
+          <div class="settings-list" id="acceptSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">好友申请：同意谁</label>
+              <label><input type="radio" name="aaFriendScope" value="all" /> 所有人</label>
+              <label><input type="radio" name="aaFriendScope" value="admin" /> 仅插件管理员</label>
+            </div>
+            <div class="mn-row"><label style="width:150px">进群邀请：接受谁的</label>
+              <label><input type="radio" name="aaInviteScope" value="admin" /> 仅插件管理员（推荐）</label>
+              <label><input type="radio" name="aaInviteScope" value="all" /> 任何人</label>
+            </div>
+            <div class="mn-row"><label style="width:150px">处理前等待（秒）</label><input type="number" min="0" max="600" class="input-sm" id="aaDelay" style="width:100px" /><span class="mn-hint">再随机加 0~50%，避免秒同意被风控</span></div>
+            <p class="mn-hint" id="aaInviteWarn" style="display:none;color:var(--warning)">「任何人」的邀请都接受时：没设群白名单的话，被拉进的陌生群也会成为管理范围，会收到全群公告、参与全群踢人。建议在「设置 → 名单管理」配置群白名单。</p>
+            <p class="mn-hint">插件黑名单里的人：好友申请自动拒绝，邀请不接受。不在范围内的申请 / 邀请不处理，留在 QQ 里人工决定。每次处理都写进操作记录。</p>
+            <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnAaSave">保存</button></div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><h2>退群撤回</h2></div>
           <div class="settings-list" id="leaveRecallSwitches"></div>
           <div class="mn-body">
@@ -3373,6 +3391,11 @@ var MANUAL_SETTING_KEYS = {
   batch_jitter_seconds: true,
   batch_default_mode: true,
   batch_notify_enabled: true,
+  auto_accept_friend_enabled: true,
+  auto_accept_friend_scope: true,
+  auto_accept_invite_enabled: true,
+  auto_accept_invite_scope: true,
+  auto_accept_delay_seconds: true,
   code_board_enabled: true,
   code_board_size: true,
   wxcode_block_codes: true,
@@ -5062,6 +5085,10 @@ var MN_SWITCHES = {
     { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
     { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
   ],
+  acceptSwitches: [
+    { key: 'auto_accept_friend_enabled', label: '自动同意好友申请', desc: '有人加机器人好友时自动处理' },
+    { key: 'auto_accept_invite_enabled', label: '自动接受进群邀请', desc: '有人邀请机器人进群时自动接受（开启后邀请不再走入群审核）' }
+  ],
   cbSwitches: [
     { key: 'code_board_enabled', label: '保留识别图片（二维码看板）', desc: '关闭后不保留任何图片，看板为空；码内容拉黑仍然有效' }
   ],
@@ -5482,6 +5509,13 @@ async function loadKick() {
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('kickSwitches');
   mnRenderSwitches('leaveRecallSwitches');
+  mnRenderSwitches('acceptSwitches');
+  var fs = mnCfg('auto_accept_friend_scope') || 'all', is = mnCfg('auto_accept_invite_scope') || 'admin';
+  $$('input[name=aaFriendScope]').forEach(function(r) { r.checked = r.value === fs; });
+  $$('input[name=aaInviteScope]').forEach(function(r) { r.checked = r.value === is; });
+  var delay = mnCfg('auto_accept_delay_seconds');
+  $('#aaDelay').value = (delay === undefined || delay === null || delay === '') ? 5 : delay;
+  $('#aaInviteWarn').style.display = is === 'all' ? '' : 'none';
   var lrc = mnCfg('leave_recall_count'), lrm = mnCfg('leave_recall_minutes');
   $('#lrCount').value = (lrc === undefined || lrc === null || lrc === '') ? 10 : lrc;
   $('#lrMinutes').value = (lrm === undefined || lrm === null || lrm === '') ? 30 : lrm;
@@ -6423,6 +6457,18 @@ function initMinimalPages() {
     var groups = mnSelectedGroups('#dirTable');
     if (!groups.length) { toast('请先勾选群', 'warning'); return; }
     mnDirRefresh({ groups: groups });
+  });
+  $$('input[name=aaInviteScope]').forEach(function(r) {
+    r.addEventListener('change', function() { $('#aaInviteWarn').style.display = r.value === 'all' && r.checked ? '' : 'none'; });
+  });
+  bindIfExists('btnAaSave', function() {
+    var delay = Number($('#aaDelay').value);
+    if (!(delay >= 0 && delay <= 600) || Math.floor(delay) !== delay) { toast('等待秒数请填 0–600 的整数', 'warning'); return; }
+    mnSaveConfig({
+      auto_accept_friend_scope: ($('input[name=aaFriendScope]:checked') || {}).value || 'all',
+      auto_accept_invite_scope: ($('input[name=aaInviteScope]:checked') || {}).value || 'admin',
+      auto_accept_delay_seconds: delay
+    }, '已保存');
   });
   bindIfExists('btnLrSave', function() {
     var count = Number($('#lrCount').value), minutes = Number($('#lrMinutes').value);

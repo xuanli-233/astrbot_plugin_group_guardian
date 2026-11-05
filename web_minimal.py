@@ -44,6 +44,8 @@ MINIMAL_CONFIG_KEYS = (
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
+    "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
+    "auto_accept_invite_scope", "auto_accept_delay_seconds",
     "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",

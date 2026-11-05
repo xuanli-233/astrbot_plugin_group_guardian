@@ -136,6 +136,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ live_log.py 实时日志：内存环形缓冲 + 处理步骤（二次开发新增）
 ├─ batch_queue.py 批量任务队列：逐项执行、间隔 + 抖动、自动 / 手动（二次开发新增）
 ├─ code_board.py 二维码看板 + 码内容拉黑（二次开发新增）
+├─ auto_accept.py 自动同意好友申请 / 进群邀请（二次开发新增）
 ├─ card_monitor.py    名片监控、名片保护、管理员任免记录
 ├─ appeal.py          刷屏申诉（AI 裁决，已停用）
 ├─ lexicon_learn.py   词库自学习（AI，已停用）
@@ -241,6 +242,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 黑名单用户入群即踢 | `group_blacklist.py` | `blacklist_kick_on_join` | 启用 |
 | 踢黑名单时 QQ 原生拉黑 | `onebot.py:_kick_member` | `blacklist_native_block_enabled` | 启用 |
 | 退群自动拉黑（全群通用） | `group_blacklist.py` | `leave_auto_blacklist_enabled` | 默认关 |
+| 自动同意好友申请 / 自动接受进群邀请 | `auto_accept.py`（main `_on_friend_request`、`_on_group_request` 先于入群审核处理 invite） | `auto_accept_friend_enabled` / `_friend_scope`（all / admin）、`auto_accept_invite_enabled` / `_invite_scope`（admin / all）、`auto_accept_delay_seconds` | 都默认关；邀请默认仅接受插件管理员的；黑名单用户好友申请拒绝、邀请不接受；不在范围内的留给人工 |
 | 二维码看板：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |
 | 实时日志：WebUI 查看近期消息处理进度与耗时 | `live_log.py`、`web_minimal.py:_web_minimal_livelog` | `live_log_enabled`、`live_log_show_text`、`live_log_size` | 默认开（只存内存，300 条） |
 | 退群撤回：主动退群 / 被踢后撤回其最近 N 条、最近 M 分钟的消息 | `leave_recall.py` | `leave_recall_enabled`（`_on_leave` / `_on_kick` / `_count` / `_minutes` / `_use_history`） | 默认关 |
