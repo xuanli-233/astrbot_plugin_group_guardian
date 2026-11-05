@@ -6,7 +6,8 @@
     pass  放行（计入发送次数）   limit  超过次数被撤回   rule  命中码内容规则 / 已拉黑被撤回
     allow 在白名单里（放行，不计次）
   同时保存图片：原图和每个码的裁剪图存到插件数据目录 code_images/，超过 code_image_max_kb（默认 500KB）
-  先压缩；同一张图只存一份。记录和图片保留「滚动窗口 × 2」（code_limit_window_hours × 2）后自动清理。
+  先压缩；同一张图只存一份。记录和图片保留 code_store_ttl_hours 小时后自动清理（0 = 滚动窗口 × 2；
+  填了也不会短于滚动窗口，否则计次会漏算）。
 
 发送次数限制（code_limit_enabled，默认关）
   没命中规则、不在白名单的码按内容计次：code_limit_window_hours 小时（滑动窗口）内超过 code_limit_max 次，
@@ -33,6 +34,8 @@ except ImportError:  # 单元测试直接加载本文件
         return None
 
 CODE_LIMIT_WINDOW_MAX_HOURS = 168
+# 码记录 / 图片最长保留（小时），一年
+CODE_STORE_TTL_MAX_HOURS = 8760
 CODE_LIMIT_TEXT_MAX = 300
 CODE_IMAGE_THUMB = 96
 DEFAULT_WARN = "[群管] {name}，同一个码 {hours} 小时内只能发 {max} 次，这条已撤回"
@@ -150,10 +153,18 @@ class CodeLimitMixin:
     def _cs_enabled(self, group_id: str = None) -> bool:
         return bool(self._cfg("code_store_enabled", True, group_id=group_id))
 
+    def _cs_ttl_hours(self) -> int:
+        """码记录 / 图片保留时长（小时）。code_store_ttl_hours = 0 时为滚动窗口 × 2；
+        自定义值不短于滚动窗口（计次要读窗口内的记录），不超过 CODE_STORE_TTL_MAX_HOURS。"""
+        window = min(max(self._cfg_int("code_limit_window_hours", 5), 1), CODE_LIMIT_WINDOW_MAX_HOURS)
+        custom = self._cfg_int("code_store_ttl_hours", 0)
+        if custom <= 0:
+            return window * 2
+        return min(max(custom, window), CODE_STORE_TTL_MAX_HOURS)
+
     def _cs_ttl(self) -> int:
-        """码记录 / 图片保留时长（秒）= 滚动窗口 × 2。"""
-        hours = min(max(self._cfg_int("code_limit_window_hours", 5), 1), CODE_LIMIT_WINDOW_MAX_HOURS)
-        return hours * 2 * 3600
+        """码记录 / 图片保留时长（秒），见 _cs_ttl_hours。"""
+        return self._cs_ttl_hours() * 3600
 
     def _cl_count(self, code_hash: str, since: int, group_id: str = "", user_id: str = "") -> int:
         """窗口内计入次数的发送（outcome = pass）。group_id / user_id 为空时不按它过滤。"""
@@ -403,7 +414,7 @@ class CodeLimitMixin:
             logger.debug(f"[GroupMgr] 清理码记录失败: {e}")
 
     def _cs_clean(self, now: Optional[int] = None) -> int:
-        """删除超过保留时长（滚动窗口 × 2）的记录，以及不再被引用的图片文件。返回删除的图片数。"""
+        """删除超过保留时长（_cs_ttl）的记录，以及不再被引用的图片文件。返回删除的图片数。"""
         now = int(now or time.time())
         cutoff = now - self._cs_ttl()
         self._cl_init_db()
@@ -448,7 +459,7 @@ class CodeLimitMixin:
         """窗口内按码（或按「码 + 人」）汇总。keyword 匹配码内容、QQ 号或昵称。"""
         self._cl_init_db()
         hours = int(hours or 0) or min(max(self._cfg_int("code_limit_window_hours", 5), 1), CODE_LIMIT_WINDOW_MAX_HOURS)
-        since = int(time.time()) - min(hours, CODE_LIMIT_WINDOW_MAX_HOURS * 2) * 3600
+        since = int(time.time()) - min(hours, self._cs_ttl_hours()) * 3600
         where, args = ["s.ts>=?"], [since]
         if group_id:
             where.append("s.group_id=?")
@@ -517,4 +528,4 @@ class CodeLimitMixin:
                                "orig": self._cs_read_image(r["img_hash"]), "crop": self._cs_read_image(r["crop_hash"])})
         text = rows[0]["code_text"] if rows else ""
         return {"code_hash": code_hash, "text": text, "sends": sends, "images": images,
-                "ttl_hours": self._cs_ttl() // 3600}
+                "ttl_hours": self._cs_ttl_hours()}

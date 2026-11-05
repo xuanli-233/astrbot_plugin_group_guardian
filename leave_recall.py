@@ -210,6 +210,12 @@ class LeaveRecallMixin:
         if lock is None:
             lock = self._lr_lock = asyncio.Lock()
         async with lock:
+            backup = getattr(self, "_backup_msg_ids", None)
+            if targets and callable(backup):
+                # 撤回前先备份到备份群（backup_enabled），一个人的消息合并成一条转发
+                result["backup"] = await backup(
+                    client, gid, [{"message_id": m, "user_id": uid} for m in targets],
+                    f"退群撤回：{trigger}", operator=operator if operator != uid else "")
             await self._lr_delete_all(client, targets, result)
         self._lr_store().pop((gid, uid), None)
         return self._lr_finish(gid, uid, trigger, operator, opts, result)
@@ -240,6 +246,10 @@ class LeaveRecallMixin:
                 scope.append(f"最近 {opts['minutes']} 分钟")
             status = "成功" if not result["failed"] else ("失败" if not result["recalled"] else "部分成功")
             detail = f"撤回 {result['recalled']}/{result['total']} 条（范围：{' 或 '.join(scope)}）"
+            if result.get("backup") is True:
+                detail += "；已备份"
+            elif result.get("backup") is False:
+                detail += "；备份失败"
             if result["errors"]:
                 detail += "；失败原因：" + "；".join(result["errors"][:3])
             self._record_op("退群撤回", source="自动", operator=operator, group_id=gid, target=uid,

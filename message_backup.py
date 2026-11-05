@@ -11,6 +11,10 @@ LuckyLilliaBot 的 send_group_forward_msg 支持 {"type":"node","data":{"id": �
   backup_group_id          关键词命中的备份群
   wxcode_forward_group_id  葵花码命中的转发群（留空则用 backup_group_id）
 备份群 / 转发群本身不参与审核（见 _is_backup_group），避免备份内容被再次撤回。
+
+其他撤回（/撤回最新消息、/批量撤回、/回复撤回、退群撤回）在撤回前调用 _backup_msg_ids：
+只有消息 ID 时按 ID 引用；一次撤回多条时合并成一条转发（每 BACKUP_NODES_PER_MSG 条一条），
+引用失败时用已知的消息段回退为自定义节点。同样受 backup_enabled 控制，发到 backup_group_id。
 """
 import time
 from typing import List, Optional
@@ -21,6 +25,8 @@ from astrbot.api.event import AstrMessageEvent
 
 class MessageBackupMixin:
     BACKUP_HEADER_MAX = 1500
+    # 合并转发每条最多的消息节点数（不含说明节点），QQ 单条合并转发上限约 100
+    BACKUP_NODES_PER_MSG = 50
 
     # ------------------------------------------------------------------
     # 目标群
@@ -123,3 +129,78 @@ class MessageBackupMixin:
         if not ok:
             logger.warning(f"[GroupMgr] 备份消息到群 {target} 失败: {last_err or err}")
         return ok
+
+    async def _backup_msg_ids(self, client, group_id: str, items: list, reason: str,
+                              operator: str = "", label: str = "撤回消息备份") -> Optional[bool]:
+        """按消息 ID 备份即将撤回的消息（不依赖事件对象）。必须在撤回之前调用。
+
+        items：[{"message_id", "user_id"?, "user_name"?, "segments"?}]，或直接是消息 ID 列表。
+        返回 True=全部发送成功，False=有发送失败，None=未备份（开关关闭 / 未填备份群 / 就在备份群里 / 无消息）。
+        """
+        if not self._cfg("backup_enabled", True):
+            return None
+        target = self._safe_int(self._backup_target_group("keyword"), 0)
+        if not target or not client or str(target) == str(group_id):
+            return None
+        norm = []
+        for it in items or []:
+            if not isinstance(it, dict):
+                it = {"message_id": it}
+            mid = str(it.get("message_id") or "").strip()
+            if mid:
+                norm.append({"message_id": mid, "user_id": str(it.get("user_id") or ""),
+                             "user_name": str(it.get("user_name") or ""),
+                             "segments": [s for s in (it.get("segments") or []) if isinstance(s, dict) and s.get("type")]})
+        if not norm:
+            return None
+        bot_uin = await self._get_bot_uin(client) if hasattr(self, "_get_bot_uin") else 0
+        users = []
+        for it in norm:
+            if it["user_id"] and it["user_id"] not in users:
+                users.append(it["user_id"])
+        size = self.BACKUP_NODES_PER_MSG
+        chunks = [norm[i:i + size] for i in range(0, len(norm), size)]
+        all_ok = True
+        for idx, chunk in enumerate(chunks):
+            lines = [f"[{label}]", f"来源群：{group_id}"]
+            if users:
+                shown = "、".join(users[:5]) + (f" 等 {len(users)} 人" if len(users) > 5 else "")
+                lines.append(f"发送者：{shown}")
+            if operator:
+                lines.append(f"操作人：{operator}")
+            lines += [f"时间：{time.strftime('%Y-%m-%d %H:%M:%S')}", f"原因：{reason}",
+                      f"条数：{len(norm)}" + (f"（第 {idx + 1}/{len(chunks)} 部分）" if len(chunks) > 1 else "")]
+            header_node = {"type": "node", "data": {
+                "name": "群管备份", "uin": str(bot_uin or (users[0] if users else "10000")),
+                "content": [{"type": "text", "data": {"text": "\n".join(lines)[: self.BACKUP_HEADER_MAX]}}],
+            }}
+            ok, err = await self._call_group_api(
+                client, "send_group_forward_msg", "备份消息", group_id=target,
+                messages=[header_node] + [{"type": "node", "data": {"id": it["message_id"]}} for it in chunk],
+            )
+            if not ok:
+                # 回退：用已知的消息段拼自定义节点（不知道内容的消息只写 ID）
+                nodes = [header_node]
+                for it in chunk:
+                    segs = it["segments"] or [{"type": "text", "data": {"text": f"（消息 {it['message_id']}，内容未知）"}}]
+                    nodes.append({"type": "node", "data": {"name": it["user_name"] or it["user_id"] or "群成员",
+                                                           "uin": it["user_id"] or str(bot_uin or "10000"), "content": segs}})
+                ok, err2 = await self._call_group_api(
+                    client, "send_group_forward_msg", "备份消息", group_id=target, messages=nodes,
+                )
+                if not ok:
+                    all_ok = False
+                    logger.warning(f"[GroupMgr] 撤回前备份到群 {target} 失败: {err or err2}")
+        return all_ok
+
+    @staticmethod
+    def _history_backup_item(msg: dict) -> dict:
+        """get_group_msg_history 的一条消息 → _backup_msg_ids 的 item。"""
+        sender = msg.get("sender") or {}
+        message = msg.get("message")
+        if isinstance(message, str):
+            segs = [{"type": "text", "data": {"text": message}}] if message else []
+        else:
+            segs = [s for s in (message or []) if isinstance(s, dict)]
+        return {"message_id": msg.get("message_id"), "user_id": sender.get("user_id", msg.get("user_id", "")),
+                "user_name": sender.get("card") or sender.get("nickname") or "", "segments": segs}

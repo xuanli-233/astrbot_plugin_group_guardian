@@ -47,6 +47,8 @@
 
 先把原消息以合并转发的形式备份到指定群（引用原消息 ID，图片完整保留；失败时依次回退为自定义节点、普通消息），再撤回。可选：`hit_mute_enabled` 同时禁言（默认关）、`hit_notice_enabled` 群内提示（默认关）。备份群 / 转发群本身不参与审核。
 
+**其他撤回也先备份**（`backup_enabled`，发到 `backup_group_id`）：`/撤回最新消息`、`/批量撤回`、`/回复撤回`，以及退群撤回（主动退群、被踢，含机器人自己踢人 / 黑名单踢出触发的）。一次撤回多条时合并成一条转发（每 50 条一条），说明里写来源群、发送者、操作人、原因和条数；按消息 ID 引用失败时用已知的消息内容回退为自定义节点。退群撤回的操作记录里会注明「已备份 / 备份失败」。
+
 ### 新增指令（均仅插件管理员）
 
 | 指令 | 作用 |
@@ -171,7 +173,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 10 | **关键词撤回 → 葵花码 / 二维码识别 → OCR 文字**（`keyword_guard.py`，见第零节） | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回，可选禁言（`hit_mute_enabled`，时长 `moderation_ban_duration`） |
 | 10.5 | **码白名单**：`wxcode_allow_codes` 里的码（内容完全一致）一律放行，不按正则撤回、不计次；与黑名单 `wxcode_block_codes` 互斥 | — | 空 | 放行 |
 | 10.6 | **同一个码的发送次数**：解出的码没命中规则时计次，`code_limit_window_hours` 小时内超过 `code_limit_max` 次撤回（`code_limit.py`） | `code_limit_enabled`、`code_limit_scope`（global 所有群合计 / group 每群单独）、`code_limit_count_by`（code 按码 / user 按人）、`code_limit_warn_enabled` + `code_limit_warn_template` | 默认关；5 小时 3 次，按码，警告开 | 同上，另发警告 |
-| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_limit_window_hours × 2` 后自动删除；WebUI「码管理」查看 | `code_store_enabled`、`code_image_max_kb` | 开；500KB | — |
+| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_store_ttl_hours` 小时后自动删除（0 = `code_limit_window_hours × 2`，不短于统计窗口）；WebUI「码管理」查看 | `code_store_enabled`、`code_image_max_kb`、`code_store_ttl_hours` | 开；500KB；0 | — |
 
 每一步都会写入实时日志（`live_log.py`）。
 

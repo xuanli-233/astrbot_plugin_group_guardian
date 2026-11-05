@@ -420,6 +420,21 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-groups{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:6px 8px}
     .mn-groups label{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer}
     .mn-groups .mn-tag{font-size:11px;color:var(--text-muted)}
+    /* 群勾选列表：头像 + 群名 + 群号，上方筛选框（mnGroupFilter） */
+    .gp-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 8px}
+    .gp-bar input{width:240px;max-width:100%}
+    .gp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px;max-height:380px;overflow:auto;padding:2px}
+    .gp-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:13px;min-width:0;transition:border-color .15s,background .15s}
+    .gp-item:hover{border-color:var(--primary)}
+    .gp-item.on{border-color:var(--primary);background:var(--primary-light)}
+    .gp-item input{flex:none;margin:0}
+    .gp-txt{min-width:0;flex:1;display:flex;flex-direction:column;line-height:1.35}
+    .gp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .gp-id{font-size:11px;color:var(--text-muted);font-family:monospace}
+    .gp-id .mn-tag{font-family:inherit;margin-left:4px}
+    .gp-ava{width:30px;height:30px;border-radius:6px;flex:none;background:var(--info-light);object-fit:cover}
+    .gp-cell{display:flex;align-items:center;gap:8px;min-width:0}
+    .gp-empty{grid-column:1/-1}
     .mn-table{width:100%;border-collapse:collapse;font-size:13px}
     .mn-table th,.mn-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
     .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
@@ -973,8 +988,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             <div class="card-header"><h2>码记录与图片</h2></div>
             <div class="settings-list" id="csSwitches"></div>
             <div class="mn-body">
-              <div class="mn-row"><label style="width:150px">图片超过多少 KB 压缩</label><input type="number" min="50" max="5000" class="input-sm" id="csMaxKb" style="width:100px" /><span>KB</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
-              <p class="mn-hint" id="csTtlHint">每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留「滚动窗口 × 2」后自动删除。</p>
+              <div class="mn-row"><label style="width:150px">图片超过多少 KB 压缩</label><input type="number" min="50" max="5000" class="input-sm" id="csMaxKb" style="width:100px" /><span>KB</span></div>
+              <div class="mn-row"><label style="width:150px">记录和图片保留</label><input type="number" min="0" max="8760" class="input-sm" id="csTtlHours" style="width:100px" /><span>小时（0 = 统计窗口 × 2）</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
+              <p class="mn-hint" id="csTtlHint">每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留指定小时数后自动删除。</p>
             </div>
           </div>
         </div>
@@ -1036,7 +1052,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="card">
             <div class="card-header"><h2>发到哪些群</h2>
               <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnBcAll">全选</button><button class="btn btn-ghost btn-sm" id="btnBcNone">全不选</button></div></div>
-            <div class="mn-body"><div class="mn-groups" id="bcGroups"></div><p class="mn-hint" style="margin-top:8px">备份群默认不勾选；机器人不是管理员的群会发布失败。</p></div>
+            <div class="mn-body"><div class="gp-grid" id="bcGroups"></div><p class="mn-hint" style="margin-top:8px">备份群默认不勾选；机器人不是管理员的群会发布失败。</p></div>
           </div>
         </div>
         <div class="card">
@@ -1177,7 +1193,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="mn-body" id="dupCoverage"><p class="mn-hint">加载中...</p></div>
           <div class="mn-body" style="padding-top:0">
             <div class="mn-row"><strong style="font-size:13px">在哪些群里去重</strong><button class="btn btn-ghost btn-sm" id="btnDupScopeAll">全选</button><button class="btn btn-ghost btn-sm" id="btnDupScopeNone">全不选</button><button class="btn btn-primary btn-sm" id="btnDupScopeSave">保存范围</button><span class="mn-hint" id="dupScopeHint"></span></div>
-            <div id="dupScope" style="display:flex;flex-wrap:wrap;gap:4px 16px"></div>
+            <div class="gp-grid" id="dupScope"></div>
           </div>
         </div>
         <div class="card">
@@ -2678,6 +2694,7 @@ var MANUAL_SETTING_KEYS = {
   code_limit_count_by: true,
   code_store_enabled: true,
   code_image_max_kb: true,
+  code_store_ttl_hours: true,
   wxcode_allow_codes: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
@@ -3442,7 +3459,7 @@ var MN = { overview: null, kw: [], wx: [], kwErrors: {}, wxErrors: {}, names: []
 var MN_SWITCHES = {
   guardSwitches: [
     { key: 'keyword_guard_enabled', label: '关键词撤回', desc: '消息命中关键词规则时撤回' },
-    { key: 'backup_enabled', label: '撤回前先备份', desc: '把原消息以合并转发的形式发到备份群' },
+    { key: 'backup_enabled', label: '撤回前先备份', desc: '机器人的所有撤回（命中撤回、撤回指令、退群撤回）都先把原消息以合并转发的形式发到备份群' },
     { key: 'hit_mute_enabled', label: '同时禁言', desc: '时长取「自动审核禁言时长」，默认 30 分钟' },
     { key: 'hit_notice_enabled', label: '群内提示', desc: '撤回后在群里发一条提示' },
     { key: 'card_parse_enabled', label: '解析小程序 / 分享卡片', desc: '小程序名、标题、appid、跳转链接也参与关键词匹配，例如规则写 wx 开头的 appid 可拦某个小程序' },
@@ -3517,6 +3534,91 @@ function mnRuleBuild(type, value) {
 function mnCfg(key) { var c = (MN.overview && MN.overview.config) || {}; return c[key]; }
 function mnGroups() { return (MN.overview && MN.overview.groups) || []; }
 function mnGroupLabel(g) { return (g.group_name || '未命名群') + '（' + g.group_id + '）'; }
+function mnGroupAvatar(gid, size) {
+  size = size || 30;
+  var id = encodeURIComponent(gid);
+  return '<img class="gp-ava" src="https://p.qlogo.cn/gh/' + id + '/' + id + '/100" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:' + size + 'px;height:' + size + 'px" onerror="this.style.visibility=\'hidden\'" />';
+}
+function mnGroupSearchKey(gid, name) { return (String(name || '') + ' ' + String(gid || '')).toLowerCase(); }
+// 带头像的群勾选项。cls：复选框的 class；tags：群号后面的标签 HTML；sub：替换群号那一行的 HTML
+function mnGroupChip(g, checked, cls, tags) {
+  return '<label class="gp-item' + (checked ? ' on' : '') + '" data-gsearch="' + escAttr(mnGroupSearchKey(g.group_id, g.group_name)) + '">' +
+    '<input type="checkbox"' + (cls ? ' class="' + cls + '"' : '') + ' value="' + escAttr(g.group_id) + '"' + (checked ? ' checked' : '') + ' />' +
+    mnGroupAvatar(g.group_id) + '<span class="gp-txt"><span class="gp-name" title="' + escAttr(g.group_name || '') + '">' + esc(g.group_name || '未命名群') + '</span>' +
+    '<span class="gp-id">' + esc(g.group_id) + (tags || '') + '</span></span></label>';
+}
+// 表格里的「头像 + 群名 + 群号」单元格
+function mnGroupCell(gid, name, tags) {
+  return '<div class="gp-cell">' + mnGroupAvatar(gid) + '<span class="gp-txt"><span class="gp-name" title="' + escAttr(name || '') + '">' + esc(name || '未命名群') + '</span>' +
+    '<span class="gp-id">' + esc(gid) + (tags || '') + '</span></span></div>';
+}
+// 在群列表容器上方加筛选框（只加一次），每次重新渲染列表后再调用一次以套用当前关键词。
+// 列表里每一项（.gp-item 或表格行）带 data-gsearch；全选 / 全不选只作用于筛选后显示的项。
+function mnGroupFilter(containerSel) {
+  var box = $(containerSel);
+  if (!box || !box.id) return;
+  var bar = document.getElementById(box.id + 'Filter');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'gp-bar';
+    bar.id = box.id + 'Filter';
+    bar.innerHTML = '<input type="search" class="input-sm" placeholder="按群名或群号筛选，空格分隔多个词" /><span class="mn-hint gp-count"></span>';
+    box.parentNode.insertBefore(bar, box);
+    bar.querySelector('input').addEventListener('input', function() { mnApplyGroupFilter(containerSel); });
+    box.addEventListener('change', function(e) {
+      var t = e.target;
+      if (!t || t.type !== 'checkbox') return;
+      var item = t.closest('.gp-item');
+      if (item) item.classList.toggle('on', t.checked);
+      mnApplyGroupFilter(containerSel);
+    });
+  }
+  mnApplyGroupFilter(containerSel);
+}
+function mnApplyGroupFilter(containerSel) {
+  var box = $(containerSel);
+  var bar = box && document.getElementById(box.id + 'Filter');
+  if (!bar) return;
+  var words = bar.querySelector('input').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  var items = $$('[data-gsearch]', box), shown = 0, checked = 0;
+  items.forEach(function(el) {
+    var key = el.getAttribute('data-gsearch') || '';
+    var ok = words.every(function(w) { return key.indexOf(w) !== -1; });
+    el.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+    var cb = el.querySelector('input[type=checkbox]');
+    if (cb && cb.checked) checked++;
+  });
+  var empty = box.querySelector('.gp-nomatch');
+  if (items.length && !shown) {
+    if (!empty) {
+      empty = document.createElement(box.tagName === 'TBODY' ? 'tr' : 'div');
+      empty.className = 'gp-nomatch mn-empty gp-empty';
+      empty.textContent = '没有匹配的群';
+      var host = box.querySelector('tbody') || box;
+      host.appendChild(empty);
+    }
+    empty.style.display = '';
+  } else if (empty) {
+    empty.style.display = 'none';
+  }
+  bar.querySelector('.gp-count').textContent = items.length
+    ? '已选 ' + checked + ' / 共 ' + items.length + ' 个群' + (words.length ? '，筛选出 ' + shown + ' 个（全选 / 全不选只作用于筛选出的群）' : '')
+    : '';
+}
+// 全选 / 全不选：只改筛选后显示的项
+function mnSetGroupChecks(containerSel, on) {
+  var box = $(containerSel);
+  if (!box) return;
+  $$('[data-gsearch]', box).forEach(function(el) {
+    if (el.style.display === 'none') return;
+    var cb = el.querySelector('input[type=checkbox]');
+    if (!cb) return;
+    cb.checked = on;
+    if (el.classList.contains('gp-item')) el.classList.toggle('on', on);
+  });
+  mnApplyGroupFilter(containerSel);
+}
 
 async function mnLoadOverview() {
   var res = await safeGet('minimal/overview');
@@ -3718,6 +3820,7 @@ async function loadCodes(page) {
   $('#clMax').value = mnCfg('code_limit_max') || 3;
   $('#clTpl').value = mnCfg('code_limit_warn_template') || '';
   $('#csMaxKb').value = mnCfg('code_image_max_kb') || 500;
+  $('#csTtlHours').value = Number(mnCfg('code_store_ttl_hours')) || 0;
   var g = $('#csGroup'), cur = g.value;
   g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   g.value = cur;
@@ -3734,7 +3837,7 @@ async function csLoadStats() {
   hoursSel.innerHTML = '<option value="' + d.window_hours + '">最近 ' + d.window_hours + ' 小时（计次窗口）</option>' +
     '<option value="' + d.ttl_hours + '">最近 ' + d.ttl_hours + ' 小时（全部保留的）</option>';
   hoursSel.value = pick && Number(pick) === d.ttl_hours ? String(d.ttl_hours) : String(d.window_hours);
-  $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留 ' + d.ttl_hours + ' 小时（滚动窗口 ' + d.window_hours + ' 小时 × 2）后自动删除。' + (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
+  $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留 ' + d.ttl_hours + ' 小时' + (Number(d.ttl_custom) > 0 ? (Number(d.ttl_custom) < d.window_hours ? '（填的 ' + d.ttl_custom + ' 小时短于统计窗口，按统计窗口算）' : '') : '（自动：统计窗口 ' + d.window_hours + ' 小时 × 2）') + '后自动删除。' + (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
   var byUser = d.by === 'user';
   $('#csTable').innerHTML = CS.items.length ? '<table class="mn-table"><thead><tr><th>码</th><th>内容</th>' + (byUser ? '<th>发送者</th>' : '') +
     '<th>次数</th><th>群 / 人</th><th>最近</th><th>操作</th></tr></thead><tbody>' + CS.items.map(function(it, i) {
@@ -3869,12 +3972,14 @@ function mnSelectedGroups(containerSel) {
 function mnRenderGroupPicker(containerSel, defaultChecked) {
   var box = $(containerSel);
   var groups = mnGroups().filter(function(g) { return g.managed; });
-  if (!groups.length) { box.innerHTML = '<div class="mn-empty">没有可管理的群（机器人未连接或群白名单为空）</div>'; return; }
+  if (!groups.length) { box.innerHTML = '<div class="mn-empty gp-empty">没有可管理的群（机器人未连接或群白名单为空）</div>'; mnGroupFilter(containerSel); return; }
+  var prev = {}, had = false;
+  $$('input[type=checkbox]', box).forEach(function(cb) { had = true; prev[cb.value] = cb.checked; });
   box.innerHTML = groups.map(function(g) {
-    var checked = defaultChecked && !g.backup;
-    return '<label><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (checked ? ' checked' : '') + ' /> ' + esc(mnGroupLabel(g)) +
-      (g.backup ? ' <span class="mn-tag">备份群</span>' : '') + '</label>';
+    var checked = had && (g.group_id in prev) ? prev[g.group_id] : (defaultChecked && !g.backup);
+    return mnGroupChip(g, checked, '', g.backup ? '<span class="mn-tag">备份群</span>' : '');
   }).join('');
+  mnGroupFilter(containerSel);
 }
 function mnBroadcastMode() { var r = $('input[name=bcMode]:checked'); return r ? r.value : 'notice'; }
 function mnSyncBroadcastMode() {
@@ -3949,14 +4054,15 @@ async function loadNames() {
   var checked = {}; $$('#namesTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
   var backups = {}; mnGroups().forEach(function(g) { if (g.backup) backups[g.group_id] = true; });
   if (!MN.names.length) { box.innerHTML = '<p class="empty">没有可管理的群</p>'; return; }
-  box.innerHTML = '<table class="mn-table"><thead><tr><th></th><th>群号</th><th>当前群名</th><th>后缀</th><th>倒计时</th><th>定时改名</th></tr></thead><tbody>' +
+  box.innerHTML = '<table class="mn-table"><thead><tr><th></th><th>群（当前群名）</th><th>后缀</th><th>倒计时</th><th>定时改名</th></tr></thead><tbody>' +
     MN.names.map(function(g) {
       var cd = g.countdown ? (g.countdown.target + '（剩 ' + g.countdown.days_left + ' 天）<br><span class="mn-hint">' + esc(g.countdown.template) + '</span>') : '<span class="mn-hint">—</span>';
       var sched = (g.scheduled || []).map(function(s) { return esc(s.at) + ' →「' + esc(s.suffix || '清除') + '」'; }).join('<br>') || '<span class="mn-hint">—</span>';
       var isChecked = Object.keys(checked).length ? checked[g.group_id] : !backups[g.group_id];
-      return '<tr><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (isChecked ? ' checked' : '') + ' /></td><td>' + esc(g.group_id) +
-        (backups[g.group_id] ? ' <span class="mn-tag">备份群</span>' : '') + '</td><td>' + esc(g.name) + '</td><td>' + (esc(g.suffix) || '<span class="mn-hint">—</span>') + '</td><td>' + cd + '</td><td>' + sched + '</td></tr>';
+      return '<tr data-gsearch="' + escAttr(mnGroupSearchKey(g.group_id, g.name)) + '"><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (isChecked ? ' checked' : '') + ' /></td><td>' +
+        mnGroupCell(g.group_id, g.name, backups[g.group_id] ? ' <span class="mn-tag">备份群</span>' : '') + '</td><td>' + (esc(g.suffix) || '<span class="mn-hint">—</span>') + '</td><td>' + cd + '</td><td>' + sched + '</td></tr>';
     }).join('') + '</tbody></table>';
+  mnGroupFilter('#namesTable');
 }
 // 批量任务已创建：显示编号、项数、执行方式，并提供跳转到「批量任务」页面的按钮
 function mnJobCreatedHtml(job, extraLines) {
@@ -4133,9 +4239,9 @@ function dupGroupText(g) {
 function dupRenderScope(c) {
   var all = c.scope_all || [];
   $('#dupScope').innerHTML = all.length ? all.map(function(g) {
-    return '<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="dup-scope" value="' + escAttr(g.group_id) + '"' + (g.selected ? ' checked' : '') + ' />' +
-      esc(g.group_name || '未命名') + '<span class="mn-hint">（' + esc(g.group_id) + '）' + (g.cached ? '' : ' 未缓存') + '</span></label>';
-  }).join('') : '<span class="mn-hint">还没有群列表，先到「群成员缓存」刷新</span>';
+    return mnGroupChip(g, g.selected, 'dup-scope', g.cached ? '' : '<span class="mn-tag" style="color:var(--warning)">未缓存</span>');
+  }).join('') : '<span class="mn-hint gp-empty">还没有群列表，先到「群成员缓存」刷新</span>';
+  mnGroupFilter('#dupScope');
   $('#dupScopeHint').textContent = c.scope_custom ? '当前：只在勾选的 ' + all.filter(function(g) { return g.selected; }).length + ' 个群里检测' : '当前：所有管理的群';
 }
 async function dupSaveScope() {
@@ -5031,11 +5137,12 @@ async function loadDirectory() {
   var roles = { owner: '群主', admin: '管理员', member: '普通成员', '': '未知' };
   $('#dirTable').innerHTML = (d.groups || []).length ? '<table class="mn-table"><thead><tr><th></th><th>群</th><th>机器人身份</th><th>已缓存成员</th><th>成员更新时间</th></tr></thead><tbody>' +
     d.groups.map(function(g) {
-      return '<tr><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (checked[g.group_id] ? ' checked' : '') + ' /></td>' +
-        '<td>' + esc(g.group_name || '未命名') + '<br><span class="mn-hint">' + esc(g.group_id) + '</span></td><td>' + esc(roles[g.bot_role] || g.bot_role) + '</td>' +
+      return '<tr data-gsearch="' + escAttr(mnGroupSearchKey(g.group_id, g.group_name)) + '"><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (checked[g.group_id] ? ' checked' : '') + ' /></td>' +
+        '<td>' + mnGroupCell(g.group_id, g.group_name) + '</td><td>' + esc(roles[g.bot_role] || g.bot_role) + '</td>' +
         '<td>' + (g.members_cached ? g.members_cached + ' 人' : '<span class="mn-hint">未缓存</span>') + '</td>' +
         '<td>' + (g.members_updated_at ? esc(mnTime(g.members_updated_at)) + (g.members_fresh ? '' : ' <span style="color:var(--warning)">（已过期）</span>') : '<span class="mn-hint">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">还没有缓存群列表，点「只刷新群列表」开始</p>';
+  mnGroupFilter('#dirTable');
   clearTimeout(DIR_POLL);
   if (prog && $('#tab-directory').classList.contains('active')) DIR_POLL = setTimeout(loadDirectory, 2000);
 }
@@ -5094,14 +5201,14 @@ function initMinimalPages() {
 
   bindIfExists('btnBcRefresh', loadBroadcast);
   $$('input[name=bcMode]').forEach(function(r) { r.addEventListener('change', mnSyncBroadcastMode); });
-  bindIfExists('btnBcAll', function() { $$('#bcGroups input[type=checkbox]').forEach(function(cb) { cb.checked = true; }); });
-  bindIfExists('btnBcNone', function() { $$('#bcGroups input[type=checkbox]').forEach(function(cb) { cb.checked = false; }); });
+  bindIfExists('btnBcAll', function() { mnSetGroupChecks('#bcGroups', true); });
+  bindIfExists('btnBcNone', function() { mnSetGroupChecks('#bcGroups', false); });
   bindIfExists('btnBcSend', mnSendBroadcast);
   bindIfExists('btnTodoStatus', mnTodoStatus);
 
   bindIfExists('btnNamesRefresh', loadNames);
-  bindIfExists('btnNamesAll', function() { $$('#namesTable input[type=checkbox]').forEach(function(cb) { cb.checked = true; }); });
-  bindIfExists('btnNamesNone', function() { $$('#namesTable input[type=checkbox]').forEach(function(cb) { cb.checked = false; }); });
+  bindIfExists('btnNamesAll', function() { mnSetGroupChecks('#namesTable', true); });
+  bindIfExists('btnNamesNone', function() { mnSetGroupChecks('#namesTable', false); });
   bindIfExists('nmTarget', mnUpdateCountdownPreview, 'input');
   bindIfExists('nmTemplate', mnUpdateCountdownPreview, 'input');
   bindIfExists('btnNmSuffix', function() {
@@ -5146,8 +5253,8 @@ function initMinimalPages() {
   bindIfExists('btnDupIgnore', function() { mnDupIgnore(); });
   bindIfExists('dupBulkMode', dupRenderTable, 'change');
   bindIfExists('btnDupScopeSave', dupSaveScope);
-  bindIfExists('btnDupScopeAll', function() { $$('#dupScope .dup-scope').forEach(function(b) { b.checked = true; }); });
-  bindIfExists('btnDupScopeNone', function() { $$('#dupScope .dup-scope').forEach(function(b) { b.checked = false; }); });
+  bindIfExists('btnDupScopeAll', function() { mnSetGroupChecks('#dupScope', true); });
+  bindIfExists('btnDupScopeNone', function() { mnSetGroupChecks('#dupScope', false); });
   bindIfExists('btnDupRefreshCache', async function() {
     if (!(await mnConfirm('逐个刷新所有群的成员缓存？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行，完成后点「重新检测」。', { okText: '刷新' }))) return;
     var res = await safePost('minimal/directory/refresh', { all: true });
@@ -5205,8 +5312,10 @@ function initMinimalPages() {
   bindIfExists('csKeyword', function(e) { if (e.key === 'Enter') { CS.page = 1; csLoadStats(); } }, 'keydown');
   bindIfExists('btnCsSave', function() {
     var kb = Number($('#csMaxKb').value);
-    if (!(kb >= 50 && kb <= 5000) || Math.floor(kb) !== kb) { toast('填 50–5000 的整数', 'warning'); return; }
-    mnSaveConfig({ code_image_max_kb: kb }, '已保存');
+    var ttl = Number($('#csTtlHours').value || 0);
+    if (!(kb >= 50 && kb <= 5000) || Math.floor(kb) !== kb) { toast('压缩大小填 50–5000 的整数', 'warning'); return; }
+    if (!(ttl >= 0 && ttl <= 8760) || Math.floor(ttl) !== ttl) { toast('保留小时填 0–8760 的整数', 'warning'); return; }
+    mnSaveConfig({ code_image_max_kb: kb, code_store_ttl_hours: ttl }, '已保存').then(function(ok) { if (ok) csLoadStats(); });
   });
   bindIfExists('btnCsAllowAdd', function() { var t = $('#csAllowAdd').value.trim(); if (!t) return; codeListSet('allow', t, true, true).then(function(ok) { if (ok) { $('#csAllowAdd').value = ''; csAfterListChange(); } }); });
   bindIfExists('btnCsBlockAdd', function() { var t = $('#csBlockAdd').value.trim(); if (!t) return; codeListSet('block', t, true, true).then(function(ok) { if (ok) { $('#csBlockAdd').value = ''; csAfterListChange(); } }); });

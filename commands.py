@@ -195,8 +195,12 @@ class CommandsMixin:
             result = self._extract_data_result(result)
             messages = result.get('messages', []) if isinstance(result, dict) else []
             recalled = 0
+            targets = [m for m in messages[-count:] if isinstance(m, dict) and m.get('message_id')]
+            # 撤回前先备份到备份群（backup_enabled）
+            await self._backup_msg_ids(client, str(gid), [self._history_backup_item(m) for m in targets],
+                                       f"/撤回最新消息 {count} 条", operator=str(event.get_sender_id() or ""))
             # 取最后 count 条消息（最新的消息在列表末尾）
-            for msg in messages[-count:]:
+            for msg in targets:
                 msg_id = msg.get('message_id')
                 if msg_id:
                     try:
@@ -648,6 +652,7 @@ class CommandsMixin:
         if not mid:
             yield event.plain_result("被引用消息 ID 无效")
             return
+        await self._backup_msg_ids(client, str(gid), [mid], "/回复撤回", operator=str(event.get_sender_id() or ""))
         ok, err = await self._call_group_api(client, 'delete_msg', "回复撤回", message_id=mid)
         if not ok:
             yield event.plain_result(f"撤回失败: {err}（注意：仅能撤回约2分钟内的消息）")
@@ -762,14 +767,22 @@ class CommandsMixin:
             result = self._extract_data_result(result)
             messages = result.get('messages', []) if isinstance(result, dict) else []
             recalled = 0
+            # 先选出要撤回的消息（如果指定了目标用户，跳过不匹配的消息），撤回前整体备份一次
+            targets = []
             for msg in messages:
-                if recalled >= count:
+                if len(targets) >= count:
                     break
+                if not isinstance(msg, dict) or not msg.get('message_id'):
+                    continue
                 sender = msg.get('sender') or {}
                 uid = str(sender.get('user_id', ''))
-                # 如果指定了目标用户，跳过不匹配的消息
                 if target_user and uid != target_user:
                     continue
+                targets.append(msg)
+            await self._backup_msg_ids(client, str(gid), [self._history_backup_item(m) for m in targets],
+                                       "/批量撤回" + (f"（用户 {target_user}）" if target_user else ""),
+                                       operator=str(event.get_sender_id() or ""))
+            for msg in targets:
                 msg_id = msg.get('message_id')
                 if msg_id:
                     try:

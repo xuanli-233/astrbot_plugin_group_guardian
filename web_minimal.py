@@ -55,6 +55,7 @@ MINIMAL_CONFIG_KEYS = (
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
     "code_limit_warn_enabled", "code_limit_warn_template", "code_limit_count_by", "code_store_enabled", "code_image_max_kb",
+    "code_store_ttl_hours",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
@@ -489,7 +490,7 @@ class MinimalWebMixin:
         )
         window = min(max(self._cfg_int("code_limit_window_hours", 5), 1), 168)
         return jsonify({"status": "success", "data": {
-            "items": items, "total": total, "by": by, "window_hours": window, "ttl_hours": self._cs_ttl() // 3600,
+            "items": items, "total": total, "by": by, "window_hours": window, "ttl_hours": self._cs_ttl_hours(), "ttl_custom": self._cfg_int("code_store_ttl_hours", 0),
             "store_enabled": bool(self._cfg("code_store_enabled", True)),
         }})
 

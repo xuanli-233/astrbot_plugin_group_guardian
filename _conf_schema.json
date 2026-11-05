@@ -253,13 +253,19 @@
         "description": "码记录：统计码内容并保存图片",
         "type": "bool",
         "default": true,
-        "hint": "每个解出内容的码都记下时间、群、发送者和处理结果，并保存原图和裁剪图（WebUI「码管理」查看）。记录和图片保留「滚动窗口 × 2」后自动删除"
+        "hint": "每个解出内容的码都记下时间、群、发送者和处理结果，并保存原图和裁剪图（WebUI「码管理」查看）。记录和图片保留时长见 code_store_ttl_hours"
     },
     "code_image_max_kb": {
         "description": "码记录：图片超过多少 KB 就压缩",
         "type": "int",
         "default": 500,
         "hint": "原图、裁剪图超过这个大小时转成 JPEG 并逐步降低质量 / 缩小，直到不超过。范围 50–5000"
+    },
+    "code_store_ttl_hours": {
+        "description": "码记录：记录和图片保留几小时",
+        "type": "int",
+        "default": 0,
+        "hint": "0 = 自动（码发送次数统计窗口 × 2）。范围 0–8760；小于统计窗口时按统计窗口算，否则计次会漏算"
     },
     "code_limit_window_hours": {
         "description": "码发送次数：统计最近几小时",
@@ -411,10 +417,10 @@
         "hint": "每行一条：普通文本=包含即命中；=文本=整条消息完全相同才命中；re:正则=正则匹配。均不区分大小写"
     },
     "backup_enabled": {
-        "description": "违规消息备份开关",
+        "description": "撤回前备份开关",
         "type": "bool",
         "default": true,
-        "hint": "命中后先把原消息以合并转发的形式发到备份群，再撤回。未填写备份群时不备份"
+        "hint": "机器人每次撤回（关键词 / 葵花码 / 码超限命中、/撤回最新消息、/批量撤回、/回复撤回、退群撤回）前，先把原消息以合并转发的形式发到备份群。未填写备份群时不备份"
     },
     "backup_group_id": {
         "description": "备份群号",
