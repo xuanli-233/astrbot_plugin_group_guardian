@@ -15,6 +15,8 @@
   GET  /minimal/leavelog               退群记录（按 QQ / 群筛选，分页）
   GET  /minimal/leavelog/user          某个 QQ 的退群汇总
   GET  /minimal/codelimit/top          近期发送次数最多的码（码发送次数限制）
+  GET  /minimal/msgmask                各群消息接收方式的设置情况
+  POST /minimal/msgmask/apply          给选中的群设置消息接收方式（批量任务）
 业务逻辑全部复用指令所用的函数（group_blacklist / group_broadcast / group_name_task / keyword_guard）。
 """
 import re
@@ -53,7 +55,7 @@ MINIMAL_CONFIG_KEYS = (
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
-    "auto_accept_invite_scope", "auto_accept_delay_seconds",
+    "auto_accept_invite_scope", "auto_accept_delay_seconds", "auto_msg_mask_enabled", "auto_msg_mask_value",
     "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
@@ -454,6 +456,24 @@ class MinimalWebMixin:
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
         )
         return jsonify({"status": "success", "data": {"items": items, "total": total}})
+
+    async def _web_minimal_msgmask(self):
+        client = await self._get_client()
+        groups = []
+        if client:
+            groups, _err = await self._dir_groups(client)
+        return jsonify({"status": "success", "data": self._mm_status(groups)})
+
+    async def _web_minimal_msgmask_apply(self):
+        data = await self._minimal_body()
+        mask = self._safe_int(data.get("mask"), 0) or self._mm_mask()
+        if mask not in (1, 2, 3, 4):
+            return self._minimal_error("消息接收方式只能是 1–4")
+        groups = self._minimal_ids(data.get("groups"))
+        if not groups:
+            return self._minimal_error("请选择群")
+        job = self._mm_job(groups, mask, **WEB_LOG)
+        return jsonify({"status": "success", "data": {"job": job}})
 
     async def _web_minimal_codelimit_top(self):
         args = quart_request.args

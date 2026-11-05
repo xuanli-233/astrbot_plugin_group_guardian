@@ -1100,6 +1100,21 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><h2>进群后的消息提醒</h2><span class="rules-subtle">机器人自己这个 QQ 号在群里的消息设置</span></div>
+          <div class="settings-list" id="mmSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">设为</label>
+              <select class="input-sm" id="mmValue" style="width:200px">
+                <option value="4">接收消息但不提醒（推荐）</option><option value="2">收进群助手</option>
+                <option value="1">接收并提醒</option><option value="3">屏蔽群消息</option>
+              </select><button class="btn btn-primary btn-sm" id="btnMmSave">保存</button></div>
+            <p class="mn-hint" id="mmWarn" style="display:none;color:var(--warning)">「屏蔽群消息」后协议端可能收不到这个群的消息，插件就没法审核、撤回了。</p>
+            <p class="mn-hint">开启后机器人每进一个新群都会自动设置；进群通知漏了的，群成员缓存后台刷新（每 5 分钟）时补上。第一次开启时已经在的群不会改动，需要的话用下面的按钮设置。需要 LuckyLilliaBot 的 set_group_msg_mask 接口。</p>
+            <div class="mn-row"><button class="btn btn-outline btn-sm" id="btnMmLoad">查看各群情况 / 给已有的群设置</button></div>
+            <div id="mmBox"></div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><h2>退群撤回</h2></div>
           <div class="settings-list" id="leaveRecallSwitches"></div>
           <div class="mn-body">
@@ -2616,6 +2631,8 @@ var MANUAL_SETTING_KEYS = {
   auto_accept_invite_enabled: true,
   auto_accept_invite_scope: true,
   auto_accept_delay_seconds: true,
+  auto_msg_mask_enabled: true,
+  auto_msg_mask_value: true,
   code_board_enabled: true,
   code_board_size: true,
   wxcode_block_codes: true,
@@ -3438,6 +3455,9 @@ var MN_SWITCHES = {
     { key: 'leave_log_enabled', label: '记录退群', desc: '成员主动退群 / 被踢时写一条记录（总开关）' },
     { key: 'leave_log_use_history', label: '用群历史兜底', desc: '本地记录不足时（如插件刚重启）额外拉一次最近 100 条群消息' }
   ],
+  mmSwitches: [
+    { key: 'auto_msg_mask_enabled', label: '进群后自动设置消息提醒', desc: '机器人进新群后，把该群消息设为下面选的方式' }
+  ],
   leaveRecallSwitches: [
     { key: 'leave_recall_enabled', label: '启用退群撤回', desc: '成员离开群后自动撤回他的近期消息（总开关）' },
     { key: 'leave_recall_on_leave', label: '主动退群时', desc: '成员自己退群' },
@@ -3881,6 +3901,9 @@ async function loadKick() {
   mnRenderSwitches('kickSwitches');
   mnRenderSwitches('leaveRecallSwitches');
   mnRenderSwitches('acceptSwitches');
+  mnRenderSwitches('mmSwitches');
+  $('#mmValue').value = String(mnCfg('auto_msg_mask_value') || 4);
+  $('#mmWarn').style.display = $('#mmValue').value === '3' ? '' : 'none';
   var fs = mnCfg('auto_accept_friend_scope') || 'all', is = mnCfg('auto_accept_invite_scope') || 'admin';
   $$('input[name=aaFriendScope]').forEach(function(r) { r.checked = r.value === fs; });
   $$('input[name=aaInviteScope]').forEach(function(r) { r.checked = r.value === is; });
@@ -3899,6 +3922,36 @@ async function loadKick() {
   scope.value = prev;
   mnRenderBlacklist();
 }
+async function mmLoad() {
+  var box = $('#mmBox');
+  box.innerHTML = '<p class="mn-hint">加载中...</p>';
+  var res = await safeGet('minimal/msgmask');
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res), rows = d.groups || [];
+  if (!rows.length) { box.innerHTML = '<p class="mn-hint">没有群（QQ 未连接？）</p>'; return; }
+  box.innerHTML = '<div class="mn-row" style="margin-top:6px"><label><input type="checkbox" id="mmAll" /> 全选</label>' +
+    '<button class="btn btn-primary btn-sm" id="btnMmApply">给选中的群设置</button><span class="mn-hint">按上面选的方式，放进批量任务逐个执行</span></div>' +
+    '<table class="mn-table"><thead><tr><th></th><th>群</th><th>情况</th><th>时间</th></tr></thead><tbody>' +
+    rows.map(function(r) {
+      return '<tr><td><input type="checkbox" class="mm-check" value="' + escAttr(r.group_id) + '"' + (r.ok ? '' : ' checked') + ' /></td>' +
+        '<td>' + esc(r.group_name || '未命名') + '<span class="mn-hint">（' + esc(r.group_id) + '）</span></td>' +
+        '<td' + (r.status.indexOf('失败') >= 0 ? ' style="color:var(--danger)"' : '') + '>' + esc(r.status) + '</td>' +
+        '<td style="white-space:nowrap">' + (r.ts ? esc(mnTime(r.ts)) : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  bindIfExists('mmAll', function() { var on = $('#mmAll').checked; $$('#mmBox .mm-check').forEach(function(c) { c.checked = on; }); }, 'change');
+  bindIfExists('btnMmApply', mmApply);
+}
+async function mmApply() {
+  var groups = $$('#mmBox .mm-check:checked').map(function(c) { return c.value; });
+  if (!groups.length) { toast('请先勾选群', 'warning'); return; }
+  var mask = $('#mmValue').value;
+  var label = ($('#mmValue').selectedOptions[0] || {}).textContent.replace('（推荐）', '') || mask;
+  if (!(await mnConfirm('把选中的 ' + groups.length + ' 个群的消息设为「' + label + '」？\n只改机器人自己这个 QQ 号的设置，不影响群成员。', { title: '设置消息提醒', okText: '设置' }))) return;
+  var res = await safePost('minimal/msgmask/apply', { groups: groups, mask: Number(mask) });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  $('#mmBox').insertAdjacentHTML('afterbegin', mnJobCreatedHtml(mnData(res).job, []));
+}
+
 async function mnKick() {
   var ids = $('#kickIds').value.trim();
   if (!ids) { toast('请填写 QQ 号', 'warning'); return; }
@@ -4989,6 +5042,9 @@ function initMinimalPages() {
 
   bindIfExists('btnOpRefresh', function() { loadOplog(1); });
   bindIfExists('btnClSave', clSave);
+  bindIfExists('btnMmLoad', mmLoad);
+  bindIfExists('mmValue', function() { $('#mmWarn').style.display = $('#mmValue').value === '3' ? '' : 'none'; }, 'change');
+  bindIfExists('btnMmSave', function() { mnSaveConfig({ auto_msg_mask_value: Number($('#mmValue').value) }, '已保存'); });
   bindIfExists('btnClTop', clLoadTop);
   bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
   bindIfExists('btnLlFilter', function() { loadLeaveLog(1); });

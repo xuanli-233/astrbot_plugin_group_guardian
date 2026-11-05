@@ -25,6 +25,7 @@ from .leave_recall import LeaveRecallMixin
 from .leave_log import LeaveLogMixin
 from .code_limit import CodeLimitMixin
 from .card_parse import CardParseMixin
+from .group_msg_mask import MsgMaskMixin
 from .live_log import LiveLogMixin
 from .batch_queue import BatchQueueMixin
 from .code_board import CodeBoardMixin
@@ -41,7 +42,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -93,7 +94,7 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         await self._stop_scheduler()
         # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_cb_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):
@@ -346,6 +347,15 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             self._invalidate_member_roles(raw.get("group_id"))
         except Exception as e:
             logger.debug(f"[GroupMgr] 失效机器人角色缓存失败: {e}")
+
+    # 机器人进新群后，把这个群的消息设为「接收消息但不提醒」（group_msg_mask.py，默认关）。广播型通知，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_bot_join_msg_mask(self, event: AiocqhttpMessageEvent):
+        try:
+            await MsgMaskMixin._handle_bot_join_msg_mask(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 进群设置消息接收方式出错: {e}")
 
     # 群成员缓存：入群 / 退群 / 被踢 / 管理员任免 / 改名片通知实时更新本地缓存。广播型通知，不 stop_event。
     @filter.event_message_type(filter.EventMessageType.ALL)

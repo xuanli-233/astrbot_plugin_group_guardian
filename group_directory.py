@@ -432,6 +432,13 @@ class GroupDirectoryMixin:
         if not client:
             return
         groups, _err = await self._dir_groups(client)
+        # 进群自动设置消息接收方式的漏报兜底（group_msg_mask.py）：群列表里出现没处理过的新群就补上
+        check_mask = getattr(self, "_mm_check_new_groups", None)
+        if callable(check_mask) and groups:
+            try:
+                await check_mask(client, [g["group_id"] for g in groups])
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 检查新群消息接收方式失败: {e}")
         stale = [g["group_id"] for g in groups if not self._dir_members_fresh(g["group_id"])]
         stale.sort(key=lambda gid: self._dir()["members_ts"].get(gid, 0))
         for gid in stale[: self.DIR_BACKGROUND_BATCH]:

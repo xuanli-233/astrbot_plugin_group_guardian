@@ -506,6 +506,14 @@ class FakeOneBot:
         self.system(group_id, f"发布了群公告{f'（{flags}）' if flags else ''}：{content[:40]}")
         return _ok(None)
 
+    def act_set_group_msg_mask(self, group_id, mask, **_):
+        g = self.groups.get(int(group_id))
+        if not g:
+            return _fail("群不存在")
+        g["msg_mask"] = int(mask)
+        self.system(int(group_id), f"（机器人账号）本群消息设为 mask={int(mask)}")
+        return _ok(None)
+
     def act_set_group_add_request(self, **_):
         return _ok(None)
 
