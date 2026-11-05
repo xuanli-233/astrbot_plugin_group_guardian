@@ -591,6 +591,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
           <span>实时日志</span>
         </a>
+        <a class="nav-item" data-tab="leavelog">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+          <span>退群记录</span>
+        </a>
         <a class="nav-item" data-tab="oplog">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
           <span>操作记录</span>
@@ -1057,6 +1061,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="card">
             <div class="card-header"><h2>自动拉黑与拦截</h2></div>
             <div class="settings-list" id="kickSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label>退群自动拉黑：</label><input type="number" min="1" max="365" class="input-sm" id="labDays" style="width:80px" /><span>天内主动退群</span><input type="number" min="1" max="100" class="input-sm" id="labTimes" style="width:80px" /><span>次才拉黑</span><button class="btn btn-primary btn-sm" id="btnLabSave">保存</button></div>
+              <p class="mn-hint">次数填 1 = 一退群就拉黑。按「退群记录」计次（所有群合计，被踢不算），关闭退群记录时只能按 1 次处理。</p>
+            </div>
           </div>
         </div>
         <div class="card">
@@ -1224,6 +1232,33 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             <div class="mn-row"><label style="width:150px">保留最近几条</label><input type="number" min="50" max="2000" class="input-sm" id="liveSize" style="width:120px" /><button class="btn btn-primary btn-sm" id="btnLiveSize">保存</button><span class="mn-hint">50–2000，默认 300</span></div>
           </div>
         </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-leavelog">
+        <div class="page-header"><h1>退群记录</h1><button class="btn btn-ghost btn-sm" id="btnLlRefresh">刷新</button></div>
+        <p class="mn-intro">成员主动退群、被踢出时记下时间、群、方式和退群前的最近几条消息。点 QQ 号看这个人一共退过几次、退过哪些群；点「消息」看他退群前说了什么。「退群自动拉黑」按这里的记录计次，在「踢人与黑名单」设置。</p>
+        <div class="card">
+          <div class="card-header"><h2>设置</h2></div>
+          <div class="settings-list" id="leaveLogSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">保存退群前几条消息</label><input type="number" min="0" max="30" class="input-sm" id="llMsgCount" style="width:100px" /><span class="mn-hint">0–30，0 = 只记退群不存消息</span><button class="btn btn-primary btn-sm" id="btnLlSave">保存</button></div>
+            <p class="mn-hint">消息只记开启之后插件收到的（文字最多 120 字，图片 / 表情 / 卡片写成 [图片] 这样的占位），只存内存；插件重启后靠群历史兜底（最近 100 条）。被撤回的消息群历史里可能已经没有了。</p>
+          </div>
+        </div>
+        <div class="card" id="llUserCard" style="display:none">
+          <div class="card-header"><h2 id="llUserTitle">退群汇总</h2><button class="btn btn-ghost btn-sm" id="btnLlUserClose">关闭</button></div>
+          <div class="mn-body" id="llUserBody"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>记录</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="llKind" style="width:110px"><option value="">全部方式</option><option value="leave">主动退群</option><option value="kick">被踢出</option></select>
+              <input class="input-sm" id="llKeyword" placeholder="QQ号 / 群号 / 昵称 / 群名" style="width:180px" />
+              <button class="btn btn-outline btn-sm" id="btnLlFilter">筛选</button>
+            </div></div>
+          <div class="log-container" id="llTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="llPager"></div></div>
         </div>
       </div>
 
@@ -1411,6 +1446,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     <a class="mobile-nav-item" data-tab="livelog">
       <svg viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
       <span>实时日志</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="leavelog">
+      <svg viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+      <span>退群</span>
     </a>
     <a class="mobile-nav-item" data-tab="oplog">
       <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
@@ -2014,6 +2053,7 @@ function switchTab(tabName) {
   if (tabName === 'names') loadNames();
   if (tabName === 'kick') loadKick();
   if (tabName === 'oplog') loadOplog(1);
+  if (tabName === 'leavelog') loadLeaveLog(1);
   if (tabName === 'livelog') loadLive();
   if (tabName === 'batch') loadBatch();
   if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
@@ -2564,6 +2604,11 @@ var MANUAL_SETTING_KEYS = {
   leave_recall_count: true,
   leave_recall_minutes: true,
   leave_recall_use_history: true,
+  leave_log_enabled: true,
+  leave_log_msg_count: true,
+  leave_log_use_history: true,
+  leave_auto_blacklist_times: true,
+  leave_auto_blacklist_days: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
   blacklist_native_block_enabled: true,
@@ -3335,7 +3380,7 @@ var MN_SWITCHES = {
     { key: 'wxcode_enabled', label: '启用葵花码识别', desc: '需要先接入识别模块' }
   ],
   kickSwitches: [
-    { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '成员主动退群后加入插件黑名单，所有群通用' },
+    { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '一段时间内主动退群达到次数后加入插件黑名单，所有群通用（次数在下方设置）' },
     { key: 'blacklist_reject_join_enabled', label: '黑名单申请自动拒绝', desc: '黑名单用户的加群申请自动拒绝（不需要开入群审核）' },
     { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
     { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
@@ -3350,6 +3395,10 @@ var MN_SWITCHES = {
   liveSwitches: [
     { key: 'live_log_enabled', label: '记录实时日志', desc: '只在内存里保留最近几百条，不写数据库、不调用接口' },
     { key: 'live_log_show_text', label: '显示消息内容', desc: '关闭后只显示群、发送者和处理结果（最多保留前 80 个字）' }
+  ],
+  leaveLogSwitches: [
+    { key: 'leave_log_enabled', label: '记录退群', desc: '成员主动退群 / 被踢时写一条记录（总开关）' },
+    { key: 'leave_log_use_history', label: '用群历史兜底', desc: '本地记录不足时（如插件刚重启）额外拉一次最近 100 条群消息' }
   ],
   leaveRecallSwitches: [
     { key: 'leave_recall_enabled', label: '启用退群撤回', desc: '成员离开群后自动撤回他的近期消息（总开关）' },
@@ -3771,6 +3820,9 @@ async function loadKick() {
   var delay = mnCfg('auto_accept_delay_seconds');
   $('#aaDelay').value = (delay === undefined || delay === null || delay === '') ? 5 : delay;
   $('#aaInviteWarn').style.display = is === 'all' ? '' : 'none';
+  var labT = mnCfg('leave_auto_blacklist_times'), labD = mnCfg('leave_auto_blacklist_days');
+  $('#labTimes').value = (labT === undefined || labT === null || labT === '') ? 3 : labT;
+  $('#labDays').value = (labD === undefined || labD === null || labD === '') ? 30 : labD;
   var lrc = mnCfg('leave_recall_count'), lrm = mnCfg('leave_recall_minutes');
   $('#lrCount').value = (lrc === undefined || lrc === null || lrc === '') ? 10 : lrc;
   $('#lrMinutes').value = (lrm === undefined || lrm === null || lrm === '') ? 30 : lrm;
@@ -3923,6 +3975,71 @@ async function loadOplog(page) {
     '<button class="btn btn-ghost btn-sm" id="opNext"' + (OP_STATE.page >= pages ? ' disabled' : '') + '>下一页</button>';
   bindIfExists('opPrev', function() { loadOplog(OP_STATE.page - 1); });
   bindIfExists('opNext', function() { loadOplog(OP_STATE.page + 1); });
+}
+
+/* ---- 退群记录 ---- */
+var LL_STATE = { page: 1, pageSize: 50, items: [] };
+function llGroupName(gid, name) {
+  if (name) return name;
+  var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
+  return (g && g.group_name) || '';
+}
+async function loadLeaveLog(page) {
+  if (page) LL_STATE.page = page;
+  if (!MN.overview) await mnLoadOverview();
+  mnRenderSwitches('leaveLogSwitches');
+  var mc = mnCfg('leave_log_msg_count');
+  $('#llMsgCount').value = (mc === undefined || mc === null || mc === '') ? 10 : mc;
+  var res = await safeGet('minimal/leavelog', { keyword: $('#llKeyword').value.trim(), kind: $('#llKind').value,
+    page: LL_STATE.page, page_size: LL_STATE.pageSize });
+  if (isApiError(res)) { $('#llTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res);
+  var items = LL_STATE.items = d.items || [];
+  $('#llTable').innerHTML = items.length ? '<table class="mn-table"><thead><tr><th>时间</th><th>成员</th><th>群</th><th>方式</th><th>累计</th><th>退群前的消息</th></tr></thead><tbody>' +
+    items.map(function(r, i) {
+      var msgs = r.messages || [];
+      var last = msgs.length ? msgs[msgs.length - 1].text : '';
+      return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td>' +
+        '<td><a href="javascript:void(0)" data-ll-user="' + escAttr(r.user_id) + '">' + esc(r.user_id) + '</a>' + (r.nickname ? '<br><span class="mn-hint">' + esc(r.nickname) + '</span>' : '') + '</td>' +
+        '<td>' + esc(llGroupName(r.group_id, r.group_name)) + '<br><span class="mn-hint">' + esc(r.group_id) + '</span></td>' +
+        '<td>' + esc(r.kind_label) + (r.operator_id ? '<br><span class="mn-hint">操作人 ' + esc(r.operator_id) + '</span>' : '') + '</td>' +
+        '<td style="white-space:nowrap">退 ' + (r.user_leaves || 0) + ' 次' + (r.user_kicks ? '<br><span class="mn-hint">被踢 ' + r.user_kicks + ' 次</span>' : '') + '</td>' +
+        '<td style="max-width:360px">' + (msgs.length ? '<a href="javascript:void(0)" data-ll-msgs="' + i + '">' + msgs.length + ' 条</a>' + (r.msg_source ? ' <span class="mn-hint">（' + esc(r.msg_source) + '）</span>' : '') +
+          '<div class="mn-hint" style="word-break:break-all">最后一条：' + esc(last) + '</div>' : '<span class="mn-hint">没有记录到</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
+  var pages = Math.max(1, Math.ceil((d.total || 0) / LL_STATE.pageSize));
+  $('#llPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 条，第 ' + LL_STATE.page + ' / ' + pages + ' 页</span>' +
+    '<button class="btn btn-ghost btn-sm" id="llPrev"' + (LL_STATE.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+    '<button class="btn btn-ghost btn-sm" id="llNext"' + (LL_STATE.page >= pages ? ' disabled' : '') + '>下一页</button>';
+  bindIfExists('llPrev', function() { loadLeaveLog(LL_STATE.page - 1); });
+  bindIfExists('llNext', function() { loadLeaveLog(LL_STATE.page + 1); });
+  $$('[data-ll-user]', $('#llTable')).forEach(function(a) { a.addEventListener('click', function() { llShowUser(a.getAttribute('data-ll-user')); }); });
+  $$('[data-ll-msgs]', $('#llTable')).forEach(function(a) { a.addEventListener('click', function() { llShowMessages(LL_STATE.items[Number(a.getAttribute('data-ll-msgs'))]); }); });
+}
+function llShowMessages(r) {
+  if (!r) return;
+  var body = '<p class="mn-hint" style="margin-bottom:8px">' + esc(r.user_id) + (r.nickname ? '（' + esc(r.nickname) + '）' : '') + ' 于 ' + esc(mnTime(r.ts)) + ' ' + esc(r.kind_label) +
+    '：' + esc(llGroupName(r.group_id, r.group_name)) + '（' + esc(r.group_id) + '）</p>' +
+    (r.messages || []).map(function(m) {
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="mn-hint">' + esc(mnTime(m.ts)) + '</span><div style="word-break:break-all">' + esc(m.text) + '</div></div>';
+    }).join('');
+  showModal('退群前的消息', body, '<button class="btn btn-ghost btn-sm" id="btnLlMsgClose">关闭</button>');
+  $('#btnLlMsgClose').addEventListener('click', closeModal);
+}
+async function llShowUser(uid) {
+  var res = await safeGet('minimal/leavelog/user', { user_id: uid });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var d = mnData(res);
+  $('#llUserTitle').textContent = '退群汇总：' + d.user_id + (d.nickname ? '（' + d.nickname + '）' : '');
+  $('#llUserBody').innerHTML = '<div class="mn-row"><span>共 <b>' + d.total + '</b> 次：主动退群 ' + d.leaves + ' 次，被踢 ' + d.kicks + ' 次</span>' +
+    (d.total ? '<span class="mn-hint">第一次 ' + esc(mnTime(d.first_ts)) + '，最近 ' + esc(mnTime(d.last_ts)) + '</span>' : '') + '</div>' +
+    ((d.groups || []).length ? '<table class="mn-table"><thead><tr><th>群</th><th>主动退群</th><th>被踢</th><th>最近一次</th></tr></thead><tbody>' +
+      d.groups.map(function(g) {
+        return '<tr><td>' + esc(llGroupName(g.group_id, g.group_name)) + '（' + esc(g.group_id) + '）</td><td>' + g.leaves + '</td><td>' + g.kicks + '</td><td>' + esc(mnTime(g.last_ts)) + '</td></tr>';
+      }).join('') + '</tbody></table>' : '');
+  $('#llUserCard').style.display = '';
+  $('#llKeyword').value = d.user_id;
+  loadLeaveLog(1);
 }
 
 /* ---- 批量任务 ---- */
@@ -4699,6 +4816,23 @@ function initMinimalPages() {
   document.addEventListener('visibilitychange', function() { if (liveActive() && !LIVE.paused) livePoll(); });
 
   bindIfExists('btnOpRefresh', function() { loadOplog(1); });
+  bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
+  bindIfExists('btnLlFilter', function() { loadLeaveLog(1); });
+  bindIfExists('btnLlUserClose', function() { $('#llUserCard').style.display = 'none'; });
+  var llKw = document.getElementById('llKeyword');
+  if (llKw) llKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') loadLeaveLog(1); });
+  bindIfExists('btnLlSave', function() {
+    var n = Number($('#llMsgCount').value);
+    if (!(n >= 0 && n <= 30) || Math.floor(n) !== n) { toast('填 0–30 的整数', 'warning'); return; }
+    mnSaveConfig({ leave_log_msg_count: n }, '已保存');
+  });
+  bindIfExists('btnLabSave', function() {
+    var t = Number($('#labTimes').value), dd = Number($('#labDays').value);
+    if (!(t >= 1 && t <= 100) || !(dd >= 1 && dd <= 365) || Math.floor(t) !== t || Math.floor(dd) !== dd) {
+      toast('天数填 1–365，次数填 1–100 的整数', 'warning'); return;
+    }
+    mnSaveConfig({ leave_auto_blacklist_times: t, leave_auto_blacklist_days: dd }, '已保存');
+  });
   bindIfExists('btnOpFilter', function() { loadOplog(1); });
   bindIfExists('opKeyword', function(e) { if (e.key === 'Enter') loadOplog(1); }, 'keydown');
   bindIfExists('opAction', function() { loadOplog(1); }, 'change');

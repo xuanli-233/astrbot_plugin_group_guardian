@@ -7,7 +7,8 @@
   /批量踢黑 <QQ...>   仅在当前群踢出并原生拉黑（群管理员可用）
 
 事件：
-  group_decrease(sub_type=leave)  成员主动退群 → 加入插件用户黑名单（leave_auto_blacklist_enabled）
+  group_decrease(sub_type=leave)  成员主动退群 → 加入插件用户黑名单（leave_auto_blacklist_enabled；
+                                  leave_auto_blacklist_days 天内退群达到 leave_auto_blacklist_times 次才拉黑，按退群记录计次）
   group_increase                  黑名单用户被邀请入群 → 立即踢出并原生拉黑（blacklist_kick_on_join）
 
 QQ 原生群黑名单只能在踢人那一刻附带（set_group_kick 的 reject_add_request=true），
@@ -19,6 +20,7 @@ QQ 原生群黑名单只能在踢人那一刻附带（set_group_kick 的 reject_
 """
 import asyncio
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 
 from astrbot.api import logger
@@ -393,8 +395,23 @@ class GroupBlacklistMixin:
             return False
         if not self._cfg("leave_auto_blacklist_enabled", False, group_id=group_id):
             return False
-        return self._add_user_blacklist(user_id, f"主动退出群 {group_id}（退群自动拉黑）",
-                                        source="自动", group_id=group_id)
+        # 达到次数才拉黑：days 天内主动退群 times 次（按退群记录计次，本次已由 leave_log 先写入）。
+        # times = 1 时等同于原来的「一退群就拉黑」。
+        times = min(max(self._cfg_int("leave_auto_blacklist_times", 3), 1), 100)
+        days = min(max(self._cfg_int("leave_auto_blacklist_days", 30), 1), 365)
+        if times > 1:
+            count = 1
+            if callable(getattr(self, "_ll_count", None)) and self._cfg("leave_log_enabled", True, group_id=group_id):
+                try:
+                    count = max(1, self._ll_count(user_id, "leave", int(time.time()) - days * 86400))
+                except Exception as e:
+                    logger.debug(f"[GroupMgr] 退群计次失败: {e}")
+            if count < times:
+                return False
+            reason = f"{days} 天内主动退群 {count} 次（最近一次：群 {group_id}），达到 {times} 次自动拉黑"
+        else:
+            reason = f"主动退出群 {group_id}（退群自动拉黑）"
+        return self._add_user_blacklist(user_id, reason, source="自动", group_id=group_id)
 
     async def _handle_blacklisted_join(self, event: AstrMessageEvent) -> bool:
         """黑名单用户入群（被邀请等绕过了申请）→ 立即踢出并原生拉黑。返回是否已踢出。"""

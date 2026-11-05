@@ -12,6 +12,8 @@
   POST /minimal/names/stop             停止倒计时 / 取消定时任务
   POST /minimal/names/refresh          立即刷新倒计时
   POST /minimal/kick                   跨群踢人 / 踢出并拉黑
+  GET  /minimal/leavelog               退群记录（按 QQ / 群筛选，分页）
+  GET  /minimal/leavelog/user          某个 QQ 的退群汇总
 业务逻辑全部复用指令所用的函数（group_blacklist / group_broadcast / group_name_task / keyword_guard）。
 """
 import re
@@ -42,6 +44,8 @@ MINIMAL_CONFIG_KEYS = (
     "leave_auto_blacklist_enabled", "blacklist_reject_join_enabled",
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
+    "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history",
+    "leave_auto_blacklist_times", "leave_auto_blacklist_days",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
@@ -429,6 +433,23 @@ class MinimalWebMixin:
         return jsonify({"status": "success", "data": {
             "items": items, "total": total, "actions": self._op_actions(),
         }})
+
+    # ------------------------------------------------------------------
+    # 退群记录（leave_log.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_leavelog(self):
+        args = quart_request.args
+        items, total = self._ll_list(
+            keyword=str(args.get("keyword", "") or "").strip(), kind=str(args.get("kind", "") or ""),
+            page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+        )
+        return jsonify({"status": "success", "data": {"items": items, "total": total}})
+
+    async def _web_minimal_leavelog_user(self):
+        uid = str(quart_request.args.get("user_id", "") or "").strip()
+        if not uid.isdigit():
+            return jsonify({"status": "error", "message": "请填写 QQ 号"})
+        return jsonify({"status": "success", "data": self._ll_user_summary(uid)})
 
     # ------------------------------------------------------------------
     # 批量任务（batch_queue.py）

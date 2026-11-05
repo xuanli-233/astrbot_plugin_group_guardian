@@ -64,6 +64,7 @@ utilities = _load_module(f"{package.__name__}.utils", "utils.py")
 onebot = _load_module(f"{package.__name__}.onebot", "onebot.py")
 group_blacklist = _load_module(f"{package.__name__}.group_blacklist", "group_blacklist.py")
 batch_queue = _load_module(f"{package.__name__}.batch_queue", "batch_queue.py")
+leave_log = _load_module(f"{package.__name__}.leave_log", "leave_log.py")
 sys.path.insert(0, str(ROOT / "tests"))
 from _sqlite_storage import SqliteConnectMixin  # noqa: E402
 
@@ -150,7 +151,7 @@ class _Harness(
         return self.cfg_values.get(key, default)
 
     def _cfg_int(self, key, default=0, group_id=None):
-        return default
+        return int(self.cfg_values.get(key, default))
 
     def _cfg_str(self, key, default="", group_id=None):
         return str(self.cfg_values.get(key, default))
@@ -314,6 +315,7 @@ class LeaveBlacklistTests(unittest.IsolatedAsyncioTestCase):
     def _harness(self, enabled=True):
         harness = _Harness(_Client({}))
         harness.cfg_values["leave_auto_blacklist_enabled"] = enabled
+        harness.cfg_values["leave_auto_blacklist_times"] = 1  # 一退群就拉黑（原行为）
         return harness
 
     async def test_voluntary_leave_is_blacklisted(self):
@@ -340,6 +342,60 @@ class LeaveBlacklistTests(unittest.IsolatedAsyncioTestCase):
         harness._group_white_set = {"5"}
         self.assertFalse(await harness._handle_member_leave_blacklist(_notice("group_decrease", "leave")))
         self.assertEqual(harness._user_black_set, set())
+
+
+class _LeaveLogHarness(leave_log.LeaveLogMixin, _Harness):
+    """退群记录 + 退群拉黑：拉黑按退群记录计次。"""
+
+    def _is_backup_group(self, gid):
+        return False
+
+    def _dir(self):
+        return {"groups": {"1": {"group_name": "测试群"}}, "members": {}}
+
+
+class LeaveThresholdTests(unittest.IsolatedAsyncioTestCase):
+    def _harness(self, times=3, days=30):
+        harness = _LeaveLogHarness(_Client({}))
+        harness.cfg_values.update({
+            "leave_auto_blacklist_enabled": True, "leave_auto_blacklist_times": times,
+            "leave_auto_blacklist_days": days, "leave_log_use_history": False,
+        })
+        return harness
+
+    async def _leave(self, harness, group_id):
+        event = _notice("group_decrease", "leave", group_id=group_id)
+        await harness._handle_leave_log(event)
+        return await harness._handle_member_leave_blacklist(event)
+
+    async def test_blacklisted_only_after_reaching_threshold(self):
+        harness = self._harness(times=3)
+        self.assertFalse(await self._leave(harness, 1))
+        self.assertFalse(await self._leave(harness, 2))
+        self.assertEqual(harness._user_black_set, set())
+        self.assertTrue(await self._leave(harness, 3))
+        self.assertIn("111", harness._user_black_set)
+
+    async def test_kicks_do_not_count(self):
+        harness = self._harness(times=2)
+        kick = _notice("group_decrease", "kick", group_id=1)
+        await harness._handle_leave_log(kick)
+        await harness._handle_member_leave_blacklist(kick)
+        self.assertFalse(await self._leave(harness, 2))
+        self.assertEqual(harness._ll_count("111", "kick"), 1)
+
+    async def test_old_leaves_outside_window_do_not_count(self):
+        import time as _time
+        harness = self._harness(times=2, days=7)
+        harness._ll_insert(group_id="9", user_id="111", kind="leave", ts=int(_time.time()) - 10 * 86400)
+        self.assertFalse(await self._leave(harness, 1))
+        self.assertTrue(await self._leave(harness, 2))
+
+    async def test_threshold_without_leave_log_never_reaches_more_than_one(self):
+        harness = self._harness(times=2)
+        harness.cfg_values["leave_log_enabled"] = False
+        self.assertFalse(await self._leave(harness, 1))
+        self.assertFalse(await self._leave(harness, 2))
 
 
 class BlacklistedJoinTests(unittest.IsolatedAsyncioTestCase):

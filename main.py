@@ -22,6 +22,7 @@ from .group_name_task import GroupNameTaskMixin
 from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
 from .leave_recall import LeaveRecallMixin
+from .leave_log import LeaveLogMixin
 from .live_log import LiveLogMixin
 from .batch_queue import BatchQueueMixin
 from .code_board import CodeBoardMixin
@@ -38,7 +39,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -90,7 +91,7 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         await self._stop_scheduler()
         # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_bot_role_tasks", "_lr_tasks", "_aa_tasks", "_cb_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_cb_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):
@@ -266,8 +267,8 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         async for item in CommandsMixin.recall_all(self, event):
             yield item
 
-    # 退群撤回：记录每条群消息的 ID 与时间（只记 ID，不存内容）。注册在审核入口之前，
-    # 保证被审核撤回、stop_event 的消息也已记下。功能关闭时不记录。
+    # 退群撤回 / 退群记录：记录每条群消息（撤回只记 ID 与时间；退群记录另存最近 N 条的文字摘要，只在内存）。
+    # 注册在审核入口之前，保证被审核撤回、stop_event 的消息也已记下。功能关闭时不记录。
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     async def _on_track_group_message(self, event: AiocqhttpMessageEvent):
@@ -275,6 +276,8 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             gid = self._get_group_id(event)
             if gid and self._cfg("leave_recall_enabled", False, group_id=gid):
                 LeaveRecallMixin._lr_track_event(self, event)
+            if gid and self._cfg("leave_log_enabled", True, group_id=gid):
+                LeaveLogMixin._ll_track_event(self, event)
         except Exception as e:
             logger.debug(f"[GroupMgr] 记录群消息出错: {e}")
     # 消息监听注册区：审核主流程由 moderation.py 实现，这里只负责注册事件入口。
@@ -350,6 +353,16 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             await GroupDirectoryMixin._dir_handle_notice(self, event)
         except Exception as e:
             logger.debug(f"[GroupMgr] 群成员缓存更新出错: {e}")
+
+    # 退群记录：成员主动退群 / 被踢时记下时间、群、退群前的最近 N 条消息。必须注册在退群自动拉黑之前
+    # （拉黑按退群记录计次）。广播型通知，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_member_leave_log(self, event: AiocqhttpMessageEvent):
+        try:
+            await LeaveLogMixin._handle_leave_log(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 退群记录出错: {e}")
 
     # 退群自动拉黑：成员主动退群（group_decrease / leave）时加入插件用户黑名单。广播型通知，不 stop_event。
     @filter.event_message_type(filter.EventMessageType.ALL)

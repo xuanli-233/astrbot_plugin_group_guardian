@@ -122,7 +122,19 @@
         "description": "退群自动拉黑",
         "type": "bool",
         "default": false,
-        "hint": "成员主动退群后自动加入用户黑名单（所有群通用）：之后的加群申请自动拒绝，被邀请入群会立即踢出。插件管理员与用户白名单除外；可在多群配置中对单个群关闭"
+        "hint": "成员主动退群达到下面的次数后自动加入用户黑名单（所有群通用）：之后的加群申请自动拒绝，被邀请入群会立即踢出。插件管理员与用户白名单除外；可在多群配置中对单个群关闭"
+    },
+    "leave_auto_blacklist_times": {
+        "description": "退群自动拉黑：达到几次才拉黑",
+        "type": "int",
+        "default": 3,
+        "hint": "在下面的天数内主动退群（任意群）达到这么多次才拉黑，范围 1–100；1 = 一退群就拉黑。按「退群记录」计次，关闭退群记录时只能按 1 次处理"
+    },
+    "leave_auto_blacklist_days": {
+        "description": "退群自动拉黑：统计最近几天",
+        "type": "int",
+        "default": 30,
+        "hint": "统计最近多少天内的退群次数，范围 1–365"
     },
     "batch_interval_seconds": {
         "description": "批量任务：两项之间的间隔（秒）",
@@ -245,6 +257,24 @@
         "type": "int",
         "default": 30,
         "hint": "0 表示不按时间；范围 0–10080（7 天）"
+    },
+    "leave_log_enabled": {
+        "description": "退群记录",
+        "type": "bool",
+        "default": true,
+        "hint": "成员主动退群 / 被踢时记录时间、群、方式和退群前的最近几条消息，在 WebUI「退群记录」查看。消息摘要只存内存（每人最近几条，文字最多 120 字）"
+    },
+    "leave_log_msg_count": {
+        "description": "退群记录：保存退群前最近几条消息",
+        "type": "int",
+        "default": 10,
+        "hint": "范围 0–30；0 = 只记退群，不存消息"
+    },
+    "leave_log_use_history": {
+        "description": "退群记录：用群历史兜底",
+        "type": "bool",
+        "default": true,
+        "hint": "本地记录不足时（如插件刚重启）后台调用一次 get_group_msg_history（最近 100 条）补上"
     },
     "leave_recall_use_history": {
         "description": "退群撤回：用群历史兜底",
