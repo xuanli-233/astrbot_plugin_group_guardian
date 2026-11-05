@@ -20,6 +20,18 @@ from typing import List, Optional, Tuple
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 
+try:  # 实时日志进度（live_log.py）
+    from .live_log import live_set, live_stage
+except ImportError:
+    try:
+        from live_log import live_set, live_stage
+    except ImportError:
+        def live_set(*_a, **_k):
+            return None
+
+        def live_stage(*_a, **_k):
+            return None
+
 
 class KeywordGuardMixin:
     REGEX_MAX_LEN = 300
@@ -167,6 +179,7 @@ class KeywordGuardMixin:
         if backed_up:
             parts.append("已备份")
         action = "+".join(parts)
+        live_set("hit", action, reason)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
         self._record_op(
             "葵花码撤回" if kind == "wxcode" else "关键词撤回", source="自动", group_id=group_id,
@@ -193,6 +206,7 @@ class KeywordGuardMixin:
                               user_name: str, text: str, image_urls: list) -> Tuple[bool, Optional[str]]:
         """依次执行关键词、葵花码、OCR 三道检查。返回 (是否已处理, 群内提示)。"""
         if self._cfg("keyword_guard_enabled", True, group_id=group_id):
+            live_stage("检查关键词")
             rule = self._match_rules(text, "keyword_rules")
             if rule:
                 notice = await self._execute_hit_action(
@@ -228,6 +242,7 @@ class KeywordGuardMixin:
                     )
                     return True, notice
             else:
+                live_stage("识别葵花码")
                 texts = await self._recognize_images(image_urls, "wxcode")
                 joined = "\n".join(texts)
                 rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
@@ -240,6 +255,7 @@ class KeywordGuardMixin:
 
         if self._cfg("keyword_guard_enabled", True, group_id=group_id) and \
                 self._cfg_str("local_ocr_driver", "off", group_id=group_id) != "off":
+            live_stage("OCR 识别图片文字")
             texts = await self._recognize_images(image_urls, "local_ocr")
             joined = "\n".join(texts)
             rule = self._match_rules(joined, "keyword_rules")

@@ -427,6 +427,21 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
     .mn-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--primary-light);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)}
     .mn-steps{margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.9}
+    .lv-row{cursor:pointer}
+    .lv-row:hover td{background:var(--bg-hover, rgba(127,127,127,.06))}
+    .lv-text{max-width:360px;word-break:break-all;color:var(--text-secondary)}
+    .lv-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:1px 8px;border-radius:10px;white-space:nowrap}
+    .lv-badge.running{background:var(--primary-light);color:var(--primary)}
+    .lv-badge.hit,.lv-badge.error{background:var(--danger-light);color:var(--danger)}
+    .lv-badge.pass{background:var(--success-light);color:var(--success)}
+    .lv-badge.skip{background:var(--info-light);color:var(--text-muted)}
+    .lv-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:lvPulse 1s ease-in-out infinite}
+    @keyframes lvPulse{50%{opacity:.25}}
+    @media (prefers-reduced-motion: reduce){.lv-dot{animation:none}}
+    .lv-steps td{background:var(--bg-secondary, rgba(127,127,127,.04));font-size:12px;color:var(--text-secondary)}
+    .lv-steps span{display:inline-block;margin-right:14px;white-space:nowrap}
+    .lv-ms{font-variant-numeric:tabular-nums;white-space:nowrap}
+    .lv-slow{color:var(--warning)}
   </style>
 </head>
 <body>
@@ -482,6 +497,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         <a class="nav-item" data-tab="dup">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
           <span>重复成员</span>
+        </a>
+        <a class="nav-item" data-tab="livelog">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
+          <span>实时日志</span>
         </a>
         <a class="nav-item" data-tab="oplog">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
@@ -1162,6 +1181,36 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
       </div>
 
+      <div class="tab-panel" id="tab-livelog">
+        <div class="page-header"><h1>实时日志</h1>
+          <div class="header-actions">
+            <button class="btn btn-outline btn-sm" id="btnLivePause">暂停</button>
+            <button class="btn btn-ghost btn-sm" id="btnLiveClear">清空显示</button>
+          </div>
+        </div>
+        <p class="mn-intro">近期进入审核流程的群消息和处理进度：收到 → 检查关键词 → 下载图片 / 定位 / 解码 → 结果（撤回、放行、跳过、出错）和耗时。识别服务较慢时可以看到消息卡在哪一步。数据只在内存里（重启清空），页面打开且在前台时才轮询，每次只取回有变化的记录；离开本页或切到后台就停止。点一行可展开每一步的耗时。</p>
+        <div id="liveDisabled" class="mn-banner" style="display:none"><span>实时日志记录已关闭，新消息不会出现在这里。</span><button class="btn btn-primary btn-sm" id="btnLiveEnable">开启</button></div>
+        <div class="card">
+          <div class="card-header"><h2>消息</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="liveGroup" style="width:180px"><option value="">全部群</option></select>
+              <select class="input-sm" id="liveFilter" style="width:120px">
+                <option value="">全部结果</option><option value="running">处理中</option><option value="hit">命中处理</option>
+                <option value="pass">放行</option><option value="skip">跳过</option><option value="error">出错</option>
+              </select>
+            </div></div>
+          <div class="mn-body" style="padding-bottom:0"><div class="mn-hint" id="liveStats">加载中...</div></div>
+          <div class="log-container" id="liveTable"><p class="empty">加载中...</p></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>设置</h2></div>
+          <div class="settings-list" id="liveSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">保留最近几条</label><input type="number" min="50" max="2000" class="input-sm" id="liveSize" style="width:120px" /><button class="btn btn-primary btn-sm" id="btnLiveSize">保存</button><span class="mn-hint">50–2000，默认 300</span></div>
+          </div>
+        </div>
+      </div>
+
       <div class="tab-panel" id="tab-oplog">
         <div class="page-header"><h1>操作记录</h1><button class="btn btn-ghost btn-sm" id="btnOpRefresh">刷新</button></div>
         <p class="mn-intro">插件执行的每一个操作都在这里：踢人、拉黑、移出黑名单、关键词 / 葵花码撤回、自动拉黑、入群即踢、加群申请处理、发布公告、改群名、倒计时、修改规则和配置。来源分为「指令」（群里发的指令，操作人为发送者 QQ）、「WebUI」（管理页面）和「自动」（插件根据规则自动执行）。</p>
@@ -1349,6 +1398,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     <a class="mobile-nav-item" data-tab="dup">
       <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
       <span>重复成员</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="livelog">
+      <svg viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
+      <span>实时日志</span>
     </a>
     <a class="mobile-nav-item" data-tab="oplog">
       <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
@@ -1983,6 +2036,7 @@ function switchTab(tabName) {
   if (tabName === 'names') loadNames();
   if (tabName === 'kick') loadKick();
   if (tabName === 'oplog') loadOplog(1);
+  if (tabName === 'livelog') loadLive();
   if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
   if (tabName === 'directory') loadDirectory();
   if (tabName === 'settings') loadSettings();
@@ -3017,7 +3071,7 @@ var LEXICON_TOGGLES = [
 var FEATURE_TOGGLES = [
   { key: 'ban_enabled', label: '禁言功能' },
   { key: 'unban_enabled', label: '解禁功能' },
-  { key: 'kick_enabled', label: '踢人功能' },
+  { key: 'kick_enabled', label: '踢人功能', desc: '原生指令 /踢人 /批量踢人；不影响全群踢人、批量踢黑和 WebUI 踢人' },
   { key: 'recall_enabled', label: '撤回消息' },
   { key: 'whole_ban_enabled', label: '全体禁言' },
   { key: 'set_admin_enabled', label: '设置管理员' },
@@ -3028,8 +3082,8 @@ var FEATURE_TOGGLES = [
   { key: 'join_verify_enabled', label: '加群验证' },
   { key: 'essence_enabled', label: '精华消息' },
   { key: 'group_files_enabled', label: '群文件管理' },
-  { key: 'set_group_name_enabled', label: '修改群名' },
-  { key: 'send_announcement_enabled', label: '发布公告' },
+  { key: 'set_group_name_enabled', label: '修改群名', desc: '原生指令 /群名；不影响群名后缀 / 倒计时' },
+  { key: 'send_announcement_enabled', label: '发布公告', desc: '原生指令 /发公告；不影响全群公告 / 待办' },
   { key: 'delete_announcement_enabled', label: '删除公告' },
   { key: 'list_announcements_enabled', label: '查看公告' },
   { key: 'group_honor_enabled', label: '群荣誉查看' },
@@ -3137,6 +3191,9 @@ var MANUAL_SETTING_KEYS = {
   // 以下由「常用功能」里的新页面管理，不在全量配置里重复显示
   // （列表类规则若在全量配置里按逗号拆分保存，会把正则里的逗号拆坏）
   leave_auto_blacklist_enabled: true,
+  live_log_enabled: true,
+  live_log_show_text: true,
+  live_log_size: true,
   leave_recall_enabled: true,
   leave_recall_on_leave: true,
   leave_recall_on_kick: true,
@@ -4820,6 +4877,10 @@ var MN_SWITCHES = {
     { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
     { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
   ],
+  liveSwitches: [
+    { key: 'live_log_enabled', label: '记录实时日志', desc: '只在内存里保留最近几百条，不写数据库、不调用接口' },
+    { key: 'live_log_show_text', label: '显示消息内容', desc: '关闭后只显示群、发送者和处理结果（最多保留前 80 个字）' }
+  ],
   leaveRecallSwitches: [
     { key: 'leave_recall_enabled', label: '启用退群撤回', desc: '成员离开群后自动撤回他的近期消息（总开关）' },
     { key: 'leave_recall_on_leave', label: '主动退群时', desc: '成员自己退群' },
@@ -5372,6 +5433,114 @@ async function loadOplog(page) {
   bindIfExists('opNext', function() { loadOplog(OP_STATE.page + 1); });
 }
 
+/* ---- 实时日志 ---- */
+var LIVE = { epoch: 0, seq: 0, size: 300, map: {}, names: {}, open: {}, timer: null, inflight: false, paused: false, enabled: true, clearedBefore: 0 };
+var LIVE_LABELS = { running: '处理中', hit: '命中处理', pass: '放行', skip: '跳过', error: '出错' };
+function liveActive() {
+  var p = $('#tab-livelog');
+  return !!(p && p.classList.contains('active') && !document.hidden);
+}
+function liveSchedule(ms) {
+  clearTimeout(LIVE.timer);
+  LIVE.timer = setTimeout(livePoll, ms);
+}
+async function loadLive() {
+  if (!MN.overview) await mnLoadOverview();
+  mnRenderSwitches('liveSwitches');
+  var size = mnCfg('live_log_size');
+  $('#liveSize').value = (size === undefined || size === null || size === '') ? 300 : size;
+  livePoll();
+}
+async function livePoll() {
+  clearTimeout(LIVE.timer);
+  LIVE.timer = null;
+  if (!liveActive() || LIVE.paused || LIVE.inflight) return;
+  LIVE.inflight = true;
+  var res = await safeGet('minimal/livelog', { since: LIVE.seq, epoch: LIVE.epoch });
+  LIVE.inflight = false;
+  if (isApiError(res)) {
+    $('#liveStats').textContent = '获取失败：' + mnErr(res) + '（5 秒后重试）';
+    if (liveActive() && !LIVE.paused) liveSchedule(5000);
+    return;
+  }
+  var d = mnData(res) || {};
+  if (d.reset) { LIVE.map = {}; LIVE.open = {}; }
+  LIVE.epoch = d.epoch; LIVE.seq = d.seq; LIVE.size = d.size || 300; LIVE.enabled = d.enabled !== false;
+  Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) LIVE.names[k] = d.group_names[k]; });
+  var now = Date.now();
+  (d.items || []).forEach(function(e) { if (e.id > LIVE.clearedBefore) { e._recv = now; LIVE.map[e.id] = e; } });
+  var ids = Object.keys(LIVE.map).map(Number).sort(function(a, b) { return b - a; });
+  ids.slice(LIVE.size).forEach(function(id) { delete LIVE.map[id]; delete LIVE.open[id]; });
+  liveRender();
+  if (liveActive() && !LIVE.paused) liveSchedule(d.running ? 1500 : 3000);
+}
+function liveMs(e) {
+  var ms = Number(e.ms) || 0;
+  if (e.status === 'running') ms += Date.now() - (e._recv || Date.now());
+  return ms;
+}
+function liveTime(ts) {
+  var d = new Date(Number(ts) * 1000), p = function(n) { return (n < 10 ? '0' : '') + n; };
+  var today = new Date().toDateString() === d.toDateString();
+  return (today ? '' : (d.getMonth() + 1) + '-' + d.getDate() + ' ') + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+function liveFmtMs(ms) { return ms >= 1000 ? (ms / 1000).toFixed(ms >= 10000 ? 0 : 1) + ' 秒' : ms + ' 毫秒'; }
+function liveRender() {
+  $('#liveDisabled').style.display = LIVE.enabled ? 'none' : '';
+  var all = Object.keys(LIVE.map).map(function(k) { return LIVE.map[k]; }).sort(function(a, b) { return b.id - a.id; });
+  // 群筛选下拉：只用出现过的群，保留当前选择
+  var gsel = $('#liveGroup'), gcur = gsel.value, seen = {};
+  all.forEach(function(e) { seen[e.group_id] = true; });
+  var gopts = '<option value="">全部群</option>' + Object.keys(seen).sort().map(function(g) {
+    return '<option value="' + escAttr(g) + '">' + esc((LIVE.names[g] ? LIVE.names[g] + '（' + g + '）' : g)) + '</option>';
+  }).join('');
+  if (gsel.getAttribute('data-opts') !== gopts) { gsel.innerHTML = gopts; gsel.setAttribute('data-opts', gopts); gsel.value = gcur; }
+  var fg = gsel.value, fs = $('#liveFilter').value;
+  var rows = all.filter(function(e) { return (!fg || e.group_id === fg) && (!fs || e.status === fs); });
+
+  var running = 0, hits = 0, done = 0, total = 0, slowest = 0;
+  all.forEach(function(e) {
+    if (e.status === 'running') { running++; return; }
+    if (e.status === 'hit') hits++;
+    done++; total += Number(e.ms) || 0; slowest = Math.max(slowest, Number(e.ms) || 0);
+  });
+  $('#liveStats').textContent = '最近 ' + all.length + ' 条（最多保留 ' + LIVE.size + ' 条）：处理中 ' + running + '，命中处理 ' + hits +
+    (done ? '，平均耗时 ' + liveFmtMs(Math.round(total / done)) + '，最慢 ' + liveFmtMs(slowest) : '') +
+    (LIVE.paused ? ' · 已暂停' : ' · ' + (running ? '每 1.5 秒' : '每 3 秒') + '更新');
+
+  if (!rows.length) {
+    $('#liveTable').innerHTML = '<p class="empty">' + (all.length ? '没有符合筛选条件的消息' : '还没有消息。群里有新消息时会出现在这里。') + '</p>';
+    return;
+  }
+  $('#liveTable').innerHTML = '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>内容</th><th>进度 / 结果</th><th>耗时</th></tr></thead><tbody>' +
+    rows.map(function(e) {
+      var ms = liveMs(e);
+      var label = e.status === 'running' ? (e.stage || '处理中') : (e.result || LIVE_LABELS[e.status] || e.status);
+      var badge = '<span class="lv-badge ' + escAttr(e.status) + '">' + (e.status === 'running' ? '<span class="lv-dot"></span>' : '') + esc(label) + '</span>';
+      var reason = e.reason ? '<div class="mn-hint">' + esc(e.reason) + '</div>' : '';
+      var content = (e.text ? esc(e.text) : '') + (e.images ? ' <span class="mn-hint">[图片×' + e.images + ']</span>' : '');
+      var gname = LIVE.names[e.group_id];
+      var html = '<tr class="lv-row" data-lv="' + e.id + '"><td style="white-space:nowrap">' + esc(liveTime(e.ts)) + '</td>' +
+        '<td>' + esc(gname || e.group_id) + (gname ? '<div class="mn-hint">' + esc(e.group_id) + '</div>' : '') + '</td>' +
+        '<td>' + esc(e.user_name || e.user_id) + (e.user_name ? '<div class="mn-hint">' + esc(e.user_id) + '</div>' : '') + '</td>' +
+        '<td class="lv-text">' + (content || '<span class="mn-hint">（无文字）</span>') + '</td>' +
+        '<td>' + badge + reason + '</td>' +
+        '<td class="lv-ms' + (ms >= 10000 ? ' lv-slow' : '') + '">' + liveFmtMs(ms) + '</td></tr>';
+      if (LIVE.open[e.id]) {
+        var steps = (e.steps || []).map(function(s) { return '<span>+' + liveFmtMs(s[0]) + ' ' + esc(s[1]) + '</span>'; }).join('');
+        html += '<tr class="lv-steps"><td colspan="6">' + (steps || '没有记录到中间步骤') + '</td></tr>';
+      }
+      return html;
+    }).join('') + '</tbody></table>';
+  $$('[data-lv]', $('#liveTable')).forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var id = Number(tr.getAttribute('data-lv'));
+      LIVE.open[id] = !LIVE.open[id];
+      liveRender();
+    });
+  });
+}
+
 /* ---- 群成员缓存 ---- */
 var DIR_POLL = null;
 async function loadDirectory() {
@@ -5510,6 +5679,28 @@ function initMinimalPages() {
     if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
     toast('已开始在后台刷新，可在「群成员缓存」页面查看进度', 'success');
   });
+
+  bindIfExists('btnLivePause', function() {
+    LIVE.paused = !LIVE.paused;
+    $('#btnLivePause').textContent = LIVE.paused ? '继续' : '暂停';
+    if (LIVE.paused) { clearTimeout(LIVE.timer); liveRender(); } else livePoll();
+  });
+  bindIfExists('btnLiveClear', function() {
+    LIVE.clearedBefore = LIVE.seq;
+    LIVE.map = {}; LIVE.open = {};
+    liveRender();
+  });
+  bindIfExists('btnLiveEnable', function() {
+    mnSaveConfig({ live_log_enabled: true }, '已开启实时日志').then(function(ok) { if (ok) { mnRenderSwitches('liveSwitches'); livePoll(); } });
+  });
+  bindIfExists('btnLiveSize', function() {
+    var n = Number($('#liveSize').value);
+    if (!(n >= 50 && n <= 2000) || Math.floor(n) !== n) { toast('请填写 50–2000 的整数', 'warning'); return; }
+    mnSaveConfig({ live_log_size: n }, '已保存');
+  });
+  bindIfExists('liveGroup', liveRender, 'change');
+  bindIfExists('liveFilter', liveRender, 'change');
+  document.addEventListener('visibilitychange', function() { if (liveActive() && !LIVE.paused) livePoll(); });
 
   bindIfExists('btnOpRefresh', function() { loadOplog(1); });
   bindIfExists('btnOpFilter', function() { loadOplog(1); });

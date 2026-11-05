@@ -124,7 +124,7 @@ class GroupBroadcastMixin:
             return unsupported
         if not await self._is_plugin_admin(event):
             return self._admin_denied_message(event, f"仅插件管理员可以使用 /{name}")
-        ok, msg = self._cfg_check("send_announcement_enabled", "发布公告")
+        ok, msg = self._cfg_check("enabled", "批量公告")
         return None if ok else msg
 
     async def cmd_broadcast_notice(self, event: AstrMessageEvent, todo: bool = False):

@@ -534,11 +534,26 @@ class WiringTests(unittest.TestCase):
         for key in ("anti_flood_enabled", "scan_swear", "scan_ad", "lexicon_porn_enabled",
                     "combine_detect_enabled", "base_decode_enabled", "recall_qq_favorite_enabled"):
             self.assertFalse(schema[key]["default"], key)
-        for key in ("kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
-                    "keyword_guard_enabled", "backup_enabled"):
+        for key in ("keyword_guard_enabled", "backup_enabled", "live_log_enabled", "strict_permission_enabled"):
             self.assertTrue(schema[key]["default"], key)
         self.assertFalse(schema["wxcode_enabled"]["default"])
         self.assertEqual(schema["local_ocr_driver"]["default"], "off")
+
+    def test_native_group_commands_default_off_and_new_features_decoupled(self):
+        schema = json.loads((ROOT / "_conf_schema.json").read_text(encoding="utf-8"))
+        native = ("ban_enabled", "unban_enabled", "kick_enabled", "recall_enabled", "whole_ban_enabled",
+                  "set_admin_enabled", "set_card_enabled", "set_title_enabled", "member_list_enabled",
+                  "banned_list_enabled", "join_verify_enabled", "essence_enabled", "group_files_enabled",
+                  "set_group_name_enabled", "send_announcement_enabled", "delete_announcement_enabled",
+                  "list_announcements_enabled", "group_stats_enabled", "word_count_enabled")
+        for key in native:
+            self.assertFalse(schema[key]["default"], key)
+        # 新功能（全群踢人 / 批量踢黑 / 批量公告 / 群名任务 / WebUI）不受原生指令开关影响
+        for filename in ("group_blacklist.py", "group_broadcast.py", "group_name_task.py", "web_minimal.py"):
+            source = (ROOT / filename).read_text(encoding="utf-8")
+            for key in ("kick_enabled", "send_announcement_enabled", "set_group_name_enabled"):
+                self.assertNotIn(f'_cfg_check("{key}"', source, f"{filename}: {key}")
+                self.assertNotIn(f'_prepare_group_action(event, "{key}"', source, f"{filename}: {key}")
 
 
 if __name__ == "__main__":

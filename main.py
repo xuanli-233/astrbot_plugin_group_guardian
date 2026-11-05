@@ -27,6 +27,7 @@ from .group_name_task import GroupNameTaskMixin
 from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
 from .leave_recall import LeaveRecallMixin
+from .live_log import LiveLogMixin
 from .message_backup import MessageBackupMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
@@ -41,7 +42,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -432,8 +433,21 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
     @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     async def _handle_message(self, event: AiocqhttpMessageEvent):
-        async for item in ModerationMixin._handle_message(self, event):
-            yield item
+        # 实时日志（live_log.py）：登记本条消息，处理过程中各步骤更新进度，结束时写入结果与耗时
+        live = LiveLogMixin._live_begin(self, event)
+        try:
+            async for item in ModerationMixin._handle_message(self, event):
+                yield item
+        except Exception as e:
+            LiveLogMixin._live_end(live, error=e)
+            raise
+        finally:
+            stopped = False
+            try:
+                stopped = bool(event.is_stopped())
+            except Exception:
+                pass
+            LiveLogMixin._live_end(live, stopped=stopped)
 
     # F1 入群自动审核：监听加群申请事件（与 _handle_message 共用 ALL 监听，互不干扰）。
     @filter.event_message_type(filter.EventMessageType.ALL)

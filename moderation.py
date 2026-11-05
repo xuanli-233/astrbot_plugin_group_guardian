@@ -9,6 +9,18 @@ from typing import Dict, Optional, Tuple
 from astrbot.api import logger
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
+try:  # 实时日志进度（live_log.py）；独立加载本模块的测试里没有时退化为空操作
+    from .live_log import live_set, live_stage
+except ImportError:
+    try:
+        from live_log import live_set, live_stage
+    except ImportError:
+        def live_set(*_a, **_k):
+            return None
+
+        def live_stage(*_a, **_k):
+            return None
+
 LLM_MESSAGE_MAX_CHARS = 6000
 LLM_MESSAGE_CHUNK_OVERLAP = 200
 LLM_CALL_TIMEOUT = 60.0
@@ -2008,35 +2020,42 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
         user_name = event.get_sender_name()
 
         if self._pre_check_message(event, group_id, user_id):
+            live_set("skip", "跳过", "白名单用户 / 非管理群 / 未同意免责声明等")
             return
 
         # 备份群 / 葵花码转发群本身不参与审核，避免备份进来的违规内容被再次撤回
         is_backup_group = getattr(self, "_is_backup_group", None)
         if callable(is_backup_group) and is_backup_group(group_id):
+            live_set("skip", "跳过", "备份群不参与审核")
             return
 
         # Issue #90：QQ 开放平台机器人消息整体豁免内容审核与防刷屏（开关 + 按群覆盖）。
         if await self._is_exempt_official_bot(event, group_id, user_id):
+            live_set("skip", "跳过", "官方机器人消息")
             return
 
         # Issue #89：机器人在该群只是普通成员时无法撤回/禁言，继续审核只会白耗 LLM
         # 调用并在群里虚报「已撤回」。确认是普通成员就整条跳过（防刷屏同样依赖禁言/撤回）。
         can_moderate = getattr(self, "_bot_can_moderate", None)
         if callable(can_moderate) and not await can_moderate(event, group_id):
+            live_set("skip", "跳过", "机器人在该群不是管理员")
             return
 
         blocked, flood_notice = await self._anti_flood_guard(event, group_id)
         if blocked:
+            live_set("hit", "防刷屏处理", flood_notice or "")
             if flood_notice:
                 yield event.plain_result(flood_notice)
             return
 
         if (self._cfg("moderation_admin_exempt", False, group_id=group_id)
                 and await self._is_admin(event)):
+            live_set("skip", "跳过", "管理员豁免")
             return
 
         blacklist_handled, blacklist_notice = await self._handle_user_blacklist(event, group_id, user_id, user_name)
         if blacklist_handled:
+            live_set("hit", "黑名单用户处理", blacklist_notice or "")
             if blacklist_notice:
                 yield event.plain_result(blacklist_notice)
             return
@@ -2072,6 +2091,7 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
         )
 
         if has_forward:
+            live_stage("解析合并转发")
             forward_text, forward_is_qq_favorite, forward_images, forward_scan = (
                 await self._resolve_forward_messages(
                     event,
@@ -2114,7 +2134,9 @@ class ModerationMixin(ImageAuditMixin, ModerationContextMixin):
             return
 
         if not moderation_enabled:
+            live_set("skip", "跳过", "本群自动审核已关闭")
             return
+        live_stage("内置规则审核")
 
         # AI 特殊数字检测（默认关闭）：全局证明 + 群内双重开关全部满足才生效，
         # 命中只撤回（不禁言/踢人/调用 LLM）。放在 OCR/LLM 之前，命中即短路，

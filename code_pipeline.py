@@ -23,7 +23,16 @@ from typing import Dict, List, Optional, Tuple
 
 from astrbot.api import logger
 
-CODE_CLASS_LABELS = {0: "ArUco", 1: "条形码", 2: "葵花码", 3: "二维码", 4: "PDF417", 5: "DataMatrix"}
+try:  # 实时日志进度（live_log.py）
+    from .live_log import live_stage
+except ImportError:
+    try:
+        from live_log import live_stage
+    except ImportError:
+        def live_stage(*_a, **_k):
+            return None
+
+CODE_CLASS_LABELS ={0: "ArUco", 1: "条形码", 2: "葵花码", 3: "二维码", 4: "PDF417", 5: "DataMatrix"}
 DETECT_MAX_BYTES = 10 * 1024 * 1024
 DETECT_MAX_PIXELS = 12_000_000
 DETECT_MAX_SIDE = 12_000
@@ -223,7 +232,7 @@ class CodePipelineMixin:
     # ------------------------------------------------------------------
     STOPPED_EARLY = "已命中规则，未继续解码"
 
-    async def _code_scan_bytes(self, data: bytes, stop_when=None) -> dict:
+    async def _code_scan_bytes(self, data: bytes, stop_when=None, label: str = "") -> dict:
         """返回 {"has_code", "codes": [...], "error", "stopped_early"}。
 
         codes 每项：{class_id, label, score, bbox, crop_box, decoded: {code_type, text, payload_base64} | None,
@@ -239,6 +248,7 @@ class CodePipelineMixin:
             return out
         try:
             detect_bytes, scale = self._code_prepare_detect(data, image)
+            live_stage(f"{label}定位码")
             detected = await self._code_detect(detect_bytes)
         except CodeServiceError as e:
             out["error"] = str(e)
@@ -252,7 +262,9 @@ class CodePipelineMixin:
                 if isinstance(d, dict) and int(d.get("class_id", -1)) in wanted]
         limit = max(1, self._cfg_int("code_max_per_image", 3))
         ratio = self._cfg_int("code_box_expand_ratio", 20)
-        for det in dets[:limit]:
+        if not dets:
+            live_stage(f"{label}未发现码")
+        for index, det in enumerate(dets[:limit], 1):
             cid = int(det.get("class_id"))
             bbox = [float(v) * scale for v in (det.get("bbox") or [0, 0, 0, 0])[:4]]
             item = {"class_id": cid, "label": CODE_CLASS_LABELS.get(cid, str(cid)),
@@ -269,6 +281,7 @@ class CodePipelineMixin:
                     crop = self._code_png(image.crop(box))
                 else:
                     crop = data  # 没有 Pillow：整图交给解码服务
+                live_stage(f"{label}解码{item['label']} {index}/{min(len(dets), limit)}")
                 result = await self._code_decode(crop)
                 if result is None:
                     item["error"] = "未能解出"
@@ -319,7 +332,9 @@ class CodePipelineMixin:
             seen.add(url)
             if len(seen) > getattr(self, "RECOGNIZE_MAX_IMAGES", 4):
                 break
+            label = f"图 {len(seen)}/{min(len(image_urls), getattr(self, 'RECOGNIZE_MAX_IMAGES', 4))}："
             try:
+                live_stage(f"{label}下载图片")
                 data = await self._download_bytes(url)
             except Exception as e:
                 results.append({"url": url, "has_code": False, "codes": [], "error": f"图片下载失败：{e}"})
@@ -336,7 +351,7 @@ class CodePipelineMixin:
                 if not cached.get("stopped_early") or still_hits:
                     results.append(dict(cached, url=url, cached=True, stopped_early=still_hits))
                     continue
-            scanned = await self._code_scan_bytes(data, stop_when=stop_when)
+            scanned = await self._code_scan_bytes(data, stop_when=stop_when, label=label)
             if scanned["error"]:
                 logger.warning(f"[GroupMgr] 二维码 / 葵花码识别失败（放行）：{scanned['error']}")
             else:

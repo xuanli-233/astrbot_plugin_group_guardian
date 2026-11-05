@@ -229,19 +229,19 @@
     "ban_enabled": {
         "description": "禁言功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /禁言 指令和 LLM 禁言工具均不可用"
     },
     "unban_enabled": {
         "description": "解除禁言功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /解禁 指令和 LLM 解禁工具均不可用"
     },
     "kick_enabled": {
         "description": "踢人功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /踢人 指令和 LLM 踢人工具均不可用"
     },
     "set_admin_require_owner": {
@@ -296,6 +296,24 @@
         "type": "bool",
         "default": false,
         "hint": "成员主动退群后自动加入用户黑名单（所有群通用）：之后的加群申请自动拒绝，被邀请入群会立即踢出。插件管理员与用户白名单除外；可在多群配置中对单个群关闭"
+    },
+    "live_log_enabled": {
+        "description": "实时日志：记录近期消息的处理进度",
+        "type": "bool",
+        "default": true,
+        "hint": "WebUI「实时日志」面板的数据来源。只存在内存里（重启清空），不写数据库、不调用接口，开销很小"
+    },
+    "live_log_show_text": {
+        "description": "实时日志：显示消息内容",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后实时日志只显示群、发送者和处理结果，不保留消息文字（只保留前 80 个字）"
+    },
+    "live_log_size": {
+        "description": "实时日志：保留最近几条",
+        "type": "int",
+        "default": 300,
+        "hint": "范围 50–2000，超出后最旧的被丢弃"
     },
     "leave_recall_enabled": {
         "description": "退群撤回：成员离开后撤回其近期消息",
@@ -590,121 +608,121 @@
     "whole_ban_enabled": {
         "description": "全体禁言功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /全体禁言 指令和 LLM 工具均不可用"
     },
     "set_card_enabled": {
         "description": "修改群名片功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /设置名片 指令和 LLM 工具均不可用"
     },
     "send_announcement_enabled": {
         "description": "发送群公告功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /发公告 指令和 LLM 工具均不可用"
     },
     "delete_announcement_enabled": {
         "description": "删除群公告功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /删公告 指令和 LLM 工具均不可用"
     },
     "list_announcements_enabled": {
         "description": "查看群公告列表功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /公告列表 指令均不可用"
     },
     "member_list_enabled": {
         "description": "查看群成员列表功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /成员列表 和 /搜索成员 指令均不可用"
     },
     "set_admin_enabled": {
         "description": "设置群管理员功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /设置管理 指令和 LLM 工具均不可用"
     },
     "set_group_name_enabled": {
         "description": "修改群名称功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /群名 指令和 LLM 工具均不可用"
     },
     "set_title_enabled": {
         "description": "设置专属头衔功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /头衔 指令和 LLM 工具均不可用"
     },
     "banned_list_enabled": {
         "description": "查看禁言列表功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /禁言列表 指令和 LLM 工具均不可用"
     },
     "join_verify_enabled": {
         "description": "设置加群方式功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /加群方式 指令和 LLM 工具均不可用"
     },
     "recall_enabled": {
         "description": "撤回消息功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /撤回最新消息 和 /批量撤回 指令均不可用（自动审核的撤回不受此控制）"
     },
     "essence_enabled": {
         "description": "精华消息功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 /设精华 和 /取消精华 指令和 LLM 工具均不可用"
     },
     "group_files_enabled": {
         "description": "群文件管理功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后群文件查看/上传/删除/移动/重命名等全部不可用"
     },
     "group_honor_enabled": {
         "description": "群荣誉查看功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后群荣誉查看 LLM 工具不可用"
     },
     "at_all_remain_enabled": {
         "description": "@全体成员剩余次数查询开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后 @全体成员剩余次数查询 LLM 工具不可用"
     },
     "ignore_requests_enabled": {
         "description": "被忽略加群请求查看开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后被忽略加群请求查看 LLM 工具不可用"
     },
     "group_msg_history_enabled": {
         "description": "群消息历史查看开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后群消息历史查看 LLM 工具不可用"
     },
     "group_portrait_enabled": {
         "description": "群头像设置功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后群头像设置 LLM 工具不可用"
     },
     "group_sign_enabled": {
         "description": "群打卡功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "关闭后群打卡 LLM 工具不可用"
     },
     "anti_flood_enabled": {
@@ -938,7 +956,7 @@
     "group_stats_enabled": {
         "description": "群统计功能开关",
         "type": "bool",
-        "default": true,
+        "default": false,
         "hint": "开启后允许使用 /群统计 查看群成员数量与管理员统计"
     },
     "join_audit_enabled": {

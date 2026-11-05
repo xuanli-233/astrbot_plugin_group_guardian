@@ -273,7 +273,7 @@ class GroupBlacklistMixin:
         if not await self._is_plugin_admin(event):
             yield event.plain_result(self._admin_denied_message(event, f"仅插件管理员可以使用 /{name}"))
             return
-        ok, msg = self._cfg_check("kick_enabled", "踢人")
+        ok, msg = self._cfg_check("enabled", "全群踢人")
         if not ok:
             yield event.plain_result(msg)
             return
@@ -344,7 +344,7 @@ class GroupBlacklistMixin:
         if not targets:
             yield event.plain_result("用法: /批量踢黑 <QQ1> <QQ2> ... 或 @某人\n示例: /批量踢黑 111 222 333")
             return
-        ok, err, client, gid = await self._prepare_group_action(event, "kick_enabled", "批量踢黑")
+        ok, err, client, gid = await self._prepare_group_action(event, "enabled", "批量踢黑")
         if not ok:
             yield event.plain_result(err)
             return

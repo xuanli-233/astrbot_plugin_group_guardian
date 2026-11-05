@@ -133,6 +133,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ membership.py      加群申请审核
 ├─ group_blacklist.py 跨群踢人 / 踢黑 / 退群自动拉黑（二次开发新增）
 ├─ leave_recall.py 退群 / 被踢后撤回近期消息（二次开发新增）
+├─ live_log.py 实时日志：内存环形缓冲 + 处理步骤（二次开发新增）
 ├─ card_monitor.py    名片监控、名片保护、管理员任免记录
 ├─ appeal.py          刷屏申诉（AI 裁决，已停用）
 ├─ lexicon_learn.py   词库自学习（AI，已停用）
@@ -182,13 +183,15 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 所有指令都需要“群操作权限”（插件管理员、群超管，或群主 / 群管理员，见第八节）。注册位置均在 `main.py`，业务在 `commands.py`（标注了的除外）。
 
+> 下表的原有群管指令开关**默认全部关闭**，在 WebUI「设置 → 功能开关」里按需打开。二次开发新增的功能（`/全群踢人` `/全群踢黑` `/批量踢黑`、批量公告 / 待办、群名后缀 / 倒计时、WebUI 踢人与重复成员处理）不受这些开关影响，只检查插件总开关、免责声明和权限。已经安装过的实例保留原来保存的开关值。
+
 | 指令 | 作用 | 功能开关 |
 | --- | --- | --- |
 | `/禁言` `/解禁` | 禁言 / 解除禁言某人 | `ban_enabled` / `unban_enabled` |
 | `/踢人` | 踢出某人 | `kick_enabled` |
 | `/批量禁言` `/批量踢人` | 当前群批量操作 | `ban_enabled` / `kick_enabled` |
-| `/批量踢黑` | 当前群批量踢出并 QQ 拉黑（`group_blacklist.py`） | `kick_enabled` |
-| `/全群踢人` `/全群踢黑` | 所有管理的群踢人 / 踢黑，仅插件管理员（`group_blacklist.py`） | `kick_enabled` |
+| `/批量踢黑` | 当前群批量踢出并 QQ 拉黑（`group_blacklist.py`，新增） | 不受原生开关影响 |
+| `/全群踢人` `/全群踢黑` | 所有管理的群踢人 / 踢黑，仅插件管理员（`group_blacklist.py`，新增） | 不受原生开关影响 |
 | `/全体禁言` | 开关全员禁言 | `whole_ban_enabled` |
 | `/撤回最新消息` `/批量撤回` `/回复撤回` | 撤回消息 | `recall_enabled` |
 | `/设置名片` `/头衔` | 改群名片 / 专属头衔 | `set_card_enabled` / `set_title_enabled` |
@@ -236,6 +239,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 黑名单用户入群即踢 | `group_blacklist.py` | `blacklist_kick_on_join` | 启用 |
 | 踢黑名单时 QQ 原生拉黑 | `onebot.py:_kick_member` | `blacklist_native_block_enabled` | 启用 |
 | 退群自动拉黑（全群通用） | `group_blacklist.py` | `leave_auto_blacklist_enabled` | 默认关 |
+| 实时日志：WebUI 查看近期消息处理进度与耗时 | `live_log.py`、`web_minimal.py:_web_minimal_livelog` | `live_log_enabled`、`live_log_show_text`、`live_log_size` | 默认开（只存内存，300 条） |
 | 退群撤回：主动退群 / 被踢后撤回其最近 N 条、最近 M 分钟的消息 | `leave_recall.py` | `leave_recall_enabled`（`_on_leave` / `_on_kick` / `_count` / `_minutes` / `_use_history`） | 默认关 |
 
 ---

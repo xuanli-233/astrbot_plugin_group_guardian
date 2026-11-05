@@ -192,7 +192,7 @@ class GroupNameTaskMixin:
             return unsupported
         if not await self._is_plugin_admin(event):
             return self._admin_denied_message(event, f"仅插件管理员可以使用 /{name}")
-        ok, msg = self._cfg_check("set_group_name_enabled", "修改群名")
+        ok, msg = self._cfg_check("enabled", "群名任务")
         return None if ok else msg
 
     @staticmethod

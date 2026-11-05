@@ -15,6 +15,7 @@
 业务逻辑全部复用指令所用的函数（group_blacklist / group_broadcast / group_name_task / keyword_guard）。
 """
 import re
+import time
 from datetime import datetime
 from typing import List, Optional
 
@@ -40,7 +41,8 @@ MINIMAL_CONFIG_KEYS = (
     "broadcast_interval_seconds", "group_name_max_length", "countdown_update_time",
     "leave_auto_blacklist_enabled", "blacklist_reject_join_enabled",
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
-    "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history", "blacklist_kick_on_join",
+    "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
+    "live_log_enabled", "live_log_show_text", "live_log_size", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
     "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
@@ -174,7 +176,7 @@ class MinimalWebMixin:
     # 批量公告
     # ------------------------------------------------------------------
     async def _web_minimal_broadcast(self):
-        ok, msg = self._cfg_check("send_announcement_enabled", "发布公告")
+        ok, msg = self._cfg_check("enabled", "批量公告")
         if not ok:
             return self._minimal_error(msg)
         data = await self._minimal_body()
@@ -213,7 +215,7 @@ class MinimalWebMixin:
     # 群名任务
     # ------------------------------------------------------------------
     async def _minimal_name_targets(self, data):
-        ok, msg = self._cfg_check("set_group_name_enabled", "修改群名")
+        ok, msg = self._cfg_check("enabled", "群名任务")
         if not ok:
             return None, None, msg
         client = await self._get_client()
@@ -385,7 +387,7 @@ class MinimalWebMixin:
         return jsonify({"status": "success", "data": data})
 
     async def _web_minimal_duplicates_handle(self):
-        ok, msg = self._cfg_check("kick_enabled", "踢人")
+        ok, msg = self._cfg_check("enabled", "踢人")
         if not ok:
             return self._minimal_error(msg)
         data = await self._minimal_body()
@@ -432,6 +434,25 @@ class MinimalWebMixin:
             "items": items, "total": total, "actions": self._op_actions(),
         }})
 
+    async def _web_minimal_livelog(self):
+        """实时日志：?since=上次的 seq&epoch=上次的 epoch，只返回变化的记录（live_log.py）。"""
+        args = quart_request.args
+        enabled = bool(self._cfg("live_log_enabled", True))
+        snap = self._live_log().snapshot(
+            since=self._safe_int(args.get("since", 0), 0), epoch=self._safe_int(args.get("epoch", 0), 0),
+        )
+        snap["enabled"] = enabled
+        snap["show_text"] = bool(self._cfg("live_log_show_text", True))
+        snap["now"] = time.time()
+        # 群名只读内存里的群成员缓存，不调用接口
+        names = {}
+        try:
+            names = {gid: (g or {}).get("group_name") or "" for gid, g in self._dir()["groups"].items()}
+        except Exception:
+            names = {}
+        snap["group_names"] = {gid: names.get(gid, "") for gid in {i["group_id"] for i in snap["items"]}}
+        return jsonify({"status": "success", "data": snap})
+
     # ------------------------------------------------------------------
     # 黑名单（带原因）
     # ------------------------------------------------------------------
@@ -465,7 +486,7 @@ class MinimalWebMixin:
     # 跨群踢人
     # ------------------------------------------------------------------
     async def _web_minimal_kick(self):
-        ok, msg = self._cfg_check("kick_enabled", "踢人")
+        ok, msg = self._cfg_check("enabled", "踢人")
         if not ok:
             return self._minimal_error(msg)
         data = await self._minimal_body()
