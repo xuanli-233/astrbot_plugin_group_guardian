@@ -128,6 +128,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ code_pipeline.py   二维码 / 葵花码两阶段识别（定位服务 → 裁剪 → 解码服务）
 ├─ code_board.py      二维码看板 + 码内容拉黑
 ├─ code_limit.py      同一个码的发送次数限制（滑动窗口）
+├─ card_parse.py      小程序 / 分享卡片解析（文字、appid、链接、封面图）
 ├─ image_recognizer.py / message_backup.py   识别器接口、备份到指定群
 ├─ membership.py      加群申请审核（通过词 / 拒绝词 / 默认动作）
 ├─ group_blacklist.py 跨群踢人 / 踢黑 / 退群自动拉黑
@@ -166,6 +167,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 7 | 自动审核总开关（可按群） | `auto_moderate_enabled` | 启用 | 关闭则后面全部不做 |
 | 8 | 同一条消息 60 秒内只处理一次 | — | — | 跳过重复事件 |
 | 9 | 解析消息链、合并转发内容（含图片） | `scan_forward_msg` | 启用 | — |
+| 9.5 | **小程序 / 分享卡片**（`card_parse.py`）：微信小程序 / QQ 小程序 / 链接分享等卡片拆出小程序名、标题、appid、跳转链接，拼成一行文字并入消息；封面图加入待识别图片 | `card_parse_enabled`、`card_scan_preview` | 启用 | — |
 | 10 | **关键词撤回 → 葵花码 / 二维码识别 → OCR 文字**（`keyword_guard.py`，见第零节） | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回，可选禁言（`hit_mute_enabled`，时长 `moderation_ban_duration`） |
 | 10.5 | **同一个码的发送次数**：解出的码没命中规则时按内容计次，`code_limit_window_hours` 小时内超过 `code_limit_max` 次撤回（`code_limit.py`，计次存 SQLite `code_sends`） | `code_limit_enabled`、`code_limit_scope`（global 所有群合计 / group 每群单独）、`code_limit_warn_enabled` + `code_limit_warn_template` | 默认关；5 小时 3 次，警告开 | 同上，另发警告 |
 

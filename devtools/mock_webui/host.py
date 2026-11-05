@@ -813,6 +813,9 @@ def sim_send(payload_json: str) -> str:
     if p.get("ocr"):
         url = "mock://ocr/" + urllib.parse.quote(p["ocr"])
         segments.append({"type": "image", "data": {"url": url, "file": url}})
+    if p.get("card"):  # 小程序 / 分享卡片：原样的 json 消息段数据（字符串或对象）
+        card = p["card"] if isinstance(p["card"], str) else json.dumps(p["card"], ensure_ascii=False)
+        segments.append({"type": "json", "data": {"data": card}})
     if not segments:
         return json.dumps({"ok": False, "message": "消息为空"})
     mid = BOT._post(gid, segments, nickname=m["card"] or m["nickname"], uid=uid, kind="user")

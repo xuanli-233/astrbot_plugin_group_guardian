@@ -21,15 +21,18 @@ from astrbot.api import logger
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
 try:  # 实时日志进度（live_log.py）；独立加载本模块的测试里没有时退化为空操作
-    from .live_log import live_set, live_stage
+    from .live_log import live_detail, live_set, live_stage
 except ImportError:
     try:
-        from live_log import live_set, live_stage
+        from live_log import live_detail, live_set, live_stage
     except ImportError:
         def live_set(*_a, **_k):
             return None
 
         def live_stage(*_a, **_k):
+            return None
+
+        def live_detail(*_a, **_k):
             return None
 
 try:
@@ -173,6 +176,26 @@ class ModerationMixin(ImageAuditMixin):
                 text = (text + "\n" + forward_text) if text else forward_text
             if forward_images:
                 image_urls = self._select_image_urls(image_urls + forward_images)
+
+        # 小程序 / 分享卡片（card_parse.py）：标题、来源、appid、链接并入文字参与关键词匹配，
+        # 预览图送码识别 / OCR，实时日志里显示卡片内容
+        extract_cards = getattr(self, "_card_extract", None)
+        if callable(extract_cards) and self._cfg("card_parse_enabled", True, group_id=group_id):
+            try:
+                cards = extract_cards(event)
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 解析卡片失败: {e}")
+                cards = []
+            if cards:
+                card_lines = "\n".join(self._card_text(c) for c in cards)
+                text = (text + "\n" + card_lines) if text else card_lines
+                if self._cfg("card_scan_preview", True, group_id=group_id):
+                    previews = [c["preview"] for c in cards if c.get("preview")]
+                    for c in cards:
+                        c["_scan"] = bool(c.get("preview"))
+                    if previews:
+                        image_urls = self._select_image_urls(image_urls + previews)
+                live_detail(self._card_live_lines(cards))
 
         # 关键词撤回 + 葵花码 / OCR 识别过滤（keyword_guard.py），命中即备份到指定群并撤回
         hit_guards = getattr(self, "_run_hit_guards", None)

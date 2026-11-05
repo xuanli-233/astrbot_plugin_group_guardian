@@ -1736,6 +1736,7 @@ class WebMixin:
         "leave_recall_on_kick": "退群撤回", "leave_recall_count": "退群撤回",
         "leave_recall_minutes": "退群撤回",
         "leave_log_enabled": "退群记录", "leave_log_msg_count": "退群记录", "leave_log_use_history": "退群记录",
+        "card_parse_enabled": "卡片解析", "card_scan_preview": "卡片解析",
         "code_limit_enabled": "码发送次数", "code_limit_scope": "码发送次数", "code_limit_window_hours": "码发送次数",
         "code_limit_max": "码发送次数", "code_limit_warn_enabled": "码发送次数", "code_limit_warn_template": "码发送次数",
         "blacklist_kick_on_join": "黑名单", "blacklist_native_block_enabled": "黑名单",

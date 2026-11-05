@@ -47,6 +47,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
     "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history",
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",
+    "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
     "code_limit_warn_enabled", "code_limit_warn_template",
     "live_log_enabled", "live_log_show_text", "live_log_size",

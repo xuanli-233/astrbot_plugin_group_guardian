@@ -2635,6 +2635,8 @@ var MANUAL_SETTING_KEYS = {
   leave_log_use_history: true,
   leave_auto_blacklist_times: true,
   leave_auto_blacklist_days: true,
+  card_parse_enabled: true,
+  card_scan_preview: true,
   code_limit_enabled: true,
   code_limit_scope: true,
   code_limit_window_hours: true,
@@ -3406,7 +3408,9 @@ var MN_SWITCHES = {
     { key: 'keyword_guard_enabled', label: '关键词撤回', desc: '消息命中关键词规则时撤回' },
     { key: 'backup_enabled', label: '撤回前先备份', desc: '把原消息以合并转发的形式发到备份群' },
     { key: 'hit_mute_enabled', label: '同时禁言', desc: '时长取「自动审核禁言时长」，默认 30 分钟' },
-    { key: 'hit_notice_enabled', label: '群内提示', desc: '撤回后在群里发一条提示' }
+    { key: 'hit_notice_enabled', label: '群内提示', desc: '撤回后在群里发一条提示' },
+    { key: 'card_parse_enabled', label: '解析小程序 / 分享卡片', desc: '小程序名、标题、appid、跳转链接也参与关键词匹配，例如规则写 wx 开头的 appid 可拦某个小程序' },
+    { key: 'card_scan_preview', label: '卡片预览图也识别', desc: '卡片封面当作图片，开启葵花码识别 / OCR 时一起识别' }
   ],
   clSwitches: [
     { key: 'code_limit_enabled', label: '限制同一个码的发送次数', desc: '超过次数的那条消息撤回' },

@@ -193,6 +193,18 @@
         "default": 5,
         "hint": "收到申请 / 邀请后先等这么久（再随机加 0~50%）再处理，避免秒同意被风控。范围 0–600"
     },
+    "card_parse_enabled": {
+        "description": "解析小程序 / 分享卡片",
+        "type": "bool",
+        "default": true,
+        "hint": "把卡片的小程序名、标题、appid、跳转链接拼成一行文字并入消息，关键词规则可以匹配（例如写 appid wx9580c9208762a7c5 或链接片段拦某个小程序）；实时日志显示卡片内容"
+    },
+    "card_scan_preview": {
+        "description": "卡片的预览图送码识别 / OCR",
+        "type": "bool",
+        "default": true,
+        "hint": "小程序 / 链接卡片的封面图当作普通图片处理：开启葵花码识别或 OCR 时一起识别（封面里藏二维码时能拦住）"
+    },
     "code_limit_enabled": {
         "description": "同一个码限制发送次数",
         "type": "bool",
