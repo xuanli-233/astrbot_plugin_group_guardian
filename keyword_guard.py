@@ -185,7 +185,7 @@ class KeywordGuardMixin:
         live_set("hit", action, reason)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
         self._record_op(
-            "葵花码撤回" if kind == "wxcode" else "关键词撤回", source="自动", group_id=group_id,
+            {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回"}.get(kind, "关键词撤回"), source="自动", group_id=group_id,
             target=user_id, reason=reason, result=action,
             detail=(f"{user_name}：" if user_name else "") + (text or "")[:200]
             + (f"｜{extra_text[:200]}" if extra_text else ""),
@@ -254,6 +254,12 @@ class KeywordGuardMixin:
                         event, group_id, user_id, user_name, text or "[图片]", reason,
                         kind="wxcode", extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
                     )
+                elif texts and callable(getattr(self, "_cl_enforce", None)):
+                    # 没命中规则：同一个码在时间窗口内发送次数超限也撤回（code_limit.py）
+                    limited, notice = await self._cl_enforce(
+                        event, group_id, user_id, user_name, text, texts, image_urls, summary=summary)
+                    if limited:
+                        reason = "同一个码发送次数超限"
                 # 二维码看板：撤回之后再在后台生成缩略图
                 schedule = getattr(self, "_cb_schedule", None)
                 if callable(schedule) and collected:
@@ -278,6 +284,11 @@ class KeywordGuardMixin:
                         kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
                     )
                     return True, notice
+                if texts and callable(getattr(self, "_cl_enforce", None)):
+                    limited, notice = await self._cl_enforce(
+                        event, group_id, user_id, user_name, text, texts, image_urls, summary=joined)
+                    if limited:
+                        return True, notice
 
         if self._cfg("keyword_guard_enabled", True, group_id=group_id) and \
                 self._cfg_str("local_ocr_driver", "off", group_id=group_id) != "off":

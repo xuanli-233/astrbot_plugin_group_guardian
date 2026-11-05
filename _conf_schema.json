@@ -193,6 +193,43 @@
         "default": 5,
         "hint": "收到申请 / 邀请后先等这么久（再随机加 0~50%）再处理，避免秒同意被风控。范围 0–600"
     },
+    "code_limit_enabled": {
+        "description": "同一个码限制发送次数",
+        "type": "bool",
+        "default": false,
+        "hint": "识别出码的内容后，如果没命中码内容规则，再按内容计次：一段时间内同一个码超过次数就撤回（先备份、可选禁言，同关键词命中）。只有解出了内容的码能计次；被规则撤回的不计次"
+    },
+    "code_limit_scope": {
+        "description": "码发送次数：按所有群合计还是每个群单独计",
+        "type": "string",
+        "default": "global",
+        "options": ["global", "group"],
+        "hint": "global = 所有群合计（同一个码在任何群发都算）；group = 每个群单独计"
+    },
+    "code_limit_window_hours": {
+        "description": "码发送次数：统计最近几小时",
+        "type": "int",
+        "default": 5,
+        "hint": "滑动窗口，范围 1–168 小时"
+    },
+    "code_limit_max": {
+        "description": "码发送次数：窗口内最多发几次",
+        "type": "int",
+        "default": 3,
+        "hint": "超过这个次数的那条消息撤回，范围 1–1000"
+    },
+    "code_limit_warn_enabled": {
+        "description": "码发送超限时在群里警告",
+        "type": "bool",
+        "default": true,
+        "hint": "撤回后在群里发一条提示，内容见下面的模板"
+    },
+    "code_limit_warn_template": {
+        "description": "码发送超限警告模板",
+        "type": "string",
+        "default": "[群管] {name}，同一个码 {hours} 小时内只能发 {max} 次，这条已撤回",
+        "hint": "变量：{name} 昵称、{uid} QQ 号、{group} 群号、{hours} 小时数、{max} 上限、{count} 已发次数"
+    },
     "code_board_enabled": {
         "description": "二维码看板：保留识别过的图片和码",
         "type": "bool",

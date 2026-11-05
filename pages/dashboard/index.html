@@ -948,6 +948,20 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             </div>
           </div>
           <div class="card">
+            <div class="card-header"><h2>同一个码发送次数</h2><span class="rules-subtle">没命中规则的码，一段时间内发太多次也撤回</span></div>
+            <div class="settings-list" id="clSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:84px">计次范围</label>
+                <label><input type="radio" name="clScope" value="global" /> 所有群合计</label>
+                <label><input type="radio" name="clScope" value="group" /> 每个群单独计</label></div>
+              <div class="mn-row"><label style="width:84px">限制</label><input type="number" min="1" max="168" class="input-sm" id="clHours" style="width:80px" /><span>小时内同一个码最多发</span><input type="number" min="1" max="1000" class="input-sm" id="clMax" style="width:80px" /><span>次</span></div>
+              <div class="mn-row"><label style="width:84px">警告模板</label><input class="input-sm" id="clTpl" style="flex:1" /></div>
+              <p class="mn-hint">滑动窗口：例如「5 小时 3 次」= 最近 5 小时里这个码已经发过 3 次，第 4 次撤回（先备份；开了「同时禁言」也会禁言）。只有解出了内容的码能计次；被码内容规则撤回的不计次；同一条消息里重复的码算一次。模板变量：{name} {uid} {group} {hours} {max} {count}</p>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnClSave">保存</button><button class="btn btn-outline btn-sm" id="btnClTop">查看最近发得最多的码</button></div>
+              <div id="clTop"></div>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-header"><h2>图片文字识别（OCR）</h2><span class="rules-subtle">识别出的文字按「关键词规则」过滤</span></div>
             <div class="mn-body">
               <div class="mn-row"><label style="width:84px">接入方式</label>
@@ -2621,6 +2635,12 @@ var MANUAL_SETTING_KEYS = {
   leave_log_use_history: true,
   leave_auto_blacklist_times: true,
   leave_auto_blacklist_days: true,
+  code_limit_enabled: true,
+  code_limit_scope: true,
+  code_limit_window_hours: true,
+  code_limit_max: true,
+  code_limit_warn_enabled: true,
+  code_limit_warn_template: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
   blacklist_native_block_enabled: true,
@@ -3388,6 +3408,10 @@ var MN_SWITCHES = {
     { key: 'hit_mute_enabled', label: '同时禁言', desc: '时长取「自动审核禁言时长」，默认 30 分钟' },
     { key: 'hit_notice_enabled', label: '群内提示', desc: '撤回后在群里发一条提示' }
   ],
+  clSwitches: [
+    { key: 'code_limit_enabled', label: '限制同一个码的发送次数', desc: '超过次数的那条消息撤回' },
+    { key: 'code_limit_warn_enabled', label: '超限时在群里警告', desc: '撤回后按下面的模板发一条提示' }
+  ],
   wxSwitches: [
     { key: 'wxcode_enabled', label: '启用葵花码识别', desc: '需要先接入识别模块' }
   ],
@@ -3607,6 +3631,12 @@ async function loadGuard() {
   MN.wx = (mnCfg('wxcode_regex_rules') || []).slice();
   mnRenderSwitches('guardSwitches');
   mnRenderSwitches('wxSwitches');
+  mnRenderSwitches('clSwitches');
+  var clScope = mnCfg('code_limit_scope') || 'global';
+  $$('input[name=clScope]').forEach(function(r) { r.checked = r.value === clScope; });
+  $('#clHours').value = mnCfg('code_limit_window_hours') || 5;
+  $('#clMax').value = mnCfg('code_limit_max') || 3;
+  $('#clTpl').value = mnCfg('code_limit_warn_template') || '';
   mnRenderRules('kw');
   mnRenderRules('wx');
   mnUpdateTypeHint();
@@ -3629,6 +3659,29 @@ async function loadGuard() {
   $('#ocrUrl').value = mnCfg('local_ocr_service_url') || '';
   $('#ocrModule').value = mnCfg('local_ocr_python_module') || '';
   mnToggleDriverRows();
+}
+
+async function clSave() {
+  var h = Number($('#clHours').value), m = Number($('#clMax').value);
+  if (!(h >= 1 && h <= 168) || Math.floor(h) !== h || !(m >= 1 && m <= 1000) || Math.floor(m) !== m) {
+    toast('小时填 1–168，次数填 1–1000 的整数', 'warning'); return;
+  }
+  var scope = ($('input[name=clScope]:checked') || {}).value || 'global';
+  var values = { code_limit_scope: scope, code_limit_window_hours: h, code_limit_max: m };
+  var tpl = $('#clTpl').value.trim();
+  if (tpl) values.code_limit_warn_template = tpl;
+  mnSaveConfig(values, '已保存');
+}
+async function clLoadTop() {
+  var box = $('#clTop');
+  box.innerHTML = '<p class="mn-hint">加载中...</p>';
+  var res = await safeGet('minimal/codelimit/top', { limit: 30 });
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res), items = d.items || [];
+  box.innerHTML = items.length ? '<p class="mn-hint" style="margin:6px 0">最近 ' + d.hours + ' 小时（只统计没被规则撤回的码）</p><table class="mn-table"><thead><tr><th>码内容</th><th>次数</th><th>群数</th><th>人数</th><th>最近</th></tr></thead><tbody>' +
+    items.map(function(it) {
+      return '<tr><td style="max-width:320px;word-break:break-all">' + esc(it.text) + '</td><td><strong>' + it.count + '</strong></td><td>' + it.groups + '</td><td>' + it.users + '</td><td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="mn-hint" style="margin-top:6px">最近没有记录（功能开启后才开始计次）</p>';
 }
 
 async function mnAddRule(kind) {
@@ -4933,6 +4986,8 @@ function initMinimalPages() {
   document.addEventListener('visibilitychange', function() { if (liveActive() && !LIVE.paused) livePoll(); });
 
   bindIfExists('btnOpRefresh', function() { loadOplog(1); });
+  bindIfExists('btnClSave', clSave);
+  bindIfExists('btnClTop', clLoadTop);
   bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
   bindIfExists('btnLlFilter', function() { loadLeaveLog(1); });
   bindIfExists('btnLlUserClose', function() { $('#llUserCard').style.display = 'none'; });

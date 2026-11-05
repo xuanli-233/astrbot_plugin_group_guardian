@@ -14,6 +14,7 @@
   POST /minimal/kick                   跨群踢人 / 踢出并拉黑
   GET  /minimal/leavelog               退群记录（按 QQ / 群筛选，分页）
   GET  /minimal/leavelog/user          某个 QQ 的退群汇总
+  GET  /minimal/codelimit/top          近期发送次数最多的码（码发送次数限制）
 业务逻辑全部复用指令所用的函数（group_blacklist / group_broadcast / group_name_task / keyword_guard）。
 """
 import re
@@ -46,6 +47,8 @@ MINIMAL_CONFIG_KEYS = (
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
     "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history",
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",
+    "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
+    "code_limit_warn_enabled", "code_limit_warn_template",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
@@ -450,6 +453,13 @@ class MinimalWebMixin:
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
         )
         return jsonify({"status": "success", "data": {"items": items, "total": total}})
+
+    async def _web_minimal_codelimit_top(self):
+        args = quart_request.args
+        hours = self._safe_int(args.get("hours", 0), 0) or self._cfg_int("code_limit_window_hours", 5)
+        items = self._cl_top(hours=hours, group_id=str(args.get("group_id", "") or "").strip(),
+                             limit=self._safe_int(args.get("limit", 50), 50))
+        return jsonify({"status": "success", "data": {"items": items, "hours": min(max(hours, 1), 168)}})
 
     async def _web_minimal_leavelog_user(self):
         uid = str(quart_request.args.get("user_id", "") or "").strip()
