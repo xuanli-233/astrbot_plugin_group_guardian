@@ -1100,6 +1100,16 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><h2>退群撤回</h2></div>
+          <div class="settings-list" id="leaveRecallSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">撤回最近几条</label><input type="number" min="0" max="100" class="input-sm" id="lrCount" style="width:120px" /><span class="mn-hint">0 = 不按条数</span></div>
+            <div class="mn-row"><label style="width:150px">撤回最近几分钟</label><input type="number" min="0" max="10080" class="input-sm" id="lrMinutes" style="width:120px" /><span class="mn-hint">0 = 不按时间</span></div>
+            <p class="mn-hint">两个条件满足任意一个就撤回，单次最多 100 条。例如「10 条 + 30 分钟」= 最近 10 条，以及 30 分钟内发的所有消息。插件只在开启后开始记录消息 ID（不存内容），重启后靠群历史兜底（最近 100 条）。撤回结果写入操作记录。</p>
+            <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnLrSave">保存</button></div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
           <div class="mn-body">
             <div class="mn-row">
@@ -3127,6 +3137,12 @@ var MANUAL_SETTING_KEYS = {
   // 以下由「常用功能」里的新页面管理，不在全量配置里重复显示
   // （列表类规则若在全量配置里按逗号拆分保存，会把正则里的逗号拆坏）
   leave_auto_blacklist_enabled: true,
+  leave_recall_enabled: true,
+  leave_recall_on_leave: true,
+  leave_recall_on_kick: true,
+  leave_recall_count: true,
+  leave_recall_minutes: true,
+  leave_recall_use_history: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
   blacklist_native_block_enabled: true,
@@ -4803,6 +4819,12 @@ var MN_SWITCHES = {
     { key: 'blacklist_reject_join_enabled', label: '黑名单申请自动拒绝', desc: '黑名单用户的加群申请自动拒绝（不需要开入群审核）' },
     { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
     { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
+  ],
+  leaveRecallSwitches: [
+    { key: 'leave_recall_enabled', label: '启用退群撤回', desc: '成员离开群后自动撤回他的近期消息（总开关）' },
+    { key: 'leave_recall_on_leave', label: '主动退群时', desc: '成员自己退群' },
+    { key: 'leave_recall_on_kick', label: '被踢出时', desc: '被管理员或本插件踢出（含批量踢人、黑名单入群即踢）' },
+    { key: 'leave_recall_use_history', label: '用群历史兜底', desc: '本地记录不全时（如插件刚重启）额外拉一次最近 100 条群消息' }
   ]
 };
 var MN_TYPES = {
@@ -5187,6 +5209,10 @@ function mnRenderBlacklist() {
 async function loadKick() {
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('kickSwitches');
+  mnRenderSwitches('leaveRecallSwitches');
+  var lrc = mnCfg('leave_recall_count'), lrm = mnCfg('leave_recall_minutes');
+  $('#lrCount').value = (lrc === undefined || lrc === null || lrc === '') ? 10 : lrc;
+  $('#lrMinutes').value = (lrm === undefined || lrm === null || lrm === '') ? 30 : lrm;
   var scope = $('#kickScope'), prev = scope.value;
   scope.innerHTML = '<option value="">所有管理的群</option>' + mnGroups().filter(function(g) { return g.managed; })
     .map(function(g) { return '<option value="' + escAttr(g.group_id) + '">仅 ' + esc(mnGroupLabel(g)) + '</option>'; }).join('');
@@ -5499,6 +5525,14 @@ function initMinimalPages() {
     var groups = mnSelectedGroups('#dirTable');
     if (!groups.length) { toast('请先勾选群', 'warning'); return; }
     mnDirRefresh({ groups: groups });
+  });
+  bindIfExists('btnLrSave', function() {
+    var count = Number($('#lrCount').value), minutes = Number($('#lrMinutes').value);
+    if (!(count >= 0 && count <= 100) || !(minutes >= 0 && minutes <= 10080) || Math.floor(count) !== count || Math.floor(minutes) !== minutes) {
+      toast('条数填 0–100，分钟填 0–10080 的整数', 'warning'); return;
+    }
+    if (!count && !minutes) { toast('条数和分钟都为 0 时不会撤回任何消息', 'warning'); }
+    mnSaveConfig({ leave_recall_count: count, leave_recall_minutes: minutes }, '已保存');
   });
   bindIfExists('btnDirAll', function() {
     if (!confirm('逐个刷新所有群的成员？每个群间隔 ' + (mnCfg('directory_min_interval_ms') || 1500) + ' 毫秒，在后台进行。')) return;

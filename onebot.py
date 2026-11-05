@@ -806,6 +806,10 @@ class OneBotMixin:
                 try:
                     await asyncio.wait_for(client.call_action('delete_msg', message_id=mid), timeout=ONEBOT_CALL_TIMEOUT)
                     recalled += 1
+                    # 退群撤回（leave_recall）随后会收到同一人的退群通知，标记为已撤回避免重复撤回
+                    mark = getattr(self, "_lr_recalled", None)
+                    if callable(mark):
+                        mark()[str(mid)] = time.time()
                     await asyncio.sleep(0.3)
                 except Exception:
                     pass

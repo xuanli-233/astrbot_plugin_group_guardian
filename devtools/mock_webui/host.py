@@ -443,6 +443,11 @@ class FakeOneBot:
         if reject_add_request:
             g["blocked"].add(int(user_id))
         self.system(group_id, f"{m['nickname']}({user_id}) 被移出群聊" + ("，并被加入群黑名单" if reject_add_request else ""))
+        # 真实协议端随后会推送 group_decrease(kick) 通知；这里异步投递给退群撤回，由 pump 推进
+        if PLUGIN is not None and hasattr(PLUGIN, "_on_member_leave_recall"):
+            LOOP.create_task(_drain(PLUGIN._on_member_leave_recall(_notice_event(
+                {"post_type": "notice", "notice_type": "group_decrease", "sub_type": "kick",
+                 "group_id": int(group_id), "user_id": int(user_id), "operator_id": BOT_UIN}))))
         return _ok(None)
 
     def act_batch_delete_group_member(self, group_id, user_ids, **_):
@@ -780,6 +785,7 @@ def sim_send(payload_json: str) -> str:
     event = SimEvent(raw, segments, text)
     replies = []
     try:
+        _run_handler("_on_track_group_message", event)
         word = text.strip().split()[0] if text.strip() else ""
         if word.startswith("/") and word[1:] in COMMANDS:
             replies = _run_handler(COMMANDS[word[1:]], event, reply_gid=gid)
@@ -808,9 +814,10 @@ def sim_member(payload_json: str) -> str:
         if not m:
             return json.dumps({"ok": False, "message": "该用户不在群里"})
         BOT.system(gid, f"{m['nickname']}({uid}) 退出了群聊")
-        _run_handler("_on_member_leave_blacklist", _notice_event(
-            {"post_type": "notice", "notice_type": "group_decrease", "sub_type": "leave",
-             "group_id": gid, "user_id": uid, "operator_id": uid}))
+        leave_raw = {"post_type": "notice", "notice_type": "group_decrease", "sub_type": "leave",
+                     "group_id": gid, "user_id": uid, "operator_id": uid}
+        _run_handler("_on_member_leave_blacklist", _notice_event(leave_raw))
+        _run_handler("_on_member_leave_recall", _notice_event(leave_raw))
         return json.dumps({"ok": True})
     if uid in g["members"]:
         return json.dumps({"ok": False, "message": "该用户已经在群里"})

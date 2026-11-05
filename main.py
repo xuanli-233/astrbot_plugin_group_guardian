@@ -26,6 +26,7 @@ from .operation_log import OperationLogMixin
 from .group_name_task import GroupNameTaskMixin
 from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
+from .leave_recall import LeaveRecallMixin
 from .message_backup import MessageBackupMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
@@ -40,7 +41,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -415,6 +416,17 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         async for item in CommandsMixin.cmd_list_rule_keyword(self, event):
             yield item
 
+    # 退群撤回：记录每条群消息的 ID 与时间（只记 ID，不存内容）。注册在审核入口之前，
+    # 保证被审核撤回、stop_event 的消息也已记下。功能关闭时不记录。
+    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_track_group_message(self, event: AiocqhttpMessageEvent):
+        try:
+            gid = self._get_group_id(event)
+            if gid and self._cfg("leave_recall_enabled", False, group_id=gid):
+                LeaveRecallMixin._lr_track_event(self, event)
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 记录群消息出错: {e}")
     # 消息监听注册区：审核主流程由 moderation.py 实现，这里只负责注册事件入口。
     # moderation._handle_message 是 async generator，必须用 async for/yield 转发，不能 await。
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -519,6 +531,14 @@ class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, 
         except Exception as e:
             logger.warning(f"[GroupMgr] 退群拉黑处理出错: {e}")
 
+    # 退群撤回：成员主动退群 / 被踢后，后台撤回其最近 N 条、最近 M 分钟的消息。广播型通知，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_member_leave_recall(self, event: AiocqhttpMessageEvent):
+        try:
+            await LeaveRecallMixin._handle_leave_recall(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 退群撤回处理出错: {e}")
     # 黑名单用户被邀请等方式绕过加群申请入群时，立即踢出并原生拉黑。
     @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
