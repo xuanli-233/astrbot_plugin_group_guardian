@@ -455,6 +455,8 @@ class FakeOneBot:
         # 真实协议端随后会推送 group_decrease(kick) 通知；这里异步投递给退群撤回，由 pump 推进
         kick_raw = {"post_type": "notice", "notice_type": "group_decrease", "sub_type": "kick",
                     "group_id": int(group_id), "user_id": int(user_id), "operator_id": BOT_UIN}
+        if PLUGIN is not None and hasattr(PLUGIN, "_on_directory_notice"):
+            LOOP.create_task(_drain(PLUGIN._on_directory_notice(_notice_event(dict(kick_raw)))))
         if PLUGIN is not None and hasattr(PLUGIN, "_on_member_leave_log"):
             LOOP.create_task(_drain(PLUGIN._on_member_leave_log(_notice_event(dict(kick_raw)))))
         if PLUGIN is not None and hasattr(PLUGIN, "_on_member_leave_recall"):
@@ -921,6 +923,7 @@ def sim_member(payload_json: str) -> str:
         BOT.system(gid, f"{m['nickname']}({uid}) 退出了群聊")
         leave_raw = {"post_type": "notice", "notice_type": "group_decrease", "sub_type": "leave",
                      "group_id": gid, "user_id": uid, "operator_id": uid}
+        _run_handler("_on_directory_notice", _notice_event(dict(leave_raw)))  # 群成员缓存实时更新
         _run_handler("_on_member_leave_log", _notice_event(dict(leave_raw)))
         _run_handler("_on_member_leave_blacklist", _notice_event(leave_raw))
         _run_handler("_on_member_leave_recall", _notice_event(leave_raw))
@@ -949,6 +952,10 @@ def sim_member(payload_json: str) -> str:
             BOT.system(gid, f"{nickname}({uid}) 的入群申请未被插件处理（模拟为管理员手动同意）")
     g["members"][uid] = {"nickname": nickname, "card": "", "role": "member", "title": "", "shut_until": 0}
     BOT.system(gid, f"{nickname}({uid}) 加入了群聊" + ("（被邀请）" if action == "invite" else ""))
+    # 真实环境里同一条 group_increase 会广播给所有监听：群成员缓存也随之实时更新
+    _run_handler("_on_directory_notice", _notice_event(
+        {"post_type": "notice", "notice_type": "group_increase", "sub_type": "approve",
+         "group_id": gid, "user_id": uid}))
     _run_handler("_on_blacklisted_member_join", _notice_event(
         {"post_type": "notice", "notice_type": "group_increase", "sub_type": "approve",
          "group_id": gid, "user_id": uid}))

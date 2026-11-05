@@ -59,7 +59,9 @@ MINIMAL_CONFIG_KEYS = (
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
-    "auto_accept_invite_scope", "auto_accept_delay_seconds", "auto_msg_mask_enabled", "auto_msg_mask_value",
+    "auto_accept_invite_scope", "auto_accept_delay_seconds",
+    "auto_accept_friend_wl_users", "auto_accept_friend_wl_groups",
+    "auto_accept_invite_wl_users", "auto_accept_invite_wl_groups", "auto_msg_mask_enabled", "auto_msg_mask_value",
     "bot_notify_join_enabled", "bot_notify_friend_enabled",
     "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
@@ -524,6 +526,20 @@ class MinimalWebMixin:
     # ------------------------------------------------------------------
     # 批量任务（batch_queue.py）
     # ------------------------------------------------------------------
+    async def _web_minimal_accept_check(self):
+        """测试某个 QQ 能否通过好友申请 / 进群邀请的自动处理范围（会按需刷新白名单群成员）。"""
+        data = await self._minimal_body()
+        kind = "invite" if str(data.get("kind") or "") == "invite" else "friend"
+        uid = str(data.get("user_id") or "").strip()
+        if not uid.isdigit():
+            return self._minimal_error("请填写 QQ 号")
+        if uid in (getattr(self, "_user_black_set", None) or set()):
+            return jsonify({"status": "success", "data": {
+                "allowed": False, "reason": "在插件黑名单中（好友申请会自动拒绝，邀请不接受）", "scope": self._aa_scope(kind)}})
+        client = await self._get_client()
+        allowed, why = await self._aa_allowed(kind, uid, client)
+        return jsonify({"status": "success", "data": {"allowed": allowed, "reason": why, "scope": self._aa_scope(kind)}})
+
     async def _web_minimal_batch_jobs(self):
         args = quart_request.args
         jobs, total = self._bq_jobs(limit=self._safe_int(args.get("limit", 30), 30),

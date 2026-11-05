@@ -171,8 +171,20 @@
         "description": "自动同意好友申请的范围",
         "type": "string",
         "default": "all",
-        "options": ["all", "admin"],
-        "hint": "all = 所有人；admin = 仅插件管理员"
+        "options": ["all", "admin", "whitelist"],
+        "hint": "all = 所有人；admin = 仅插件管理员；whitelist = 白名单（插件管理员 + 下面的白名单 QQ + 白名单群的群成员）"
+    },
+    "auto_accept_friend_wl_users": {
+        "description": "好友申请白名单：QQ 号",
+        "type": "list",
+        "default": [],
+        "hint": "范围选「白名单」时，这些 QQ 的好友申请自动同意。在 WebUI「踢人与黑名单 → 好友申请与进群邀请」里编辑"
+    },
+    "auto_accept_friend_wl_groups": {
+        "description": "好友申请白名单：群号",
+        "type": "list",
+        "default": [],
+        "hint": "范围选「白名单」时，这些群的群成员加机器人好友自动同意（机器人需在群内）。缓存里找不到申请人时会重新拉取成员列表再比对"
     },
     "auto_accept_invite_enabled": {
         "description": "自动接受进群邀请",
@@ -184,8 +196,20 @@
         "description": "自动接受进群邀请的范围",
         "type": "string",
         "default": "admin",
-        "options": ["admin", "all"],
-        "hint": "admin = 仅接受插件管理员的邀请（推荐）；all = 接受任何人的邀请。注意：没设群白名单时，机器人所在的所有群都会被当成管理范围，陌生群也会收到全群公告、参与全群踢人"
+        "options": ["admin", "all", "whitelist"],
+        "hint": "admin = 仅接受插件管理员的邀请（推荐）；all = 接受任何人的邀请；whitelist = 白名单（插件管理员 + 下面的白名单 QQ + 白名单群的群成员）。注意：没设群白名单时，机器人所在的所有群都会被当成管理范围，陌生群也会收到全群公告、参与全群踢人"
+    },
+    "auto_accept_invite_wl_users": {
+        "description": "进群邀请白名单：QQ 号",
+        "type": "list",
+        "default": [],
+        "hint": "范围选「白名单」时，这些 QQ 邀请机器人进群自动接受。在 WebUI「踢人与黑名单 → 好友申请与进群邀请」里编辑"
+    },
+    "auto_accept_invite_wl_groups": {
+        "description": "进群邀请白名单：群号",
+        "type": "list",
+        "default": [],
+        "hint": "范围选「白名单」时，这些群的群成员邀请机器人进群自动接受（机器人需在群内）。缓存里找不到邀请人时会重新拉取成员列表再比对"
     },
     "bot_notify_join_enabled": {
         "description": "机器人进群时推送到备份群",

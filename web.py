@@ -706,6 +706,7 @@ class WebMixin:
                 ("/minimal/duplicates/handle", self._web_minimal_duplicates_handle, ["POST"], "处理重复群成员"),
                 ("/minimal/duplicates/ignore", self._web_minimal_duplicates_ignore, ["POST"], "忽略 / 取消忽略重复成员"),
                 ("/minimal/duplicates/scope", self._web_minimal_duplicates_scope, ["POST"], "设置重复成员检测范围"),
+                ("/minimal/accept/check", self._web_minimal_accept_check, ["POST"], "测试好友申请 / 进群邀请白名单"),
                 ("/minimal/blacklist/add", self._web_minimal_blacklist_add, ["POST"], "加入黑名单（带原因）"),
                 ("/minimal/blacklist/remove", self._web_minimal_blacklist_remove, ["POST"], "移出黑名单"),
             ]
@@ -1701,7 +1702,9 @@ class WebMixin:
         "code_board_enabled", "code_board_size", "wxcode_block_codes", "wxcode_allow_codes", "code_image_max_kb",
         "code_store_ttl_hours",
         "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
-        "auto_accept_invite_scope", "auto_accept_delay_seconds", "auto_msg_mask_enabled", "auto_msg_mask_value",
+        "auto_accept_invite_scope", "auto_accept_delay_seconds",
+        "auto_accept_friend_wl_users", "auto_accept_friend_wl_groups",
+        "auto_accept_invite_wl_users", "auto_accept_invite_wl_groups", "auto_msg_mask_enabled", "auto_msg_mask_value",
         "bot_notify_join_enabled", "bot_notify_friend_enabled",
         "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled",
         "leave_auto_blacklist_times", "leave_auto_blacklist_days",

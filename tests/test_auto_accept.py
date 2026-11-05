@@ -57,6 +57,31 @@ class _Harness(auto_accept.AutoAcceptMixin):
         return [], ""
 
 
+class _WlHarness(_Harness):
+    """带群成员缓存的替身：members 是本地缓存，remote 是协议端最新的成员（force 拉取时写回缓存）。"""
+
+    def __init__(self, cfg=None, wl=None, members=None):
+        super().__init__(cfg)
+        self.config.update(wl or {})
+        self.members = {g: set(v) for g, v in (members or {}).items()}
+        self.remote = {g: set(v) for g, v in self.members.items()}
+        self.members_ts = {g: 0 for g in self.members}
+        self.forced = []
+
+    def _dir(self):
+        return {"members_ts": self.members_ts}
+
+    def _dir_cached_member(self, gid, uid):
+        return {"user_id": uid} if uid in self.members.get(gid, set()) else None
+
+    async def _dir_members(self, client, gid, force=False):
+        if force:
+            self.forced.append(gid)
+            self.members[gid] = set(self.remote.get(gid, set()))
+            self.members_ts[gid] = __import__("time").time()
+        return {u: {} for u in self.members.get(gid, set())}
+
+
 def _friend(uid="555", flag="f1", comment="你好"):
     return types.SimpleNamespace(raw_event={"post_type": "request", "request_type": "friend",
                                             "user_id": int(uid), "flag": flag, "comment": comment})
@@ -148,6 +173,47 @@ class AutoAcceptTests(unittest.IsolatedAsyncioTestCase):
         h = _Harness({"auto_accept_friend_enabled": True})
         h.config["disclaimer_agreed"] = False
         self.assertFalse(await h._handle_friend_request(_friend()))
+
+    async def test_friend_whitelist_users_and_groups(self):
+        h = _WlHarness({"auto_accept_friend_enabled": True, "auto_accept_friend_scope": "whitelist"},
+                       wl={"auto_accept_friend_wl_users": ["111"], "auto_accept_friend_wl_groups": ["900"]},
+                       members={"900": {"222"}})
+        self.assertTrue(await h._handle_friend_request(_friend("111", flag="a")))   # 白名单 QQ
+        self.assertTrue(await h._handle_friend_request(_friend("222", flag="b")))   # 白名单群成员（缓存）
+        self.assertTrue(await h._handle_friend_request(_friend(ADMIN, flag="c")))   # 插件管理员
+        self.assertFalse(await h._handle_friend_request(_friend("333", flag="d")))  # 不在白名单：留给人工
+        await _drain(h)
+        self.assertEqual(len(h.calls), 3)
+        self.assertIn("白名单群 900", [kw["reason"] for a, kw in h.ops if kw["target"] == "222"][0])
+
+    async def test_whitelist_refreshes_stale_group_once(self):
+        h = _WlHarness({"auto_accept_friend_enabled": True, "auto_accept_friend_scope": "whitelist"},
+                       wl={"auto_accept_friend_wl_groups": ["900"]}, members={"900": set()})
+        h.remote["900"] = {"444"}  # 刚进群，本地缓存还没有
+        self.assertTrue(await h._handle_friend_request(_friend("444", flag="a")))
+        self.assertEqual(h.forced, ["900"])
+        # 陌生人：刚拉取过（不到 AA_WL_REFRESH_SECONDS），不再重复拉取
+        self.assertFalse(await h._handle_friend_request(_friend("555", flag="b")))
+        self.assertEqual(h.forced, ["900"])
+
+    async def test_invite_whitelist_is_separate_from_friend(self):
+        h = _WlHarness({"auto_accept_invite_enabled": True, "auto_accept_invite_scope": "whitelist",
+                        "auto_accept_friend_enabled": True, "auto_accept_friend_scope": "whitelist"},
+                       wl={"auto_accept_friend_wl_users": ["111"], "auto_accept_invite_wl_users": ["222"]})
+        self.assertFalse(await h._handle_group_invite(_invite("111", flag="i1")))   # 只在好友白名单
+        self.assertTrue(await h._handle_group_invite(_invite("222", flag="i2")))
+        self.assertFalse(await h._handle_friend_request(_friend("222", flag="f1")))  # 只在邀请白名单
+        await _drain(h)
+        reasons = [kw["reason"] for a, kw in h.ops if a == "自动接受进群邀请"]
+        self.assertEqual(reasons, ["邀请人：在白名单 QQ 中"])
+
+    async def test_blacklist_beats_whitelist(self):
+        h = _WlHarness({"auto_accept_friend_enabled": True, "auto_accept_friend_scope": "whitelist"},
+                       wl={"auto_accept_friend_wl_users": ["111"]})
+        h._user_black_set = {"111"}
+        await h._handle_friend_request(_friend("111"))
+        await _drain(h)
+        self.assertEqual(h.calls[0][1]["approve"], False)
 
     def test_delay_has_jitter(self):
         h = _Harness({"auto_accept_delay_seconds": 10})

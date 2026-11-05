@@ -1145,15 +1145,29 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             <div class="mn-row"><label style="width:150px">好友申请：同意谁</label>
               <label><input type="radio" name="aaFriendScope" value="all" /> 所有人</label>
               <label><input type="radio" name="aaFriendScope" value="admin" /> 仅插件管理员</label>
+              <label><input type="radio" name="aaFriendScope" value="whitelist" /> 白名单</label>
+            </div>
+            <div class="aa-wl" id="aaFriendWl" style="display:none">
+              <div class="mn-row" style="align-items:flex-start"><label style="width:150px">好友申请白名单 QQ</label><textarea class="input-md" id="aaFriendWlUsers" rows="2" style="flex:1;min-width:220px" placeholder="多个 QQ 号用逗号、空格或换行分隔"></textarea></div>
+              <div class="mn-row"><label style="width:150px">好友申请白名单群</label><span class="mn-hint">勾选的群里的群成员都算白名单（机器人需在群内）</span><button class="btn btn-ghost btn-sm" data-aa-all="aaFriendWlGroups">全选</button><button class="btn btn-ghost btn-sm" data-aa-none="aaFriendWlGroups">全不选</button></div>
+              <div class="gp-grid" id="aaFriendWlGroups"></div>
             </div>
             <div class="mn-row"><label style="width:150px">进群邀请：接受谁的</label>
               <label><input type="radio" name="aaInviteScope" value="admin" /> 仅插件管理员（推荐）</label>
               <label><input type="radio" name="aaInviteScope" value="all" /> 任何人</label>
+              <label><input type="radio" name="aaInviteScope" value="whitelist" /> 白名单</label>
+            </div>
+            <div class="aa-wl" id="aaInviteWl" style="display:none">
+              <div class="mn-row" style="align-items:flex-start"><label style="width:150px">进群邀请白名单 QQ</label><textarea class="input-md" id="aaInviteWlUsers" rows="2" style="flex:1;min-width:220px" placeholder="多个 QQ 号用逗号、空格或换行分隔"></textarea></div>
+              <div class="mn-row"><label style="width:150px">进群邀请白名单群</label><span class="mn-hint">勾选的群里的群成员都算白名单（机器人需在群内）</span><button class="btn btn-ghost btn-sm" data-aa-all="aaInviteWlGroups">全选</button><button class="btn btn-ghost btn-sm" data-aa-none="aaInviteWlGroups">全不选</button></div>
+              <div class="gp-grid" id="aaInviteWlGroups"></div>
             </div>
             <div class="mn-row"><label style="width:150px">处理前等待（秒）</label><input type="number" min="0" max="600" class="input-sm" id="aaDelay" style="width:100px" /><span class="mn-hint">再随机加 0~50%，避免秒同意被风控</span></div>
             <p class="mn-hint" id="aaInviteWarn" style="display:none;color:var(--warning)">「任何人」的邀请都接受时：没设群白名单的话，被拉进的陌生群也会成为管理范围，会收到全群公告、参与全群踢人。建议在「设置 → 名单管理」配置群白名单。</p>
             <p class="mn-hint">插件黑名单里的人：好友申请自动拒绝，邀请不接受。不在范围内的申请 / 邀请不处理，留在 QQ 里人工决定。每次处理都写进操作记录。</p>
+            <p class="mn-hint">白名单 = 插件管理员 + 白名单 QQ + 白名单群的群成员。好友申请和进群邀请各用各的白名单。群成员先查本地缓存（入群 / 退群实时更新）；缓存里没有这个人时，会把超过 1 分钟没更新的白名单群重新拉一次成员列表再比对，所以刚进群的人也能通过。</p>
             <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnAaSave">保存</button></div>
+            <div class="mn-row"><label style="width:150px">测试</label><select class="input-sm" id="aaTestKind" style="width:110px"><option value="friend">好友申请</option><option value="invite">进群邀请</option></select><input class="input-sm" id="aaTestUid" placeholder="QQ 号" style="width:140px" /><button class="btn btn-outline btn-sm" id="btnAaTest">测试</button><span class="mn-hint" id="aaTestResult">按已保存的设置判断</span></div>
           </div>
         </div>
         <div class="card">
@@ -2677,6 +2691,10 @@ var MANUAL_SETTING_KEYS = {
   auto_accept_invite_enabled: true,
   auto_accept_invite_scope: true,
   auto_accept_delay_seconds: true,
+  auto_accept_friend_wl_users: true,
+  auto_accept_friend_wl_groups: true,
+  auto_accept_invite_wl_users: true,
+  auto_accept_invite_wl_groups: true,
   auto_msg_mask_enabled: true,
   bot_notify_join_enabled: true,
   bot_notify_friend_enabled: true,
@@ -3981,6 +3999,50 @@ function mnImportRules() {
 }
 
 /* ---- 批量公告 ---- */
+/* ---- 好友申请 / 进群邀请白名单 ---- */
+function mnMinimalIds(text) {
+  var out = [];
+  String(text || '').split(/[\s,，;；]+/).forEach(function(x) { x = x.trim(); if (/^\d+$/.test(x) && out.indexOf(x) === -1) out.push(x); });
+  return out;
+}
+function aaCfgList(key) {
+  var v = mnCfg(key);
+  if (typeof v === 'string') return mnMinimalIds(v);
+  return (v || []).map(String);
+}
+// k：Friend / Invite（元素 id 前缀）；kind：friend / invite（配置键）
+function aaRenderWhitelist(k, kind) {
+  $('#aa' + k + 'WlUsers').value = aaCfgList('auto_accept_' + kind + '_wl_users').join('\n');
+  var picked = aaCfgList('auto_accept_' + kind + '_wl_groups');
+  var groups = mnGroups();
+  var known = {}; groups.forEach(function(g) { known[g.group_id] = true; });
+  // 已保存但机器人已不在的群也列出来，方便取消
+  picked.forEach(function(gid) { if (!known[gid]) groups = groups.concat([{ group_id: gid, group_name: '', gone: true }]); });
+  var box = $('#aa' + k + 'WlGroups');
+  box.innerHTML = groups.length ? groups.map(function(g) {
+    return mnGroupChip(g, picked.indexOf(g.group_id) !== -1, '', g.gone ? '<span class="mn-tag" style="color:var(--warning)">机器人不在此群</span>' : '');
+  }).join('') : '<div class="mn-empty gp-empty">没有群列表（机器人未连接）</div>';
+  mnGroupFilter('#aa' + k + 'WlGroups');
+}
+function aaSyncWlVisible() {
+  [['Friend', 'aaFriendScope'], ['Invite', 'aaInviteScope']].forEach(function(p) {
+    var r = $('input[name=' + p[1] + ']:checked');
+    $('#aa' + p[0] + 'Wl').style.display = r && r.value === 'whitelist' ? '' : 'none';
+  });
+}
+async function aaTest() {
+  var uid = $('#aaTestUid').value.trim(), out = $('#aaTestResult');
+  if (!/^\d+$/.test(uid)) { toast('请填写 QQ 号', 'warning'); return; }
+  out.textContent = '判断中...（可能会刷新白名单群成员）';
+  out.style.color = '';
+  var res = await safePost('minimal/accept/check', { kind: $('#aaTestKind').value, user_id: uid }, 60000);
+  if (isApiError(res)) { out.textContent = mnErr(res); out.style.color = 'var(--danger)'; return; }
+  var d = mnData(res);
+  var scope = { all: '所有人', admin: '仅插件管理员', whitelist: '白名单' }[d.scope] || d.scope;
+  out.textContent = (d.allowed ? '会自动处理' : '不会自动处理（留给人工）') + '：' + d.reason + '（当前范围：' + scope + '）';
+  out.style.color = d.allowed ? 'var(--success)' : 'var(--text-muted)';
+}
+
 function mnSelectedGroups(containerSel) {
   return $$(containerSel + ' input[type=checkbox]:checked').map(function(cb) { return cb.value; });
 }
@@ -4200,6 +4262,9 @@ async function loadKick() {
   var fs = mnCfg('auto_accept_friend_scope') || 'all', is = mnCfg('auto_accept_invite_scope') || 'admin';
   $$('input[name=aaFriendScope]').forEach(function(r) { r.checked = r.value === fs; });
   $$('input[name=aaInviteScope]').forEach(function(r) { r.checked = r.value === is; });
+  aaRenderWhitelist('Friend', 'friend');
+  aaRenderWhitelist('Invite', 'invite');
+  aaSyncWlVisible();
   var delay = mnCfg('auto_accept_delay_seconds');
   $('#aaDelay').value = (delay === undefined || delay === null || delay === '') ? 5 : delay;
   $('#aaInviteWarn').style.display = is === 'all' ? '' : 'none';
@@ -5502,16 +5567,32 @@ function initMinimalPages() {
     mnDirRefresh({ groups: groups });
   });
   $$('input[name=aaInviteScope]').forEach(function(r) {
-    r.addEventListener('change', function() { $('#aaInviteWarn').style.display = r.value === 'all' && r.checked ? '' : 'none'; });
+    r.addEventListener('change', function() { $('#aaInviteWarn').style.display = r.value === 'all' && r.checked ? '' : 'none'; aaSyncWlVisible(); });
   });
+  $$('input[name=aaFriendScope]').forEach(function(r) { r.addEventListener('change', aaSyncWlVisible); });
+  $$('[data-aa-all]').forEach(function(b) { b.addEventListener('click', function() { mnSetGroupChecks('#' + b.getAttribute('data-aa-all'), true); }); });
+  $$('[data-aa-none]').forEach(function(b) { b.addEventListener('click', function() { mnSetGroupChecks('#' + b.getAttribute('data-aa-none'), false); }); });
+  bindIfExists('btnAaTest', aaTest);
+  bindIfExists('aaTestUid', function(e) { if (e.key === 'Enter') aaTest(); }, 'keydown');
   bindIfExists('btnAaSave', function() {
     var delay = Number($('#aaDelay').value);
     if (!(delay >= 0 && delay <= 600) || Math.floor(delay) !== delay) { toast('等待秒数请填 0–600 的整数', 'warning'); return; }
-    mnSaveConfig({
+    var values = {
       auto_accept_friend_scope: ($('input[name=aaFriendScope]:checked') || {}).value || 'all',
       auto_accept_invite_scope: ($('input[name=aaInviteScope]:checked') || {}).value || 'admin',
-      auto_accept_delay_seconds: delay
-    }, '已保存');
+      auto_accept_delay_seconds: delay,
+      auto_accept_friend_wl_users: mnMinimalIds($('#aaFriendWlUsers').value),
+      auto_accept_friend_wl_groups: mnSelectedGroups('#aaFriendWlGroups'),
+      auto_accept_invite_wl_users: mnMinimalIds($('#aaInviteWlUsers').value),
+      auto_accept_invite_wl_groups: mnSelectedGroups('#aaInviteWlGroups')
+    };
+    var bad = ['Friend', 'Invite'].filter(function(k) { return /[^\d\s,，;；]/.test($('#aa' + k + 'WlUsers').value); });
+    if (bad.length) { toast('白名单 QQ 只能填数字，多个用逗号、空格或换行分隔', 'warning'); return; }
+    var empty = [['friend', '好友申请'], ['invite', '进群邀请']].filter(function(p) {
+      return values['auto_accept_' + p[0] + '_scope'] === 'whitelist' && !values['auto_accept_' + p[0] + '_wl_users'].length && !values['auto_accept_' + p[0] + '_wl_groups'].length;
+    });
+    if (empty.length) toast(empty.map(function(p) { return p[1]; }).join('、') + '的白名单是空的，目前只有插件管理员能通过', 'warning');
+    mnSaveConfig(values, '已保存').then(function(ok) { if (ok) { $('#aaFriendWlUsers').value = values.auto_accept_friend_wl_users.join('\n'); $('#aaInviteWlUsers').value = values.auto_accept_invite_wl_users.join('\n'); } });
   });
   bindIfExists('btnLrSave', function() {
     var count = Number($('#lrCount').value), minutes = Number($('#lrMinutes').value);
