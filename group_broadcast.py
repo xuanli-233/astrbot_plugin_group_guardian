@@ -187,19 +187,10 @@ class GroupBroadcastMixin:
         if not task:
             yield event.plain_result("没有待确认的发布任务（或已超过 5 分钟），请重新发送 /全群公告 或 /全群待办")
             return
-        client = await self._get_client(event)
-        if not client:
-            yield event.plain_result("无法获取QQ客户端")
-            return
-        yield event.plain_result(f"开始发布到 {len(task['groups'])} 个群，请稍候……")
-        ok_groups, failed = await self._publish_notice_to_groups(client, task)
-        if task["todo"] and ok_groups:
-            self._record_todo(task["content"], ok_groups)
-        msg = f"发布完成：成功 {len(ok_groups)} 个群，失败 {len(failed)} 个群"
-        if failed:
-            msg += "\n" + "\n".join(f"· {g}：{why}" for g, why in list(failed.items())[:20])
-        if task["todo"] and ok_groups:
-            msg += "\n可发送 /待办确认情况 查看各群确认人数"
+        job = self._notice_job(task, notify_group=self._get_group_id(event))
+        msg = self._bq_created_text(job)
+        if task["todo"]:
+            msg += "\n全部发布后可发送 /待办确认情况 查看各群确认人数"
         yield event.plain_result(msg)
 
     def _record_todo(self, content: str, groups: List[str]) -> None:
@@ -237,37 +228,59 @@ class GroupBroadcastMixin:
             report["groups"].append(item)
         return report
 
-    async def _publish_notice_to_groups(self, client, task: dict) -> Tuple[List[str], Dict[str, str]]:
+    async def _publish_notice_one(self, client, gid: str, task: dict) -> Tuple[bool, str]:
+        """向一个群发布公告并写操作记录。批量任务（batch_queue）逐项调用。"""
         options = task.get("options") or {}
+        payload = {
+            "group_id": self._safe_int(gid, 0),
+            "content": task["content"],
+            # LuckyLilliaBot 的 confirm_required 默认为 true，必须显式传值
+            "pinned": bool(options.get("pinned")),
+            "confirm_required": bool(options.get("confirm_required")),
+            "tip_window": bool(options.get("tip_window")),
+            "send_new_member": bool(options.get("send_new_member")),
+        }
+        if task.get("image"):
+            payload["image"] = task["image"]
+        done, err = await self._call_group_api(client, "_send_group_notice", "发群公告", **payload)
+        flags = "、".join(k for k, v in NOTICE_FLAGS.items() if options.get(v))
+        self._record_op(
+            "发布待办公告" if task.get("todo") else "发布群公告",
+            source=task.get("source", ""), operator=task.get("operator", ""), group_id=gid,
+            result="成功" if done else f"失败：{err or '发送失败'}",
+            detail=(f"[{flags}] " if flags else "") + task["content"][:200]
+            + (f"（配图：{task['image']}）" if task.get("image") else ""),
+        )
+        return bool(done), ("" if done else (err or "发送失败"))
+
+    def _notice_job(self, task: dict, notify_group: str = "") -> dict:
+        """把公告任务放进批量任务队列，每个群一项。"""
+        todo = bool(task.get("todo"))
+        content = task["content"]
+        short = content.replace("\n", " ")[:24] + ("…" if len(content) > 24 else "")
+        params = {"todo": todo, "content": content, "options": task.get("options") or {},
+                  "image": task.get("image", ""), "source": task.get("source", ""),
+                  "operator": task.get("operator", "")}
+        items = [{"group_id": gid, "action": "notice", "label": "发布待办公告" if todo else "发布群公告",
+                  "params": params} for gid in task["groups"]]
+        meta = {"notify_group": notify_group}
+        if todo:
+            meta["todo_content"] = content
+        return self._bq_create_job(f"{'全群待办' if todo else '全群公告'}：{short}", "notice", items,
+                                   source=task.get("source", ""), operator=task.get("operator", ""), meta=meta)
+
+    async def _publish_notice_to_groups(self, client, task: dict) -> Tuple[List[str], Dict[str, str]]:
+        """直接依次发布（不经批量任务队列）。指令与 WebUI 现在都走 _notice_job。"""
         ok_groups: List[str] = []
         failed: Dict[str, str] = {}
         for index, gid in enumerate(task["groups"]):
             if index:
                 await asyncio.sleep(self._broadcast_interval())
-            payload = {
-                "group_id": self._safe_int(gid, 0),
-                "content": task["content"],
-                # LuckyLilliaBot 的 confirm_required 默认为 true，必须显式传值
-                "pinned": bool(options.get("pinned")),
-                "confirm_required": bool(options.get("confirm_required")),
-                "tip_window": bool(options.get("tip_window")),
-                "send_new_member": bool(options.get("send_new_member")),
-            }
-            if task.get("image"):
-                payload["image"] = task["image"]
-            done, err = await self._call_group_api(client, "_send_group_notice", "发群公告", **payload)
+            done, err = await self._publish_notice_one(client, gid, task)
             if done:
                 ok_groups.append(gid)
             else:
-                failed[gid] = err or "发送失败"
-            flags = "、".join(k for k, v in NOTICE_FLAGS.items() if options.get(v))
-            self._record_op(
-                "发布待办公告" if task.get("todo") else "发布群公告",
-                source=task.get("source", ""), operator=task.get("operator", ""), group_id=gid,
-                result="成功" if done else f"失败：{err or '发送失败'}",
-                detail=(f"[{flags}] " if flags else "") + task["content"][:200]
-                + (f"（配图：{task['image']}）" if task.get("image") else ""),
-            )
+                failed[gid] = err
         return ok_groups, failed
 
     # ------------------------------------------------------------------

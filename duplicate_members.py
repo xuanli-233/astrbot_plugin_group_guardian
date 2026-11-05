@@ -171,3 +171,52 @@ class DuplicateMemberMixin:
                     if callable(remover):
                         remover(gid, uid)
         return {"results": results}
+
+    def _dup_job(self, user_ids: List[str], mode: str, reason: str,
+                 keep: Optional[Dict[str, str]] = None, block: bool = False,
+                 source: str = "WebUI", operator: str = "") -> dict:
+        """与 _dup_handle 相同的判断，但不立即踢人：每个「人 × 要踢的群」放进批量任务队列。
+
+        返回 {"job": 任务摘要或 None, "results": {QQ号: {"kept", "groups": [...], "skipped"}}}
+        """
+        found = {it["user_id"]: it for it in self._dup_find(include_exempt=True, include_ignored=True)["items"]}
+        keep = keep or {}
+        results, items = {}, []
+        for uid in user_ids:
+            uid = str(uid)
+            item = found.get(uid)
+            out = {"kept": "", "groups": [], "skipped": ""}
+            results[uid] = out
+            if item is None:
+                out["skipped"] = "缓存中已不是重复成员（可能已处理或缓存已更新）"
+                continue
+            if item["plugin_admin"] or item["whitelisted"]:
+                out["skipped"] = "插件管理员 / 白名单用户，不处理"
+                continue
+            group_ids = [g["group_id"] for g in item["groups"]]
+            if mode == "keep_one":
+                kept = keep.get(uid) if keep.get(uid) in group_ids else item["keep_default"]
+                out["kept"] = kept
+                targets = [g for g in group_ids if g != kept]
+                action = "重复成员清理（保留一个群）"
+            elif mode == "kick_all":
+                targets = group_ids
+                action = "重复成员清理（全部踢出）"
+                if block:
+                    self._add_user_blacklist(uid, reason or "重复加群", source=source, operator=operator)
+            else:
+                out["skipped"] = f"未知的处理方式 {mode}"
+                continue
+            out["groups"] = targets
+            params = {"block": bool(block), "source": source, "operator": operator, "log_action": action,
+                      "reason": reason + (f"（保留群 {out['kept']}）" if out["kept"] else "")}
+            label = ("踢出并拉黑" if block else "踢出") + ("（保留一个群）" if mode == "keep_one" else "")
+            items.extend({"group_id": gid, "action": "kick", "label": label, "target": uid, "params": params}
+                         for gid in targets)
+        job = None
+        if items:
+            people = len({it["target"] for it in items})
+            title = f"重复成员清理：{people} 人{'保留一个群' if mode == 'keep_one' else '全部踢出'}" + \
+                    (f"（{reason}）" if reason else "")
+            job = self._bq_create_job(title, "kick", items, source=source, operator=operator)
+        return {"job": job, "results": results}

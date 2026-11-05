@@ -241,9 +241,9 @@ class GroupNameTaskMixin:
                 yield event.plain_result(
                     f"已登记：{scheduled_at.strftime('%Y-%m-%d %H:%M')} 把 {len(targets)} 个群的后缀改为「{suffix or '（清除）'}」")
             return
-        yield event.plain_result(f"开始修改 {len(targets)} 个群的群名……")
-        done, failed = await self._name_set_suffix(client, targets, suffix, log=self._name_cmd_log(event))
-        msg = self._format_apply_result("群名后缀修改完成", done, failed)
+        job = self._name_suffix_job(targets, suffix, log=self._name_cmd_log(event),
+                                    notify_group=self._get_group_id(event))
+        msg = self._bq_created_text(job)
         if denied:
             msg += f"\n不在管理范围内、已排除：{', '.join(denied)}"
         yield event.plain_result(msg)
@@ -288,10 +288,9 @@ class GroupNameTaskMixin:
         if not targets:
             yield event.plain_result(f"没有可操作的群{f'：{list_err}' if list_err else ''}")
             return
-        yield event.plain_result(f"开始为 {len(targets)} 个群设置倒计时……")
-        done, failed = await self._name_set_countdown(client, targets, target, template, log=self._name_cmd_log(event))
-        msg = self._format_apply_result(
-            f"倒计时已设置（目标 {target.isoformat()}，每天 {self._countdown_update_time()} 更新）", done, failed)
+        job = self._name_countdown_job(targets, target, template, log=self._name_cmd_log(event),
+                                       notify_group=self._get_group_id(event))
+        msg = self._bq_created_text(job) + f"\n倒计时每天 {self._countdown_update_time()} 自动更新"
         if denied:
             msg += f"\n不在管理范围内、已排除：{', '.join(denied)}"
         yield event.plain_result(msg)
@@ -321,15 +320,45 @@ class GroupNameTaskMixin:
                 yield event.plain_result(
                     f"已停止 {len(stopped)} 个群的倒计时（群名保持现状，可用 /群名后缀 清除 去掉后缀）")
             return
-        client = await self._get_client(event)
-        if not client:
-            yield event.plain_result("无法获取QQ客户端")
-            return
-        done, failed = await self._name_refresh_countdown(client, groups, log=self._name_cmd_log(event))
-        if not done and not failed:
+        job = self._name_refresh_job(groups, log=self._name_cmd_log(event), notify_group=self._get_group_id(event))
+        if not job:
             yield event.plain_result("没有符合条件的倒计时任务")
             return
-        yield event.plain_result(self._format_apply_result("倒计时已更新", done, failed))
+        yield event.plain_result(self._bq_created_text(job))
+
+    # ------------------------------------------------------------------
+    # 批量任务（batch_queue）：改名放进队列，按间隔 + 抖动逐个执行
+    # ------------------------------------------------------------------
+    def _name_job(self, title: str, groups: List[str], params: dict, label: str,
+                  log: Optional[dict] = None, notify_group: str = "", mode: Optional[str] = None) -> dict:
+        log = log or {}
+        params = dict(params, source=log.get("source", "自动"), operator=log.get("operator", ""))
+        if log.get("reason") and not params.get("reason"):
+            params["reason"] = log["reason"]
+        items = [{"group_id": gid, "action": "rename", "label": label, "params": params} for gid in groups]
+        return self._bq_create_job(title, "rename", items, source=log.get("source", "自动"),
+                                   operator=log.get("operator", ""), mode=mode, meta={"notify_group": notify_group})
+
+    def _name_suffix_job(self, groups: List[str], suffix: str, log: Optional[dict] = None,
+                         notify_group: str = "") -> dict:
+        label = f"群名后缀改为「{suffix}」" if suffix else "清除群名后缀"
+        return self._name_job(label, groups, {"op": "suffix", "suffix": suffix, "end_countdown": True},
+                              label, log=log, notify_group=notify_group)
+
+    def _name_countdown_job(self, groups: List[str], target: date, template: str, log: Optional[dict] = None,
+                            notify_group: str = "") -> dict:
+        return self._name_job(f"群名倒计时 {target.isoformat()}（{template}）", groups,
+                              {"op": "countdown_set", "target": target.isoformat(), "template": template},
+                              "设置群名倒计时", log=log, notify_group=notify_group)
+
+    def _name_refresh_job(self, groups: Optional[List[str]] = None, log: Optional[dict] = None,
+                          notify_group: str = "") -> Optional[dict]:
+        tasks = self._load_name_tasks()
+        selected = [g for g in (groups or list(tasks)) if (tasks.get(g) or {}).get("countdown")]
+        if not selected:
+            return None
+        return self._name_job("群名倒计时立即更新", selected, {"op": "countdown_update", "force": True},
+                              "群名倒计时更新", log=log, notify_group=notify_group)
 
     # ------------------------------------------------------------------
     # 核心操作（指令与 WebUI 共用）
@@ -508,15 +537,15 @@ class GroupNameTaskMixin:
         now = now or datetime.now()
         if not self.config.get("disclaimer_agreed", False) or not self._cfg("enabled"):
             return
+        # 到点的定时改名、当天的倒计时更新都放进批量任务队列（自动执行，按间隔 + 抖动逐个改名）
+        jobs = []
         async with self._name_task_lock():
             tasks = self._load_name_tasks()
             if not tasks:
                 return
-            client = await self._get_client()
-            if not client:
-                return
             changed = False
             stamp = now.strftime("%Y-%m-%d %H:%M")
+            scheduled: Dict[Tuple[str, str], List[str]] = {}
             for gid, record in list(tasks.items()):
                 pending = record.get("scheduled") or []
                 ready = [item for item in pending if item.get("at", "") <= stamp]
@@ -524,21 +553,34 @@ class GroupNameTaskMixin:
                     continue
                 record["scheduled"] = [item for item in pending if item not in ready]
                 item = ready[-1]
-                ok, info = await self._apply_group_suffix(
-                    client, gid, item.get("suffix", ""), tasks,
-                    log={"action": "定时改群名", "source": "自动",
-                         "operator": item.get("operator", ""),
-                         "reason": f"{item.get('at')} 的定时任务（登记来源：{item.get('source') or '未知'}）"},
-                )
-                logger.info(f"[GroupMgr] 定时改群名 {gid}: {'成功 ' + info if ok else '失败 ' + info}")
+                scheduled.setdefault((item.get("suffix", ""), item.get("at", "")), []).append(gid)
                 changed = True
+            for (suffix, at), groups in scheduled.items():
+                jobs.append(("定时改群名" + (f"「{suffix}」" if suffix else "（清除后缀）") + f"（{at}）", groups,
+                             {"op": "suffix", "suffix": suffix, "log_action": "定时改群名",
+                              "reason": f"{at} 的定时任务"},
+                             "定时改群名"))
             if now.strftime("%H:%M") >= self._countdown_update_time():
-                done, failed = await self._run_countdowns(client, tasks, list(tasks), today=now.date())
-                if done or failed:
+                today = now.date().isoformat()
+                now_ts = int(now.timestamp())
+                due = []
+                for gid, record in tasks.items():
+                    cd = record.get("countdown")
+                    if not cd or cd.get("last_date") == today or cd.get("queued") == today:
+                        continue
+                    if now_ts < int(cd.get("retry_after", 0) or 0):
+                        continue
+                    cd["queued"] = today  # 已放进队列，避免每分钟重复建任务
+                    due.append(gid)
                     changed = True
-                    logger.info(f"[GroupMgr] 群名倒计时更新：成功 {len(done)}，失败 {len(failed)}")
+                if due:
+                    jobs.append((f"群名倒计时每日更新（{today}）", due, {"op": "countdown_update", "today": today},
+                                 "群名倒计时更新"))
             if changed:
                 self._save_name_tasks(tasks)
+        for title, groups, params, label in jobs:
+            job = self._name_job(title, groups, params, label, log={"source": "自动"}, mode="auto")
+            logger.info(f"[GroupMgr] {title}：已创建批量任务 #{job['id']}（{len(groups)} 个群）")
 
     async def _group_name_loop(self) -> None:
         while not getattr(self, "_scheduler_stop", False):

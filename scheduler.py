@@ -52,6 +52,9 @@ class SchedulerMixin:
             # 群成员缓存后台补齐（group_directory.py），每 5 分钟最多刷新 2 个过期的群
             if callable(getattr(self, "_dir_background_loop", None)):
                 self._dir_task = asyncio.create_task(self._dir_background_loop())
+            # 批量任务执行器（batch_queue.py）：按间隔 + 抖动逐项执行
+            if callable(getattr(self, "_bq_loop", None)):
+                self._bq_task = asyncio.create_task(self._bq_loop())
             ai_enabled = bool(getattr(self, "AI_FEATURES_ENABLED", True))
             if ai_enabled and callable(getattr(self, "_run_lexicon_learning", None)):
                 self._learn_task = asyncio.create_task(self._lexicon_learn_loop())
@@ -85,7 +88,7 @@ class SchedulerMixin:
             except asyncio.CancelledError:
                 logger.debug("[GroupMgr] 上下文学习任务已取消")
         for attr, label in (("_group_name_task", "群名定时任务"), ("_dir_task", "群成员缓存任务"),
-                            ("_dir_refresh_task", "群成员缓存刷新")):
+                            ("_dir_refresh_task", "群成员缓存刷新"), ("_bq_task", "批量任务执行器")):
             task = getattr(self, attr, None)
             if task and not task.done():
                 task.cancel()

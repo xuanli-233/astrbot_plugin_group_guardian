@@ -297,6 +297,31 @@
         "default": false,
         "hint": "成员主动退群后自动加入用户黑名单（所有群通用）：之后的加群申请自动拒绝，被邀请入群会立即踢出。插件管理员与用户白名单除外；可在多群配置中对单个群关闭"
     },
+    "batch_interval_seconds": {
+        "description": "批量任务：两项之间的间隔（秒）",
+        "type": "int",
+        "default": 3,
+        "hint": "跨群踢人、批量公告、群名任务、重复成员处理等批量任务逐项执行，两项之间至少等待这么久，范围 0–3600。单个任务可在「批量任务」页面单独设置"
+    },
+    "batch_jitter_seconds": {
+        "description": "批量任务：间隔抖动范围（秒）",
+        "type": "int",
+        "default": 2,
+        "hint": "每次在间隔上再随机加 0~该值 秒，让操作节奏不那么规律，降低风控。范围 0–3600"
+    },
+    "batch_default_mode": {
+        "description": "批量任务：默认执行方式",
+        "type": "string",
+        "default": "auto",
+        "options": ["auto", "manual"],
+        "hint": "auto = 创建后按间隔自动执行；manual = 创建后等待在 WebUI「批量任务」里手动执行（执行下一项 / 全部执行）。定时改名、倒计时每日更新始终自动执行"
+    },
+    "batch_notify_enabled": {
+        "description": "批量任务：完成后在发起指令的群通知结果",
+        "type": "bool",
+        "default": true,
+        "hint": "通过群指令创建的批量任务完成后，在该群发一条成功 / 失败汇总；WebUI 创建的任务不通知"
+    },
     "live_log_enabled": {
         "description": "实时日志：记录近期消息的处理进度",
         "type": "bool",
@@ -552,10 +577,11 @@
         "hint": "单张图片识别超时，范围 1-60"
     },
     "broadcast_interval_seconds": {
-        "description": "批量发布间隔（秒）",
+        "description": "（已停用）批量发布间隔（秒）",
         "type": "int",
         "default": 2,
-        "hint": "/全群公告、/全群待办、群名后缀等批量操作中，两个群之间的间隔，范围 1-30，防止风控"
+        "invisible": true,
+        "hint": "已由「批量任务：两项之间的间隔」和「间隔抖动范围」取代，公告、群名任务都按批量任务的设置执行"
     },
     "group_name_max_length": {
         "description": "群名最大长度",

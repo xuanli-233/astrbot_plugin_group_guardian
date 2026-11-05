@@ -134,6 +134,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ group_blacklist.py 跨群踢人 / 踢黑 / 退群自动拉黑（二次开发新增）
 ├─ leave_recall.py 退群 / 被踢后撤回近期消息（二次开发新增）
 ├─ live_log.py 实时日志：内存环形缓冲 + 处理步骤（二次开发新增）
+├─ batch_queue.py 批量任务队列：逐项执行、间隔 + 抖动、自动 / 手动（二次开发新增）
 ├─ card_monitor.py    名片监控、名片保护、管理员任免记录
 ├─ appeal.py          刷屏申诉（AI 裁决，已停用）
 ├─ lexicon_learn.py   词库自学习（AI，已停用）
@@ -280,6 +281,27 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 另外两个严格模式：`member_action_require_group_role`（群管指令只允许本群群主 / 管理员）、`set_admin_require_owner`（任免管理员只允许群主）。默认都关。
 
 ---
+
+## 批量任务（`batch_queue.py`）
+
+所有「多个群 / 多个人」的写操作都先创建批量任务，每一项 = 群 + 行为 + 对象，由后台执行器逐项执行：
+
+| 来源 | 每一项 |
+| --- | --- |
+| `/全群踢人` `/全群踢黑`、WebUI 批量踢人 | 群 × QQ（本地缓存确认不在群里的不建项）；拉黑在创建任务时立即生效 |
+| `/批量踢黑` | 当前群 × QQ（只做 QQ 原生拉黑） |
+| WebUI 重复成员处理 | 人 × 要踢的群 |
+| `/全群公告` `/全群待办`（确认后）、WebUI 批量公告 | 每个群一项；待办全部执行完后记录「最近一次待办」 |
+| `/群名后缀`、`/群名倒计时`、立即更新、WebUI 群名任务 | 每个群一项 |
+| 定时改群名、倒计时每日更新（后台每分钟检查） | 每个群一项，始终自动执行；已在队列里的倒计时不会重复建任务 |
+
+- 同一时间只执行一项；两项之间等待 `batch_interval_seconds` +（0~`batch_jitter_seconds` 的随机值），单个任务可单独设置。
+- `batch_default_mode`：auto 自动执行 / manual 等待手动（执行下一项、执行某一项、全部执行）。
+- 任务可暂停、继续、取消剩余项、重试失败项；单项可执行或跳过。
+- 群指令创建的任务完成后在该群发汇总（`batch_notify_enabled`）。
+- 存在 SQLite `batch_jobs` / `batch_items`，保留最近 300 个已结束的任务；插件重启时「执行中」的项记为失败（可重试），不会自动重做。
+- QQ 未连接时项保持待执行，连接后继续。
+- `broadcast_interval_seconds` 已停用（由上面的间隔取代）。
 
 ## 九、WebUI 管理面板（`web.py` + `pages/dashboard/index.html`）
 

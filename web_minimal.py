@@ -42,7 +42,8 @@ MINIMAL_CONFIG_KEYS = (
     "leave_auto_blacklist_enabled", "blacklist_reject_join_enabled",
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
-    "live_log_enabled", "live_log_show_text", "live_log_size", "blacklist_kick_on_join",
+    "live_log_enabled", "live_log_show_text", "live_log_size",
+    "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
     "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
@@ -198,12 +199,8 @@ class MinimalWebMixin:
             return self._minimal_error(f"没有可发布的群{f'：{err}' if err else ''}")
         task = {"todo": todo, "groups": targets, "content": content, "options": options,
                 "image": str(data.get("image") or "").strip(), "source": "WebUI", "operator": ""}
-        ok_groups, failed = await self._publish_notice_to_groups(client, task)
-        if todo and ok_groups:
-            self._record_todo(content, ok_groups)
-        return jsonify({"status": "success", "data": {
-            "ok_groups": ok_groups, "failed": failed, "denied": denied,
-        }})
+        job = self._notice_job(task)
+        return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
 
     async def _web_minimal_todo_status(self):
         client = await self._get_client()
@@ -255,8 +252,8 @@ class MinimalWebMixin:
                 return self._minimal_error(err)
             return jsonify({"status": "success", "data": {"scheduled": at.strftime("%Y-%m-%d %H:%M"),
                                                           "groups": targets}})
-        done, failed = await self._name_set_suffix(client, targets, suffix, log=WEB_LOG)
-        return jsonify({"status": "success", "data": {"done": done, "failed": failed}})
+        job = self._name_suffix_job(targets, suffix, log=WEB_LOG)
+        return jsonify({"status": "success", "data": {"job": job}})
 
     async def _web_minimal_names_countdown(self):
         data = await self._minimal_body()
@@ -272,8 +269,8 @@ class MinimalWebMixin:
         client, targets, err = await self._minimal_name_targets(data)
         if err:
             return self._minimal_error(err)
-        done, failed = await self._name_set_countdown(client, targets, target, template, log=WEB_LOG)
-        return jsonify({"status": "success", "data": {"done": done, "failed": failed}})
+        job = self._name_countdown_job(targets, target, template, log=WEB_LOG)
+        return jsonify({"status": "success", "data": {"job": job}})
 
     async def _web_minimal_names_stop(self):
         data = await self._minimal_body()
@@ -284,11 +281,10 @@ class MinimalWebMixin:
 
     async def _web_minimal_names_refresh(self):
         data = await self._minimal_body()
-        client = await self._get_client()
-        if not client:
-            return self._minimal_error("无法获取QQ客户端")
-        done, failed = await self._name_refresh_countdown(client, self._minimal_groups_arg(data.get("groups")), log=WEB_LOG)
-        return jsonify({"status": "success", "data": {"done": done, "failed": failed}})
+        job = self._name_refresh_job(self._minimal_groups_arg(data.get("groups")), log=WEB_LOG)
+        if not job:
+            return self._minimal_error("选中的群没有倒计时任务")
+        return jsonify({"status": "success", "data": {"job": job}})
 
     # ------------------------------------------------------------------
     # 群成员缓存
@@ -401,12 +397,8 @@ class MinimalWebMixin:
         if not reason:
             return self._minimal_error("请填写处理原因（会写进操作记录）")
         keep = data.get("keep") if isinstance(data.get("keep"), dict) else {}
-        client = await self._get_client()
-        if not client:
-            return self._minimal_error("无法获取QQ客户端")
-        result = await self._dup_handle(client, user_ids, mode, reason,
-                                        keep={str(k): str(v) for k, v in keep.items()},
-                                        block=bool(data.get("block")), **WEB_LOG)
+        result = self._dup_job(user_ids, mode, reason, keep={str(k): str(v) for k, v in keep.items()},
+                               block=bool(data.get("block")), **WEB_LOG)
         return jsonify({"status": "success", "data": result})
 
     async def _web_minimal_duplicates_ignore(self):
@@ -433,6 +425,62 @@ class MinimalWebMixin:
         return jsonify({"status": "success", "data": {
             "items": items, "total": total, "actions": self._op_actions(),
         }})
+
+    # ------------------------------------------------------------------
+    # 批量任务（batch_queue.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_batch_jobs(self):
+        args = quart_request.args
+        jobs, total = self._bq_jobs(limit=self._safe_int(args.get("limit", 30), 30),
+                                    offset=self._safe_int(args.get("offset", 0), 0))
+        interval, jitter = self._bq_interval_settings()
+        return jsonify({"status": "success", "data": {
+            "jobs": jobs, "total": total, "runner": self._bq_status(),
+            "settings": {"interval": interval, "jitter": jitter, "mode": self._bq_default_mode(),
+                         "notify": bool(self._cfg("batch_notify_enabled", True))},
+        }})
+
+    async def _web_minimal_batch_job(self):
+        job = self._bq_job(self._safe_int(quart_request.args.get("id", 0), 0))
+        if not job:
+            return self._minimal_error("任务不存在")
+        names = {}
+        try:
+            names = {gid: (g or {}).get("group_name") or "" for gid, g in self._dir()["groups"].items()}
+        except Exception:
+            names = {}
+        for it in job["items"]:
+            it["group_name"] = names.get(it["group_id"], "")
+            it.pop("params", None)  # 公告全文等不必每次轮询都传
+        return jsonify({"status": "success", "data": {"job": job, "runner": self._bq_status()}})
+
+    async def _web_minimal_batch_action(self):
+        data = await self._minimal_body()
+        action = str(data.get("action") or "")
+        job_id = self._safe_int(data.get("job_id", 0), 0)
+        item_id = self._safe_int(data.get("item_id", 0), 0)
+        if action == "run_next":
+            status, msg = await self._bq_run_now(job_id=job_id)
+        elif action == "run_item":
+            status, msg = await self._bq_run_now(item_id=item_id)
+        elif action == "skip_item":
+            err = self._bq_skip_item(item_id)
+            if err:
+                return self._minimal_error(err)
+            return jsonify({"status": "success", "data": {}})
+        elif action == "settings":
+            err = self._bq_update_settings(job_id, data.get("interval"), data.get("jitter"))
+            if err:
+                return self._minimal_error(err)
+            return jsonify({"status": "success", "data": {}})
+        else:
+            err = self._bq_control(job_id, action, **WEB_LOG)
+            if err:
+                return self._minimal_error(err)
+            return jsonify({"status": "success", "data": {}})
+        if not status:
+            return self._minimal_error(msg)
+        return jsonify({"status": "success", "data": {"result": status, "message": msg}})
 
     async def _web_minimal_livelog(self):
         """实时日志：?since=上次的 seq&epoch=上次的 epoch，只返回变化的记录（live_log.py）。"""
@@ -507,18 +555,13 @@ class MinimalWebMixin:
                 scope, _err = await self._list_managed_groups(client)
             for gid in scope:
                 await self._dir_members(client, gid, force=True)
-        result = await self._kick_users_across_groups(
+        job, err, info = await self._bq_kick_job(
             client, targets, block, groups=self._minimal_groups_arg(data.get("groups")),
             reason=reason or "WebUI 踢人", **WEB_LOG,
         )
-        if result["error"]:
-            protected = f"（已跳过：{', '.join(result['protected'])}）" if result["protected"] else ""
-            return self._minimal_error(result["error"] + protected, protected=result["protected"])
-        per_group = {
-            gid: {"kicked": r["kicked"], "failed": r["failed"], "absent": r["absent"], "skipped": r["skipped"]}
-            for gid, r in result["per_group"].items()
-        }
+        if err:
+            protected = f"（已跳过：{', '.join(info['protected'])}）" if info["protected"] else ""
+            return self._minimal_error(err + protected, protected=info["protected"])
         return jsonify({"status": "success", "data": {
-            "protected": result["protected"], "blacklisted": result["blacklisted"], "per_group": per_group,
-            "kicked_total": sum(len(r["kicked"]) for r in per_group.values()),
+            "job": job, "protected": info["protected"], "blacklisted": info["blacklisted"], "absent": info["absent"],
         }})

@@ -63,6 +63,9 @@ sys.modules[automaton.__name__] = automaton
 utilities = _load_module(f"{package.__name__}.utils", "utils.py")
 onebot = _load_module(f"{package.__name__}.onebot", "onebot.py")
 group_blacklist = _load_module(f"{package.__name__}.group_blacklist", "group_blacklist.py")
+batch_queue = _load_module(f"{package.__name__}.batch_queue", "batch_queue.py")
+sys.path.insert(0, str(ROOT / "tests"))
+from _sqlite_storage import SqliteConnectMixin  # noqa: E402
 
 BOT = 999
 OK = {"status": "ok", "retcode": 0, "data": None}
@@ -97,7 +100,7 @@ class _Client:
             if role is None or (self.member_info_fails and str(kwargs["user_id"]) != str(BOT)):
                 return {"status": "failed", "retcode": 100, "message": "not member"}
             return {"status": "ok", "retcode": 0, "data": {"role": role}}
-        if action == "set_group_kick":
+        if action in ("set_group_kick", "send_group_msg"):
             return OK
         raise AssertionError(f"unexpected action {action}")
 
@@ -107,8 +110,12 @@ class _Client:
             for action, kw in self.calls if action == "set_group_kick"
         ]
 
+    def notices(self):
+        """批量任务完成后发到发起群的汇总。"""
+        return [kw["message"][0]["data"]["text"] for action, kw in self.calls if action == "send_group_msg"]
 
-class _Storage:
+
+class _Storage(SqliteConnectMixin):
     def __init__(self):
         self.added = []
 
@@ -118,6 +125,7 @@ class _Storage:
 
 class _Harness(
     group_blacklist.GroupBlacklistMixin,
+    batch_queue.BatchQueueMixin,
     onebot.OneBotMixin,
     utilities.UtilitiesMixin,
 ):
@@ -143,6 +151,9 @@ class _Harness(
 
     def _cfg_int(self, key, default=0, group_id=None):
         return default
+
+    def _cfg_str(self, key, default="", group_id=None):
+        return str(self.cfg_values.get(key, default))
 
     def _get_all_admin_ids(self):
         return set(self.admin_ids)
@@ -195,36 +206,47 @@ class KickAllGroupsTests(unittest.IsolatedAsyncioTestCase):
         harness = _Harness(client)
 
         out = await _collect(harness.cmd_kick_all_groups(_cmd_event("/全群踢人 111 222"), block=False))
+        self.assertIn("已创建批量任务", out[-1])
+        self.assertEqual(client.kicks(), [])  # 创建任务时还没有踢人
+        await harness._bq_drain()
 
         self.assertEqual(
             sorted(client.kicks()),
             [("1", "111", False), ("3", "111", False), ("3", "222", False)],
         )
         self.assertEqual(harness._storage.added, [])
-        self.assertIn("在 2 个群共踢出 3 人次", out[-1])
-        self.assertIn("2（机器人不是管理员）", out[-1])
+        summary = client.notices()[-1]
+        self.assertIn("成功 3，失败 0，跳过 3", summary)  # 群 2 机器人不是管理员 ×2、群 1 没有 222
+        job = harness._bq_job(1)
+        skipped = {(it["group_id"], it["target"]): it["result"] for it in job["items"] if it["status"] == "skipped"}
+        self.assertEqual(skipped[("2", "111")], "机器人不是管理员")
+        self.assertEqual(skipped[("1", "222")], "不在该群")
 
     async def test_kick_block_all_groups_blocks_and_blacklists(self):
         client = _Client(self._groups())
         harness = _Harness(client)
 
         out = await _collect(harness.cmd_kick_all_groups(_cmd_event("/全群踢黑 111 222 333"), block=True))
+        # 拉黑在创建任务时立即生效：不在任何群的 333 也进黑名单，之后的加群申请会被拒
+        self.assertEqual(harness._user_black_set, {"111", "222", "333"})
+        self.assertIn("已加入插件黑名单 3 人", out[-1])
+        await harness._bq_drain()
 
         self.assertTrue(all(block is True for _g, _u, block in client.kicks()))
         self.assertEqual(len(client.kicks()), 3)
-        # 不在任何群的 333 也进黑名单，之后的加群申请会被拒
-        self.assertEqual(harness._user_black_set, {"111", "222", "333"})
-        self.assertIn("新加入插件用户黑名单 3 人", out[-1])
 
     async def test_admin_can_not_be_kicked_when_bot_is_only_admin(self):
         client = _Client({"1": {str(BOT): "admin", "222": "admin", "333": "owner"}})
         harness = _Harness(client)
 
-        out = await _collect(harness.cmd_kick_all_groups(_cmd_event("/全群踢人 222 333"), block=False))
+        await _collect(harness.cmd_kick_all_groups(_cmd_event("/全群踢人 222 333"), block=False))
+        await harness._bq_drain()
 
         self.assertEqual(client.kicks(), [])
-        self.assertIn("目标是管理员", out[-1])
-        self.assertIn("目标是群主", out[-1])
+        summary = client.notices()[-1]
+        self.assertIn("失败 2", summary)
+        self.assertIn("目标是管理员", summary)
+        self.assertIn("目标是群主", summary)
 
     async def test_plugin_admins_and_whitelisted_users_are_protected(self):
         client = _Client({"1": {str(BOT): "owner", "10000": "member", "444": "member"}})
@@ -252,6 +274,7 @@ class KickAllGroupsTests(unittest.IsolatedAsyncioTestCase):
         harness._group_black_set = {"3"}
 
         await _collect(harness.cmd_kick_all_groups(_cmd_event("/全群踢人 111"), block=False))
+        await harness._bq_drain()
 
         self.assertEqual(client.kicks(), [("1", "111", False)])
 
@@ -260,6 +283,7 @@ class KickAllGroupsTests(unittest.IsolatedAsyncioTestCase):
         harness = _Harness(client)
 
         await _collect(harness.cmd_kick_all_groups(_cmd_event("/全群踢人 111 222"), block=False))
+        await harness._bq_drain()
 
         self.assertEqual(client.kicks(), [("1", "111", False)])
 
@@ -278,10 +302,12 @@ class BatchKickBlockTests(unittest.IsolatedAsyncioTestCase):
         harness = _Harness(client)
 
         out = await _collect(harness.cmd_batch_kick_block(_cmd_event("/批量踢黑 111 222", group_id="1")))
+        self.assertIn("已创建批量任务", out[-1])
+        await harness._bq_drain()
 
         self.assertEqual(client.kicks(), [("1", "111", True)])
         self.assertEqual(harness._user_black_set, set())  # 单群操作不写全局黑名单
-        self.assertIn("踢出并拉黑 1 人，1 人不在本群", out[-1])
+        self.assertIn("成功 1，失败 0，跳过 1", client.notices()[-1])  # 222 不在本群
 
 
 class LeaveBlacklistTests(unittest.IsolatedAsyncioTestCase):

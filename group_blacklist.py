@@ -294,15 +294,20 @@ class GroupBlacklistMixin:
             yield event.plain_result("无法获取QQ客户端")
             return
         _head, reason = self._split_reason(getattr(event, "message_str", "") or "")
-        yield event.plain_result(f"开始处理 {len(targets) - len(protected)} 个 QQ 号，请稍候……")
-        result = await self._kick_users_across_groups(
+        # 放进批量任务队列逐项执行（间隔 + 抖动），拉黑在创建时立即生效
+        job, err, info = await self._bq_kick_job(
             client, targets, block, reason=reason or f"/{name}",
-            source="指令", operator=self._try_get_sender_id(event),
+            source="指令", operator=self._try_get_sender_id(event), notify_group=self._get_group_id(event),
         )
-        if result["error"]:
-            yield event.plain_result(f"{name}失败：{result['error']}")
+        if err:
+            yield event.plain_result(f"{name}失败：{err}")
             return
-        yield event.plain_result(self._format_kick_summary(name, result["per_group"], result["blacklisted"]))
+        msg = self._bq_created_text(job)
+        if block and info["blacklisted"] >= 0:
+            msg += f"\n已加入插件黑名单 {info['blacklisted']} 人（新增）"
+        if info["absent"]:
+            msg += f"\n按本地缓存不在群里、未建任务：{info['absent']} 项"
+        yield event.plain_result(msg)
 
     async def _kick_users_across_groups(self, client, targets: List[str], block: bool,
                                         groups: Optional[List[str]] = None, reason: str = "",
@@ -348,20 +353,20 @@ class GroupBlacklistMixin:
         if not ok:
             yield event.plain_result(err)
             return
-        targets = targets[: self.KICK_TARGETS_MAX]
-        _head, reason = self._split_reason(getattr(event, "message_str", "") or "")
-        result = await self._kick_targets_in_group(client, gid, targets, block=True, log={
-            "source": "指令", "operator": self._try_get_sender_id(event), "reason": reason or "/批量踢黑",
-        })
-        if result["skipped"]:
-            yield event.plain_result(f"批量踢黑失败：{result['skipped']}")
+        targets = [t for t in targets[: self.KICK_TARGETS_MAX] if not self._is_blacklist_exempt(t)]
+        if not targets:
+            yield event.plain_result("没有可处理的 QQ 号（插件管理员 / 白名单用户不会被处理）")
             return
-        msg = f"批量踢黑完成：踢出并拉黑 {len(result['kicked'])} 人"
-        if result["absent"]:
-            msg += f"，{result['absent']} 人不在本群"
-        if result["failed"]:
-            msg += "\n失败：" + "；".join(f"{u}（{r}）" for u, r in result["failed"].items())
-        yield event.plain_result(msg)
+        _head, reason = self._split_reason(getattr(event, "message_str", "") or "")
+        operator = self._try_get_sender_id(event)
+        # 只做 QQ 原生拉黑（与原来一致，不加入插件黑名单）；放进批量任务队列逐个执行
+        params = {"block": True, "reason": reason or "/批量踢黑", "source": "指令", "operator": operator}
+        items = [{"group_id": str(gid), "action": "kick", "label": "踢出并拉黑", "target": uid, "params": params}
+                 for uid in targets]
+        names = "、".join(targets[:3]) + (f" 等 {len(targets)} 人" if len(targets) > 3 else "")
+        job = self._bq_create_job(f"批量踢黑 {names}（群 {gid}）", "kick", items, source="指令",
+                                  operator=operator, meta={"notify_group": str(gid)})
+        yield event.plain_result(self._bq_created_text(job))
 
     # ------------------------------------------------------------------
     # 事件

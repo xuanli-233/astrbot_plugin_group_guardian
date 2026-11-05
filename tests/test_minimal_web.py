@@ -82,6 +82,7 @@ message_backup = _load(f"{PKG}.message_backup", "message_backup.py")
 group_directory = _load(f"{PKG}.group_directory", "group_directory.py")
 operation_log = _load(f"{PKG}.operation_log", "operation_log.py")
 duplicate_members = _load(f"{PKG}.duplicate_members", "duplicate_members.py")
+batch_queue = _load(f"{PKG}.batch_queue", "batch_queue.py")
 web_minimal = _load(f"{PKG}.web_minimal", "web_minimal.py", quart_stub=True)
 
 BOT = 999
@@ -173,6 +174,7 @@ class _Harness(
     message_backup.MessageBackupMixin,
     group_directory.GroupDirectoryMixin,
     duplicate_members.DuplicateMemberMixin,
+    batch_queue.BatchQueueMixin,
     operation_log.OperationLogMixin,
     onebot.OneBotMixin,
     utilities.UtilitiesMixin,
@@ -259,7 +261,8 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
     async def test_broadcast_to_selected_groups(self):
         out = await call(self.h._web_minimal_broadcast,
                          {"groups": ["10001"], "content": "通知", "pinned": True})
-        self.assertEqual(out["data"]["ok_groups"], ["10001"])
+        self.assertEqual(out["data"]["job"]["items"], 1)
+        await self.h._bq_drain()
         (sent,) = self.client.actions("_send_group_notice")
         self.assertTrue(sent["pinned"])
         self.assertFalse(sent["confirm_required"])
@@ -268,13 +271,16 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_broadcast_all_excludes_backup_and_todo_records(self):
         out = await call(self.h._web_minimal_broadcast, {"content": "交材料", "todo": True})
-        self.assertEqual(out["data"]["ok_groups"], ["10001", "10002"])
+        self.assertEqual(out["data"]["job"]["items"], 2)  # 备份群不在其中
+        self.assertNotIn("last_todo_broadcast", self.h._storage.meta)  # 全部发完才记录
+        await self.h._bq_drain()
         self.assertTrue(all(kw["confirm_required"] and kw["pinned"] for kw in self.client.actions("_send_group_notice")))
         self.assertEqual(json.loads(self.h._storage.meta["last_todo_broadcast"])["groups"], ["10001", "10002"])
 
     async def test_names_suffix_schedule_countdown_and_stop(self):
         out = await call(self.h._web_minimal_names_suffix, {"groups": ["10001"], "suffix": "|活动"})
         self.assertEqual(out["status"], "success")
+        await self.h._bq_drain()
         self.assertEqual(self.client.groups["10001"]["name"], "一群|活动")
         out = await call(self.h._web_minimal_names_suffix,
                          {"groups": ["10002"], "suffix": "|新年", "at": "2099-01-01T08:00"})
@@ -286,6 +292,7 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
         out = await call(self.h._web_minimal_names_countdown,
                          {"groups": ["10001"], "target": target, "template": "|还有{days}天"})
         self.assertEqual(out["status"], "success")
+        await self.h._bq_drain()
         self.assertIn("|还有", self.client.groups["10001"]["name"])
         names = await call(self.h._web_minimal_names)
         row = [g for g in names["data"]["groups"] if g["group_id"] == "10001"][0]
@@ -295,17 +302,58 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(out["data"]["stopped"], ["10001"])
         self.assertEqual(out["data"]["cancelled"], 1)
 
+    async def test_batch_endpoints_manual_flow(self):
+        self.h.config["batch_default_mode"] = "manual"
+        await self.h._dir_groups(self.client)  # 群名来自群成员缓存
+        out = await call(self.h._web_minimal_broadcast, {"groups": ["10001", "10002"], "content": "手动发布"})
+        job_id = out["data"]["job"]["id"]
+        self.assertEqual(out["data"]["job"]["mode"], "manual")
+        web_minimal.quart_request.args = {}
+        listing = await call(self.h._web_minimal_batch_jobs)
+        self.assertEqual(listing["data"]["jobs"][0]["counts"], {"pending": 2})
+        self.assertEqual(listing["data"]["settings"]["mode"], "manual")
+        run = await call(self.h._web_minimal_batch_action, {"action": "run_next", "job_id": job_id})
+        self.assertEqual(run["data"]["result"], "ok")
+        self.assertEqual(len(self.client.actions("_send_group_notice")), 1)
+        web_minimal.quart_request.args = {"id": str(job_id)}
+        detail = await call(self.h._web_minimal_batch_job)
+        items = detail["data"]["job"]["items"]
+        self.assertEqual([it["status"] for it in items], ["ok", "pending"])
+        self.assertEqual(items[0]["group_name"], "一群")
+        self.assertNotIn("params", items[0])
+        skip = await call(self.h._web_minimal_batch_action, {"action": "skip_item", "item_id": items[1]["id"]})
+        self.assertEqual(skip["status"], "success")
+        detail = await call(self.h._web_minimal_batch_job)
+        self.assertEqual(detail["data"]["job"]["state"], "done")
+        bad = await call(self.h._web_minimal_batch_action, {"action": "pause", "job_id": job_id})
+        self.assertEqual(bad["status"], "error")
+        settings = await call(self.h._web_minimal_batch_action,
+                              {"action": "settings", "job_id": job_id, "interval": "5", "jitter": ""})
+        self.assertEqual(settings["status"], "success")
+
     async def test_kick_across_groups_with_block(self):
         no_reason = await call(self.h._web_minimal_kick, {"user_ids": "30001", "block": True})
         self.assertIn("需要填写原因", no_reason["message"])
         out = await call(self.h._web_minimal_kick, {"user_ids": "30001 10000", "block": True, "reason": "发广告"})
         data = out["data"]
         self.assertEqual(data["protected"], ["10000"])
-        self.assertEqual(data["kicked_total"], 2)
         self.assertEqual(data["blacklisted"], 1)
+        # 没有成员缓存时每个管理的群都建一项，执行时才知道不在群里（记为跳过）
+        self.assertEqual(data["job"]["items"], 3)
+        await self.h._bq_drain()
+        self.assertEqual(len(self.client.actions("set_group_kick")), 2)
+        counts = self.h._bq_job(data["job"]["id"])["counts"]
+        self.assertEqual((counts.get("ok"), counts.get("skipped")), (2, 1))
         self.assertTrue(all(kw["reject_add_request"] for kw in self.client.actions("set_group_kick")))
-        scoped = await call(self.h._web_minimal_kick, {"user_ids": ["30001"], "groups": ["10001"]})
-        self.assertEqual(list(scoped["data"]["per_group"]), ["10001"])
+        # 已被踢出的人：缓存已更新，不再为他建任务
+        gone = await call(self.h._web_minimal_kick, {"user_ids": ["30001"], "groups": ["10001"]})
+        self.assertIn("不在任何管理的群里", gone["message"])
+        self.client.groups["10001"]["members"]["30002"] = "member"
+        self.client.groups["10002"]["members"]["30002"] = "member"
+        await self.h._dir_members(self.client, "10001", force=True)
+        scoped = await call(self.h._web_minimal_kick, {"user_ids": ["30002"], "groups": ["10001"]})
+        job = self.h._bq_job(scoped["data"]["job"]["id"])
+        self.assertEqual([it["group_id"] for it in job["items"]], ["10001"])
         empty = await call(self.h._web_minimal_kick, {"user_ids": "abc"})
         self.assertEqual(empty["status"], "error")
 
@@ -411,6 +459,7 @@ class OperationLogTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_kick_block_records_reason_per_group_and_blacklist_meta(self):
         await call(self.h._web_minimal_kick, {"user_ids": "30001", "block": True, "reason": "发广告"})
+        await self.h._bq_drain()
         records = self.logs("踢出并拉黑")
         self.assertEqual(sorted(r["group_id"] for r in records), ["10001", "10002"])
         self.assertTrue(all(r["reason"] == "发广告" and r["source"] == "WebUI" and r["result"] == "成功"
@@ -433,8 +482,10 @@ class OperationLogTests(unittest.IsolatedAsyncioTestCase):
         await call(self.h._web_minimal_rules_save, {"key": "keyword_rules", "rules": ["加微信"]})
         self.assertIn("新增 加微信", self.logs("修改关键词规则")[0]["detail"])
         await call(self.h._web_minimal_broadcast, {"groups": ["10001"], "content": "通知内容"})
+        await self.h._bq_drain()
         self.assertEqual(self.logs("发布群公告")[0]["detail"], "通知内容")
         await call(self.h._web_minimal_names_suffix, {"groups": ["10001"], "suffix": "|活动"})
+        await self.h._bq_drain()
         (rename,) = self.logs("修改群名后缀")
         self.assertEqual(rename["detail"], "一群 → 一群|活动")
 

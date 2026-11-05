@@ -28,6 +28,7 @@ from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
 from .leave_recall import LeaveRecallMixin
 from .live_log import LiveLogMixin
+from .batch_queue import BatchQueueMixin
 from .message_backup import MessageBackupMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
@@ -42,7 +43,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, ModerationReviewMixin, AntiFloodMixin, AppealMixin, MembershipMixin, CardMonitorMixin, GroupBlacklistMixin, LeaveRecallMixin, LiveLogMixin, BatchQueueMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, LexiconLearnMixin, SchedulerMixin, RemoteMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):

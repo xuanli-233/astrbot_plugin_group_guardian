@@ -427,6 +427,29 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
     .mn-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--primary-light);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)}
     .mn-steps{margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.9}
+    .nav-badge{margin-left:auto;font-size:11px;min-width:18px;padding:0 6px;border-radius:9px;background:var(--primary);color:#fff;text-align:center;line-height:18px}
+    .bq-job{border-top:1px solid var(--border);padding:12px 18px}
+    .bq-job:first-child{border-top:none}
+    .bq-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .bq-title{font-weight:600;font-size:14px;flex:1;min-width:200px;word-break:break-all}
+    .bq-meta{font-size:12px;color:var(--text-muted);margin-top:4px}
+    .bq-bar{height:6px;border-radius:3px;background:var(--info-light);overflow:hidden;display:flex;margin:8px 0 6px}
+    .bq-bar span{display:block;height:100%}
+    .bq-bar .ok{background:var(--success)}
+    .bq-bar .failed{background:var(--danger)}
+    .bq-bar .skipped,.bq-bar .cancelled{background:var(--text-muted);opacity:.5}
+    .bq-bar .running{background:var(--primary)}
+    .bq-actions{display:flex;gap:6px;flex-wrap:wrap}
+    .bq-items{margin-top:10px;max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius)}
+    .bq-st{font-size:12px;padding:1px 8px;border-radius:10px;white-space:nowrap}
+    .bq-st.pending{background:var(--info-light);color:var(--text-secondary)}
+    .bq-st.running{background:var(--primary-light);color:var(--primary)}
+    .bq-st.ok{background:var(--success-light);color:var(--success)}
+    .bq-st.failed{background:var(--danger-light);color:var(--danger)}
+    .bq-st.skipped,.bq-st.cancelled{background:var(--info-light);color:var(--text-muted)}
+    .bq-st.active{background:var(--primary-light);color:var(--primary)}
+    .bq-st.paused{background:var(--warning-light);color:var(--warning)}
+    .bq-st.done{background:var(--success-light);color:var(--success)}
     .lv-row{cursor:pointer}
     .lv-row:hover td{background:var(--bg-hover, rgba(127,127,127,.06))}
     .lv-text{max-width:360px;word-break:break-all;color:var(--text-secondary)}
@@ -488,6 +511,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 
           <span>群名任务</span>
 
+        </a>
+
+        <a class="nav-item" data-tab="batch">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 5h2v2H3V5zm4 0h14v2H7V5zM3 11h2v2H3v-2zm4 0h14v2H7v-2zm-4 6h2v2H3v-2zm4 0h14v2H7v-2z"/></svg>
+          <span>批量任务</span><span class="nav-badge" id="bqNavBadge" style="display:none"></span>
         </a>
 
         <a class="nav-item" data-tab="kick">
@@ -1184,6 +1212,34 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
       </div>
 
+      <div class="tab-panel" id="tab-batch">
+        <div class="page-header"><h1>批量任务</h1><button class="btn btn-ghost btn-sm" id="btnBqRefresh">刷新</button></div>
+        <p class="mn-intro">跨群踢人 / 踢黑、批量踢黑、重复成员处理、全群公告 / 待办、群名后缀、倒计时（含每日自动更新）、定时改名都会先变成批量任务，在这里逐项执行：同一时间只执行一项，两项之间等待「间隔 + 0~抖动 的随机秒数」。自动任务按间隔执行；手动任务等你点「执行下一项」或「全部执行」。拉黑在创建任务时就已生效，踢人在执行到那一项时才发生。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>执行器</h2></div>
+            <div class="mn-body"><div id="bqRunner" class="mn-hint">加载中...</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>默认设置</h2></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:120px">两项间隔（秒）</label><input type="number" min="0" max="3600" class="input-sm" id="bqInterval" style="width:100px" /></div>
+              <div class="mn-row"><label style="width:120px">抖动范围（秒）</label><input type="number" min="0" max="3600" class="input-sm" id="bqJitter" style="width:100px" /><span class="mn-hint">每次额外随机等待 0~该值</span></div>
+              <div class="mn-row"><label style="width:120px">新任务执行方式</label>
+                <label><input type="radio" name="bqMode" value="auto" /> 自动</label>
+                <label><input type="radio" name="bqMode" value="manual" /> 手动</label>
+              </div>
+              <div class="mn-row"><label><input type="checkbox" id="bqNotify" /> 群指令创建的任务完成后在该群通知结果</label></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBqSave">保存</button><span class="mn-hint">定时改名、倒计时每日更新始终自动执行</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>任务</h2><span class="rules-subtle" id="bqCount"></span></div>
+          <div id="bqJobs"><p class="empty">加载中...</p></div>
+        </div>
+      </div>
+
       <div class="tab-panel" id="tab-livelog">
         <div class="page-header"><h1>实时日志</h1>
           <div class="header-actions">
@@ -1389,6 +1445,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 
       <span>群名任务</span>
 
+    </a>
+    <a class="mobile-nav-item" data-tab="batch">
+      <svg viewBox="0 0 24 24"><path d="M3 5h2v2H3V5zm4 0h14v2H7V5zM3 11h2v2H3v-2zm4 0h14v2H7v-2zm-4 6h2v2H3v-2zm4 0h14v2H7v-2z"/></svg>
+      <span>批量任务</span>
     </a>
 
     <a class="mobile-nav-item" data-tab="kick">
@@ -2050,6 +2110,7 @@ function switchTab(tabName) {
   if (tabName === 'kick') loadKick();
   if (tabName === 'oplog') loadOplog(1);
   if (tabName === 'livelog') loadLive();
+  if (tabName === 'batch') loadBatch();
   if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
   if (tabName === 'directory') loadDirectory();
   if (tabName === 'settings') loadSettings();
@@ -3204,6 +3265,10 @@ var MANUAL_SETTING_KEYS = {
   // 以下由「常用功能」里的新页面管理，不在全量配置里重复显示
   // （列表类规则若在全量配置里按逗号拆分保存，会把正则里的逗号拆坏）
   leave_auto_blacklist_enabled: true,
+  batch_interval_seconds: true,
+  batch_jitter_seconds: true,
+  batch_default_mode: true,
+  batch_notify_enabled: true,
   live_log_enabled: true,
   live_log_show_text: true,
   live_log_size: true,
@@ -5178,9 +5243,9 @@ async function mnSendBroadcast() {
   btn.disabled = false;
   if (isApiError(res)) { $('#bcResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res);
-  var failed = Object.keys(d.failed || {});
-  $('#bcResult').innerHTML = '<div class="mn-result ' + (failed.length ? 'err' : 'ok') + '">成功 ' + (d.ok_groups || []).length + ' 个群，失败 ' + failed.length + ' 个群' +
-    failed.map(function(g) { return '\n· ' + esc(g) + '：' + esc(d.failed[g]); }).join('') + '</div>';
+  var extra = (d.denied || []).length ? ['不在管理范围内、已排除：' + d.denied.join(', ')] : [];
+  if (todo) extra.push('全部发布后可点「查看确认情况」');
+  $('#bcResult').innerHTML = mnJobCreatedHtml(d.job, extra);
 }
 async function mnTodoStatus() {
   var box = $('#todoStatus');
@@ -5231,10 +5296,31 @@ async function loadNames() {
         (backups[g.group_id] ? ' <span class="mn-tag">备份群</span>' : '') + '</td><td>' + esc(g.name) + '</td><td>' + (esc(g.suffix) || '<span class="mn-hint">—</span>') + '</td><td>' + cd + '</td><td>' + sched + '</td></tr>';
     }).join('') + '</tbody></table>';
 }
+// 批量任务已创建：显示编号、项数、执行方式，并提供跳转到「批量任务」页面的按钮
+function mnJobCreatedHtml(job, extraLines) {
+  if (!job) return '<div class="mn-result no">' + esc((extraLines || []).concat(['没有需要执行的项']).join('\n')) + '</div>';
+  var mode = job.mode === 'manual' ? '手动执行（请在「批量任务」页面执行）' : '自动执行，预计约 ' + bqFmtSeconds(job.eta_seconds || 0);
+  var lines = ['已创建批量任务 #' + job.id + '「' + job.title + '」，共 ' + job.items + ' 项，' + mode].concat(extraLines || []);
+  return '<div class="mn-result ok">' + esc(lines.join('\n')) +
+    '\n<button class="btn btn-outline btn-sm" data-goto-job="' + job.id + '" style="margin-top:6px">查看任务进度</button></div>';
+}
+function bqFmtSeconds(s) {
+  s = Math.round(Number(s) || 0);
+  if (s < 60) return s + ' 秒';
+  if (s < 3600) return Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒';
+  return Math.floor(s / 3600) + ' 小时 ' + Math.floor(s % 3600 / 60) + ' 分';
+}
+document.addEventListener('click', function(e) {
+  var btn = e.target && e.target.closest ? e.target.closest('[data-goto-job]') : null;
+  if (!btn) return;
+  BQ.open[Number(btn.getAttribute('data-goto-job'))] = true;
+  switchTab('batch');
+});
 function mnRenderApply(boxSel, res) {
   var box = $(boxSel);
   if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return false; }
   var d = mnData(res);
+  if (d.job !== undefined) { box.innerHTML = mnJobCreatedHtml(d.job); return true; }
   if (d.scheduled) { box.innerHTML = '<div class="mn-result ok">已登记：' + esc(d.scheduled) + ' 修改 ' + d.groups.length + ' 个群</div>'; return true; }
   var failed = Object.keys(d.failed || {});
   var lines = (d.done || []).map(function(x) { return '· ' + esc(x); }).concat(failed.map(function(g) { return '· ' + esc(g) + ' 失败：' + esc(d.failed[g]); }));
@@ -5312,17 +5398,11 @@ async function mnKick() {
     $('#kickResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return;
   }
   var d = mnData(res);
-  var lines = ['共踢出 ' + d.kicked_total + ' 人次' + (d.blacklisted >= 0 ? '，新加入插件黑名单 ' + d.blacklisted + ' 人' : '')];
-  if ((d.protected || []).length) lines.push('已跳过插件管理员 / 白名单：' + d.protected.join(', '));
-  Object.keys(d.per_group || {}).forEach(function(gid) {
-    var r = d.per_group[gid];
-    if (r.skipped) lines.push('· 群 ' + gid + '：跳过（' + r.skipped + '）');
-    else if (r.kicked.length || Object.keys(r.failed).length) {
-      lines.push('· 群 ' + gid + '：踢出 ' + (r.kicked.join(', ') || '无') +
-        Object.keys(r.failed).map(function(u) { return '；' + u + ' 失败（' + r.failed[u] + '）'; }).join(''));
-    }
-  });
-  $('#kickResult').innerHTML = '<div class="mn-result ok">' + esc(lines.join('\n')) + '</div>';
+  var extra = [];
+  if (d.blacklisted >= 0) extra.push('已加入插件黑名单 ' + d.blacklisted + ' 人（新增，立即生效）');
+  if ((d.protected || []).length) extra.push('已跳过插件管理员 / 白名单：' + d.protected.join(', '));
+  if (d.absent) extra.push('按本地缓存不在群里、未建任务：' + d.absent + ' 项');
+  $('#kickResult').innerHTML = mnJobCreatedHtml(d.job, extra);
   loadKick();
 }
 
@@ -5398,18 +5478,14 @@ async function mnDupHandle(mode) {
   $('#dupResult').innerHTML = '<div class="mn-result no">处理中……</div>';
   var res = await safePost('minimal/duplicates/handle', { user_ids: ids, mode: mode, reason: reason, keep: keep, block: block }, 300000);
   if (isApiError(res)) { $('#dupResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
-  var results = mnData(res).results || {};
-  var lines = [], anyFail = false;
+  var data = mnData(res), results = data.results || {};
+  var lines = [];
   Object.keys(results).forEach(function(uid) {
     var r = results[uid];
     if (r.skipped) { lines.push(uid + '：跳过（' + r.skipped + '）'); return; }
-    var failed = Object.keys(r.failed || {});
-    if (failed.length) anyFail = true;
-    lines.push(uid + '：' + (r.kept ? '保留 ' + r.kept + '，' : '') + '踢出 ' + (r.kicked.length ? r.kicked.join(', ') : '无') +
-      failed.map(function(g) { return '；' + g + ' 失败（' + r.failed[g] + '）'; }).join(''));
+    lines.push(uid + '：' + (r.kept ? '保留 ' + r.kept + '，' : '') + '将从 ' + (r.groups || []).length + ' 个群踢出');
   });
-  $('#dupResult').innerHTML = '<div class="mn-result ' + (anyFail ? 'err' : 'ok') + '">' + esc(lines.join('\n')) + '</div>';
-  loadDup();
+  $('#dupResult').innerHTML = mnJobCreatedHtml(data.job, lines);
 }
 async function mnDupIgnore() {
   var ids = mnDupSelected();
@@ -5447,6 +5523,158 @@ async function loadOplog(page) {
     '<button class="btn btn-ghost btn-sm" id="opNext"' + (OP_STATE.page >= pages ? ' disabled' : '') + '>下一页</button>';
   bindIfExists('opPrev', function() { loadOplog(OP_STATE.page - 1); });
   bindIfExists('opNext', function() { loadOplog(OP_STATE.page + 1); });
+}
+
+/* ---- 批量任务 ---- */
+var BQ = { open: {}, details: {}, jobs: [], runner: {}, timer: null, inflight: false };
+var BQ_STATE = { active: '执行中', paused: '已暂停', done: '已完成', cancelled: '已取消' };
+var BQ_ITEM = { pending: '待执行', running: '执行中', ok: '成功', failed: '失败', skipped: '跳过', cancelled: '已取消' };
+function bqActive() { var p = $('#tab-batch'); return !!(p && p.classList.contains('active') && !document.hidden); }
+async function loadBatch() {
+  if (!MN.overview) await mnLoadOverview();
+  bqPoll(true);
+}
+async function bqPoll(fillSettings) {
+  clearTimeout(BQ.timer); BQ.timer = null;
+  if (!bqActive() || BQ.inflight) return;
+  BQ.inflight = true;
+  try {
+    var res = await safeGet('minimal/batch/jobs', { limit: 30 });
+    if (isApiError(res)) { $('#bqJobs').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+    var d = mnData(res) || {};
+    BQ.jobs = d.jobs || []; BQ.runner = d.runner || {};
+    if (fillSettings && d.settings) {
+      $('#bqInterval').value = d.settings.interval; $('#bqJitter').value = d.settings.jitter;
+      $$('input[name=bqMode]').forEach(function(r) { r.checked = r.value === d.settings.mode; });
+      $('#bqNotify').checked = !!d.settings.notify;
+    }
+    var openIds = Object.keys(BQ.open).filter(function(k) { return BQ.open[k]; });
+    for (var i = 0; i < openIds.length; i++) {
+      var r = await safeGet('minimal/batch/job', { id: openIds[i] });
+      if (!isApiError(r)) BQ.details[openIds[i]] = (mnData(r) || {}).job;
+    }
+    bqRender();
+  } finally {
+    BQ.inflight = false;
+    var busy = BQ.jobs.some(function(j) { return j.state === 'active' && j.mode === 'auto'; });
+    if (bqActive()) BQ.timer = setTimeout(bqPoll, busy ? 2000 : 5000);
+  }
+}
+function bqRunnerText(r) {
+  if (!r || r.state === 'idle') return '空闲：没有待自动执行的项';
+  if (r.state === 'disabled') return '插件未启用或未同意免责声明，执行器暂停';
+  if (r.state === 'waiting_client') return '等待 QQ 连接：' + (r.message || '');
+  if (r.state === 'running') return '正在执行：任务 #' + r.job_id + ' · ' + (r.label || '') + (r.group_id ? ' · 群 ' + r.group_id : '');
+  if (r.state === 'waiting') return '间隔等待中：' + (r.wait_seconds != null ? r.wait_seconds + ' 秒后' : '稍后') + '执行任务 #' + r.job_id + ' 的下一项（' + (r.label || '') + '）';
+  return r.state;
+}
+function bqRender() {
+  $('#bqRunner').textContent = bqRunnerText(BQ.runner);
+  var activeCount = BQ.jobs.filter(function(j) { return j.state === 'active' || j.state === 'paused'; }).length;
+  var badge = $('#bqNavBadge');
+  if (badge) { badge.style.display = activeCount ? '' : 'none'; badge.textContent = activeCount; }
+  $('#bqCount').textContent = BQ.jobs.length ? '最近 ' + BQ.jobs.length + ' 个' + (activeCount ? '，进行中 ' + activeCount + ' 个' : '') : '';
+  if (!BQ.jobs.length) { $('#bqJobs').innerHTML = '<div class="mn-empty">还没有批量任务。跨群踢人、全群公告、群名任务等操作会在这里排队执行。</div>'; return; }
+  $('#bqJobs').innerHTML = BQ.jobs.map(bqJobHtml).join('');
+  $$('[data-bq]', $('#bqJobs')).forEach(function(btn) { btn.addEventListener('click', bqOnAction); });
+}
+function bqJobHtml(j) {
+  var c = j.counts || {}, total = j.total || 0;
+  var done = (c.ok || 0) + (c.failed || 0) + (c.skipped || 0) + (c.cancelled || 0);
+  var pending = c.pending || 0;
+  var pct = function(n) { return total ? (100 * n / total) : 0; };
+  var bar = ['ok', 'failed', 'skipped', 'cancelled', 'running'].map(function(k) {
+    return c[k] ? '<span class="' + k + '" style="width:' + pct(c[k]) + '%"></span>' : '';
+  }).join('');
+  var stateLabel = j.state === 'active' && j.mode === 'manual' ? '等待手动执行' : (BQ_STATE[j.state] || j.state);
+  var interval = j.interval_effective, jitter = j.jitter_effective;
+  var custom = j.interval_s != null || j.jitter_s != null;
+  var meta = [
+    (j.source || '') + (j.operator ? ' ' + j.operator : ''),
+    '创建于 ' + liveTime(j.created_at),
+    (j.mode === 'manual' ? '手动' : '自动') + '执行，间隔 ' + interval + (jitter ? '–' + (interval + jitter) : '') + ' 秒' + (custom ? '（本任务单独设置）' : ''),
+    '进度 ' + done + ' / ' + total + '：成功 ' + (c.ok || 0) + '，失败 ' + (c.failed || 0) + '，跳过 ' + (c.skipped || 0) + (c.cancelled ? '，取消 ' + c.cancelled : '')
+  ].filter(Boolean).join(' · ');
+  var btns = [];
+  var live = j.state === 'active' || j.state === 'paused';
+  if (live && pending) {
+    if (j.state === 'active' && j.mode === 'auto') btns.push(['pause', '暂停'], ['manual', '改为手动']);
+    if (j.state === 'paused') btns.push(['resume', '继续']);
+    if (j.mode === 'manual' || j.state === 'paused') btns.push(['run_next', '执行下一项'], ['auto', '全部执行（自动）']);
+    btns.push(['settings', '间隔设置'], ['cancel', '取消剩余']);
+  }
+  if (c.failed) btns.push(['retry', '重试失败项']);
+  btns.push(['toggle', BQ.open[j.id] ? '收起明细' : '查看明细']);
+  var html = '<div class="bq-job"><div class="bq-head"><span class="bq-title">#' + j.id + ' ' + esc(j.title) + '</span>' +
+    '<span class="bq-st ' + escAttr(j.state) + '">' + esc(stateLabel) + '</span></div>' +
+    '<div class="bq-meta">' + esc(meta) + '</div><div class="bq-bar">' + bar + '</div>' +
+    '<div class="bq-actions">' + btns.map(function(b) {
+      var cls = b[0] === 'cancel' ? 'btn-danger' : (b[0] === 'run_next' || b[0] === 'auto' ? 'btn-primary' : 'btn-ghost');
+      return '<button class="btn ' + cls + ' btn-sm" data-bq="' + b[0] + '" data-job="' + j.id + '">' + esc(b[1]) + '</button>';
+    }).join('') + '</div>';
+  if (BQ.open[j.id]) html += bqItemsHtml(BQ.details[j.id]);
+  return html + '</div>';
+}
+function bqItemsHtml(job) {
+  if (!job) return '<div class="bq-items"><p class="empty">加载中...</p></div>';
+  var running = BQ.runner && BQ.runner.state === 'waiting' && BQ.runner.job_id === job.id ? BQ.runner.item_id : null;
+  return '<div class="bq-items"><table class="mn-table"><thead><tr><th>#</th><th>群</th><th>行为</th><th>对象</th><th>状态</th><th>结果</th><th>时间</th><th></th></tr></thead><tbody>' +
+    (job.items || []).map(function(it) {
+      var ops = '';
+      if (it.status === 'pending') ops = '<button class="btn btn-ghost btn-sm" data-bq="run_item" data-item="' + it.id + '" data-job="' + job.id + '">执行</button>' +
+        '<button class="btn btn-ghost btn-sm" data-bq="skip_item" data-item="' + it.id + '" data-job="' + job.id + '">跳过</button>';
+      else if (it.status === 'failed') ops = '<button class="btn btn-ghost btn-sm" data-bq="skip_item" data-item="' + it.id + '" data-job="' + job.id + '">跳过</button>';
+      var t = it.finished_at || it.started_at;
+      var st = BQ_ITEM[it.status] || it.status;
+      if (it.id === running) st += '（下一项）';
+      return '<tr><td>' + it.seq + '</td><td>' + esc(it.group_name || it.group_id) + (it.group_name ? '<div class="mn-hint">' + esc(it.group_id) + '</div>' : '') + '</td>' +
+        '<td>' + esc(it.label) + '</td><td>' + (esc(it.target) || '<span class="mn-hint">—</span>') + '</td>' +
+        '<td><span class="bq-st ' + escAttr(it.status) + '">' + esc(st) + '</span></td>' +
+        '<td style="max-width:320px;word-break:break-all">' + esc(it.result || '') + '</td>' +
+        '<td style="white-space:nowrap">' + (t ? esc(liveTime(t)) : '') + '</td><td style="white-space:nowrap">' + ops + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+async function bqOnAction(e) {
+  var btn = e.currentTarget, action = btn.getAttribute('data-bq');
+  var jobId = Number(btn.getAttribute('data-job')), itemId = Number(btn.getAttribute('data-item') || 0);
+  if (action === 'toggle') { BQ.open[jobId] = !BQ.open[jobId]; if (!BQ.open[jobId]) delete BQ.details[jobId]; bqPoll(); return; }
+  if (action === 'settings') { bqEditSettings(jobId); return; }
+  if (action === 'cancel' && !(await mnConfirm('取消任务 #' + jobId + ' 中所有还没执行的项？已执行的不受影响。', { okText: '取消剩余', danger: true }))) return;
+  if (action === 'auto' && !(await mnConfirm('任务 #' + jobId + ' 改为按间隔自动执行剩余的项？', { okText: '全部执行' }))) return;
+  btn.disabled = true;
+  var res = await safePost('minimal/batch/action', { action: action, job_id: jobId, item_id: itemId }, 200000);
+  btn.disabled = false;
+  if (isApiError(res)) { toast(mnErr(res), 'error'); }
+  else if (action === 'run_next' || action === 'run_item') {
+    var d = mnData(res) || {};
+    toast((BQ_ITEM[d.result] || d.result || '') + '：' + (d.message || ''), d.result === 'failed' ? 'error' : 'success');
+  }
+  bqPoll();
+}
+async function bqEditSettings(jobId) {
+  var job = BQ.jobs.filter(function(j) { return j.id === jobId; })[0] || {};
+  showModal('任务 #' + jobId + ' 的间隔',
+    '<div style="display:grid;gap:10px;font-size:13px">' +
+    '<label>两项间隔（秒）<input class="input-sm" id="bqJobInterval" type="number" min="0" max="3600" style="width:100%" placeholder="留空 = 使用默认设置" value="' + (job.interval_s != null ? job.interval_s : '') + '" /></label>' +
+    '<label>抖动范围（秒）<input class="input-sm" id="bqJobJitter" type="number" min="0" max="3600" style="width:100%" placeholder="留空 = 使用默认设置" value="' + (job.jitter_s != null ? job.jitter_s : '') + '" /></label>' +
+    '<p class="mn-hint">修改后从下一项开始生效。</p></div>',
+    '<button class="btn btn-ghost btn-sm" id="bqJobCancel">取消</button><button class="btn btn-primary btn-sm" id="bqJobOk">保存</button>');
+  $('#bqJobCancel').addEventListener('click', closeModal);
+  $('#bqJobOk').addEventListener('click', async function() {
+    var res = await safePost('minimal/batch/action', { action: 'settings', job_id: jobId,
+      interval: $('#bqJobInterval').value.trim(), jitter: $('#bqJobJitter').value.trim() });
+    if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+    closeModal(); toast('已保存', 'success'); bqPoll();
+  });
+}
+async function bqSaveDefaults() {
+  var interval = Number($('#bqInterval').value), jitter = Number($('#bqJitter').value);
+  if (!(interval >= 0 && interval <= 3600) || !(jitter >= 0 && jitter <= 3600) || Math.floor(interval) !== interval || Math.floor(jitter) !== jitter) {
+    toast('间隔和抖动请填 0–3600 的整数秒', 'warning'); return;
+  }
+  var mode = ($('input[name=bqMode]:checked') || {}).value || 'auto';
+  if (await mnSaveConfig({ batch_interval_seconds: interval, batch_jitter_seconds: jitter, batch_default_mode: mode,
+    batch_notify_enabled: $('#bqNotify').checked }, '已保存')) bqPoll();
 }
 
 /* ---- 实时日志 ---- */
@@ -5701,6 +5929,10 @@ function initMinimalPages() {
     if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
     toast('已开始在后台刷新，可在「群成员缓存」页面查看进度', 'success');
   });
+
+  bindIfExists('btnBqRefresh', function() { bqPoll(true); });
+  bindIfExists('btnBqSave', bqSaveDefaults);
+  document.addEventListener('visibilitychange', function() { if (bqActive()) bqPoll(); });
 
   bindIfExists('btnLivePause', function() {
     LIVE.paused = !LIVE.paused;

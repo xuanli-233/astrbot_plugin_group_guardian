@@ -64,6 +64,9 @@ group_name_task = _load(f"{PKG}.group_name_task", "group_name_task.py")
 keyword_guard = _load(f"{PKG}.keyword_guard", "keyword_guard.py")
 image_recognizer = _load(f"{PKG}.image_recognizer", "image_recognizer.py")
 message_backup = _load(f"{PKG}.message_backup", "message_backup.py")
+batch_queue = _load(f"{PKG}.batch_queue", "batch_queue.py")
+sys.path.insert(0, str(ROOT / "tests"))
+from _sqlite_storage import SqliteConnectMixin  # noqa: E402
 
 BOT = 999
 OK = {"status": "ok", "retcode": 0, "data": None}
@@ -104,7 +107,7 @@ class _Client:
         return [kw for action, kw in self.calls if action == name]
 
 
-class _Storage:
+class _Storage(SqliteConnectMixin):
     def __init__(self):
         self.meta = {}
 
@@ -119,6 +122,7 @@ class _Harness(
     group_blacklist.GroupBlacklistMixin,
     group_broadcast.GroupBroadcastMixin,
     group_name_task.GroupNameTaskMixin,
+    batch_queue.BatchQueueMixin,
     keyword_guard.KeywordGuardMixin,
     image_recognizer.ImageRecognizerMixin,
     message_backup.MessageBackupMixin,
@@ -384,10 +388,15 @@ class BroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("即将发布群公告到 2 个群", preview[0])
         self.assertEqual(client.actions("_send_group_notice"), [])
         out = await _collect(h.cmd_broadcast_confirm(_Event("/确认发布")))
+        self.assertIn("已创建批量任务", out[-1])
+        self.assertIn("共 2 项", out[-1])
+        self.assertEqual(client.actions("_send_group_notice"), [])  # 进入队列，尚未发送
+        await h._bq_drain()
         sent = client.actions("_send_group_notice")
         self.assertEqual([kw["group_id"] for kw in sent], [10001, 10002])
         self.assertFalse(sent[0]["confirm_required"])  # LLBot 默认 true，必须显式传 false
-        self.assertIn("成功 2 个群", out[-1])
+        notify = client.actions("send_group_msg")[-1]["message"][0]["data"]["text"]
+        self.assertIn("成功 2，失败 0", notify)
         again = await _collect(h.cmd_broadcast_confirm(_Event("/确认发布")))
         self.assertIn("没有待确认", again[0])
 
@@ -405,6 +414,7 @@ class BroadcastTests(unittest.IsolatedAsyncioTestCase):
         h = _Harness(client)
         await _collect(h.cmd_broadcast_notice(_Event("/全群待办 10001 交作业"), todo=True))
         await _collect(h.cmd_broadcast_confirm(_Event("/确认发布")))
+        await h._bq_drain()  # 全部发完后才记录「最近一次待办」
         (sent,) = client.actions("_send_group_notice")
         self.assertTrue(sent["pinned"] and sent["confirm_required"] and sent["tip_window"])
         status = await _collect(h.cmd_todo_ack_status(_Event("/待办确认情况")))
@@ -460,11 +470,16 @@ class GroupNameTests(unittest.IsolatedAsyncioTestCase):
     async def test_suffix_does_not_stack(self):
         client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}})
         h = _Harness(client)
-        await _collect(h.cmd_group_suffix(_Event("/群名后缀 |周末活动")))
+        out = await _collect(h.cmd_group_suffix(_Event("/群名后缀 |周末活动")))
+        self.assertIn("已创建批量任务", out[-1])
+        self.assertEqual(client.groups["10001"]["name"], "交流群")  # 还在队列里
+        await h._bq_drain()
         self.assertEqual(client.groups["10001"]["name"], "交流群|周末活动")
         await _collect(h.cmd_group_suffix(_Event("/群名后缀 |周日")))
+        await h._bq_drain()
         self.assertEqual(client.groups["10001"]["name"], "交流群|周日")
         await _collect(h.cmd_group_suffix(_Event("/群名后缀 清除 10001")))
+        await h._bq_drain()
         self.assertEqual(client.groups["10001"]["name"], "交流群")
 
     async def test_countdown_tick_updates_once_per_day_and_expires(self):
@@ -473,28 +488,48 @@ class GroupNameTests(unittest.IsolatedAsyncioTestCase):
         tasks = {"10001": {"base": "交流群", "suffix": "", "applied": "交流群",
                            "countdown": {"target": "2026-11-06", "template": "|{days}天", "last_date": "2026-11-03"}}}
         h._save_name_tasks(tasks)
-        await h._group_name_tick(datetime(2026, 11, 4, 0, 1))  # 还没到更新时间
+
+        async def tick(when):
+            await h._group_name_tick(when)
+            await h._bq_drain()
+
+        await tick(datetime(2026, 11, 4, 0, 1))  # 还没到更新时间
         self.assertEqual(client.groups["10001"]["name"], "交流群")
-        await h._group_name_tick(datetime(2026, 11, 4, 0, 6))
+        await tick(datetime(2026, 11, 4, 0, 6))
         self.assertEqual(client.groups["10001"]["name"], "交流群|2天")
         renames = len(client.actions("set_group_name"))
-        await h._group_name_tick(datetime(2026, 11, 4, 12, 0))  # 当天不再重复
+        jobs_before = h._bq_jobs()[1]
+        await tick(datetime(2026, 11, 4, 12, 0))  # 当天不再重复，也不重复建任务
         self.assertEqual(len(client.actions("set_group_name")), renames)
-        await h._group_name_tick(datetime(2026, 11, 6, 0, 6))
+        self.assertEqual(h._bq_jobs()[1], jobs_before)
+        await tick(datetime(2026, 11, 6, 0, 6))
         self.assertEqual(client.groups["10001"]["name"], "交流群|今天")
-        await h._group_name_tick(datetime(2026, 11, 7, 0, 6))
+        await tick(datetime(2026, 11, 7, 0, 6))
         self.assertEqual(client.groups["10001"]["name"], "交流群")
         self.assertIsNone(h._load_name_tasks()["10001"]["countdown"])
+
+    async def test_countdown_not_requeued_while_waiting_in_queue(self):
+        client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}})
+        h = _Harness(client)
+        h._save_name_tasks({"10001": {"countdown": {"target": "2030-01-01", "template": "|{days}天",
+                                                    "last_date": "2000-01-01"}}})
+        await h._group_name_tick(datetime(2026, 11, 4, 1, 0))
+        await h._group_name_tick(datetime(2026, 11, 4, 1, 1))  # 第一项还在排队
+        self.assertEqual(h._bq_jobs()[1], 1)
 
     async def test_scheduled_suffix_runs_when_due(self):
         client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}})
         h = _Harness(client)
         h._save_name_tasks({"10001": {"scheduled": [{"at": "2026-12-01 08:00", "suffix": "|新年"}]}})
         await h._group_name_tick(datetime(2026, 12, 1, 7, 59))
+        await h._bq_drain()
         self.assertEqual(client.groups["10001"]["name"], "交流群")
         await h._group_name_tick(datetime(2026, 12, 1, 8, 0))
+        self.assertEqual(h._load_name_tasks()["10001"]["scheduled"], [])  # 已移入批量任务
+        job = h._bq_jobs()[0][0]
+        self.assertEqual(job["mode"], "auto")  # 定时任务总是自动执行
+        await h._bq_drain()
         self.assertEqual(client.groups["10001"]["name"], "交流群|新年")
-        self.assertEqual(h._load_name_tasks()["10001"]["scheduled"], [])
 
     async def test_failed_countdown_backs_off(self):
         client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}},
@@ -503,7 +538,9 @@ class GroupNameTests(unittest.IsolatedAsyncioTestCase):
         h._save_name_tasks({"10001": {"countdown": {"target": "2030-01-01", "template": "|{days}天",
                                                     "last_date": "2000-01-01"}}})
         await h._group_name_tick(datetime(2026, 11, 4, 1, 0))
+        await h._bq_drain()
         await h._group_name_tick(datetime(2026, 11, 4, 1, 1))
+        await h._bq_drain()
         self.assertEqual(len(client.actions("set_group_name")), 1)
         self.assertIn("retry_after", h._load_name_tasks()["10001"]["countdown"])
 
@@ -512,7 +549,8 @@ class GroupNameTests(unittest.IsolatedAsyncioTestCase):
         h = _Harness(client)
         target = date.today().replace(year=date.today().year + 1).isoformat()
         out = await _collect(h.cmd_group_countdown(_Event(f"/群名倒计时 {target} |还剩{{days}}天 10001")))
-        self.assertIn("倒计时已设置", out[-1])
+        self.assertIn("已创建批量任务", out[-1])
+        await h._bq_drain()
         self.assertTrue(client.groups["10001"]["name"].startswith("交流群|还剩"))
         listing = await _collect(h.cmd_group_countdown(_Event("/群名倒计时 列表")))
         self.assertIn(target, listing[0])
