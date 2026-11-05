@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import sys
 import types
 import unittest
@@ -696,7 +697,16 @@ class DashboardWiringTests(unittest.TestCase):
                 self.assertIn(f'id="tab-{tab}"', html)
                 self.assertIn(f'<a class="nav-item" data-tab="{tab}">', html)
                 self.assertIn(f'<a class="mobile-nav-item" data-tab="{tab}">', html)
-        self.assertIn('<div class="nav-section">常用功能</div>', html)
+        # 侧边栏按用途分组，顺序固定
+        sections = re.findall(r'<div class="nav-section">([^<]+)</div>', html)
+        self.assertEqual(sections, ["消息审核", "成员管理", "群运营", "系统"])
+        nav = html[html.index('<nav class="sidebar-nav">'):html.index("</nav>")]
+        tabs = re.findall(r'data-tab="([\w-]+)"', nav)
+        self.assertEqual(tabs, ["overview", "guard", "codes", "livelog", "records", "kick", "dup", "leavelog", "join",
+                                "tasks", "broadcast", "names", "batch", "directory", "oplog", "perms", "groupcfg",
+                                "settings"])
+        mobile = html[html.index('<nav class="mobile-nav"'):]
+        self.assertEqual(re.findall(r'class="mobile-nav-item(?: active)?" data-tab="([\w-]+)"', mobile), tabs)
         # 原版的群管理 / 刷屏 / 规则库 / 名片 / 词库学习页面已删除
         for tab in ("groups", "flood", "rules", "cardmon", "learn"):
             self.assertNotIn(f'data-tab="{tab}"', html)
