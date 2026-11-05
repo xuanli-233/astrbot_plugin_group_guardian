@@ -324,6 +324,14 @@ class FakeOneBot:
         return _ok([{"group_id": gid, "group_name": g["name"], "member_count": len(g["members"]),
                      "max_member_count": 500} for gid, g in self.groups.items()])
 
+    def act_get_stranger_info(self, user_id, **_):
+        uid = int(user_id)
+        for g in self.groups.values():
+            m = g["members"].get(uid)
+            if m:
+                return _ok({"user_id": uid, "nickname": m["nickname"]})
+        return _ok({"user_id": uid, "nickname": f"用户{uid}"})
+
     def act_get_group_info(self, group_id, **_):
         g = self.groups.get(int(group_id))
         if not g:
@@ -869,16 +877,34 @@ def sim_member(payload_json: str) -> str:
 
         def on_friend(flag=None, approve=True, **_):
             decided.update(kind="friend", approve=approve)
+            if approve and PLUGIN is not None and hasattr(PLUGIN, "_on_bot_event_notify"):
+                # 真实协议端随后推送 friend_add 通知
+                LOOP.create_task(_drain(PLUGIN._on_bot_event_notify(_notice_event(
+                    {"post_type": "notice", "notice_type": "friend_add", "user_id": uid, "time": int(time.time())}))))
             return _ok(None)
 
         def on_invite(flag=None, sub_type=None, approve=True, **_):
             decided.update(kind="invite", approve=approve)
+            gid = int(p.get("group_id") or 0)
+            if approve and gid and gid not in BOT.groups:
+                # 模拟：机器人进了一个新群，协议端随后推送 group_increase（user_id = 机器人自己）
+                BOT.groups[gid] = {"name": p.get("group_name") or f"新群{gid}", "blocked": set(), "chat": [], "notices": [],
+                                   "members": {BOT_UIN: {"nickname": "群管机器人", "card": "", "role": "member",
+                                                         "title": "", "shut_until": 0},
+                                               uid: {"nickname": f"用户{uid}", "card": "", "role": "owner",
+                                                     "title": "", "shut_until": 0}}}
+                if PLUGIN is not None and hasattr(PLUGIN, "_on_bot_event_notify"):
+                    LOOP.create_task(_drain(PLUGIN._on_bot_event_notify(_notice_event(
+                        {"post_type": "notice", "notice_type": "group_increase", "sub_type": "invite",
+                         "group_id": gid, "user_id": BOT_UIN, "operator_id": uid, "time": int(time.time())}))))
             return _ok(None)
         BOT.act_set_friend_add_request = on_friend
         BOT.act_set_group_add_request = on_invite
         if action == "friend_request":
             raw = {"post_type": "request", "request_type": "friend", "user_id": uid,
                    "comment": p.get("comment", ""), "flag": flag}
+            if hasattr(PLUGIN, "_on_bot_event_notify"):  # 与 AstrBot 一样按注册顺序：先记下验证消息
+                _run_handler("_on_bot_event_notify", _notice_event(dict(raw)))
             _run_handler("_on_friend_request", _notice_event(raw))
         else:
             raw = {"post_type": "request", "request_type": "group", "sub_type": "invite",

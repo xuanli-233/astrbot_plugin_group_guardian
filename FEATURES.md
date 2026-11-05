@@ -221,6 +221,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 自动同意好友申请 / 自动接受进群邀请 | `auto_accept.py`（main `_on_friend_request`、`_on_group_request` 先于入群审核处理 invite） | `auto_accept_friend_enabled` / `_friend_scope`（all / admin）、`auto_accept_invite_enabled` / `_invite_scope`（admin / all）、`auto_accept_delay_seconds` | 都默认关；邀请默认仅接受插件管理员的；黑名单用户好友申请拒绝、邀请不接受；不在范围内的留给人工 |
 | 二维码看板：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |
 | 实时日志：WebUI 查看近期消息处理进度与耗时 | `live_log.py`、`web_minimal.py:_web_minimal_livelog` | `live_log_enabled`、`live_log_show_text`、`live_log_size` | 默认开（只存内存，300 条） |
+| 机器人进群 / 加好友推送到备份群：进群（group_increase 里 user_id 是机器人）发群名、群号、人数、邀请人；加好友（friend_add）发昵称、QQ、验证消息、是否自动同意 | `bot_notify.py` | `bot_notify_join_enabled`、`bot_notify_friend_enabled` | 都默认开；没填备份群不发 |
 | 进群后自动设置机器人的群消息接收方式（LLBot `set_group_msg_mask`，默认 4 = 接收消息但不提醒）：进群通知触发，群成员缓存后台刷新时补漏；第一次开启时已在的群记为基线不改动；已有的群在「踢人与黑名单」批量设置（批量任务） | `group_msg_mask.py`（meta 表 `msg_mask_state`） | `auto_msg_mask_enabled`、`auto_msg_mask_value` | 默认关 |
 | 退群撤回：主动退群 / 被踢后撤回其最近 N 条、最近 M 分钟的消息 | `leave_recall.py` | `leave_recall_enabled`（`_on_leave` / `_on_kick` / `_count` / `_minutes` / `_use_history`） | 默认关 |
 

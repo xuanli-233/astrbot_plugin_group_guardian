@@ -187,6 +187,18 @@
         "options": ["admin", "all"],
         "hint": "admin = 仅接受插件管理员的邀请（推荐）；all = 接受任何人的邀请。注意：没设群白名单时，机器人所在的所有群都会被当成管理范围，陌生群也会收到全群公告、参与全群踢人"
     },
+    "bot_notify_join_enabled": {
+        "description": "机器人进群时推送到备份群",
+        "type": "bool",
+        "default": true,
+        "hint": "机器人进了新群（被邀请或申请通过）后，在备份群发一条：群名、群号、人数、邀请人、时间。没填备份群时不发"
+    },
+    "bot_notify_friend_enabled": {
+        "description": "机器人加好友时推送到备份群",
+        "type": "bool",
+        "default": true,
+        "hint": "机器人新加了好友后，在备份群发一条：昵称、QQ 号、验证消息、是否自动同意、时间。没填备份群时不发"
+    },
     "auto_msg_mask_enabled": {
         "description": "进群后自动设置群消息接收方式",
         "type": "bool",

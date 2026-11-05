@@ -2647,6 +2647,8 @@ var MANUAL_SETTING_KEYS = {
   auto_accept_invite_scope: true,
   auto_accept_delay_seconds: true,
   auto_msg_mask_enabled: true,
+  bot_notify_join_enabled: true,
+  bot_notify_friend_enabled: true,
   auto_msg_mask_value: true,
   code_board_enabled: true,
   code_board_size: true,
@@ -3464,7 +3466,9 @@ var MN_SWITCHES = {
   ],
   acceptSwitches: [
     { key: 'auto_accept_friend_enabled', label: '自动同意好友申请', desc: '有人加机器人好友时自动处理' },
-    { key: 'auto_accept_invite_enabled', label: '自动接受进群邀请', desc: '有人邀请机器人进群时自动接受（开启后邀请不再走入群审核）' }
+    { key: 'auto_accept_invite_enabled', label: '自动接受进群邀请', desc: '有人邀请机器人进群时自动接受（开启后邀请不再走入群审核）' },
+    { key: 'bot_notify_join_enabled', label: '进群后推送到备份群', desc: '机器人进了新群：在备份群发群名、群号、人数、邀请人（手动通过的也推送）' },
+    { key: 'bot_notify_friend_enabled', label: '加好友后推送到备份群', desc: '机器人新加了好友：在备份群发昵称、QQ 号、验证消息、是否自动同意' }
   ],
   cbSwitches: [
     { key: 'code_board_enabled', label: '保留识别图片（二维码看板）', desc: '关闭后不保留任何图片，看板为空；码内容拉黑仍然有效' }

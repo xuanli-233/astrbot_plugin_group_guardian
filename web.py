@@ -1700,6 +1700,7 @@ class WebMixin:
         "code_board_enabled", "code_board_size", "wxcode_block_codes", "wxcode_allow_codes", "code_image_max_kb",
         "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
         "auto_accept_invite_scope", "auto_accept_delay_seconds", "auto_msg_mask_enabled", "auto_msg_mask_value",
+        "bot_notify_join_enabled", "bot_notify_friend_enabled",
         "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled",
         "leave_auto_blacklist_times", "leave_auto_blacklist_days",
         "group_white_list", "group_black_list", "user_black_list", "user_white_list", "admin_list",

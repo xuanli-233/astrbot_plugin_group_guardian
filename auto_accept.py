@@ -111,8 +111,15 @@ class AutoAcceptMixin:
         delay = self._aa_delay()
         if delay:
             await asyncio.sleep(delay)
+        # 加好友推送到备份群时显示「自动同意」（bot_notify.py）。先标记：协议端的 friend_add 通知
+        # 可能比这次调用的返回还早到；同意失败再撤掉标记。
+        mark = getattr(self, "_bn_mark_friend_handled", None)
+        if approve and callable(mark):
+            mark(user_id, "自动同意")
         ok, err = await self._call_group_api(client, "set_friend_add_request", "处理好友申请",
                                              flag=flag, approve=approve)
+        if approve and not ok and callable(mark):
+            mark(user_id, "")
         action = "自动同意好友申请" if approve else "自动拒绝好友申请"
         self._record_op(action, source="自动", target=user_id, reason=why,
                         result="成功" if ok else f"失败：{err}", detail=f"验证信息：{comment}" if comment else "")

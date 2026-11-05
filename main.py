@@ -26,6 +26,7 @@ from .leave_log import LeaveLogMixin
 from .code_limit import CodeLimitMixin
 from .card_parse import CardParseMixin
 from .group_msg_mask import MsgMaskMixin
+from .bot_notify import BotNotifyMixin
 from .live_log import LiveLogMixin
 from .batch_queue import BatchQueueMixin
 from .code_board import CodeBoardMixin
@@ -42,7 +43,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -305,6 +306,16 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             except Exception:
                 pass
             LiveLogMixin._live_end(live, stopped=stopped)
+
+    # 机器人进群 / 新好友推送到备份群（bot_notify.py）。注册在加群 / 好友申请处理之前：
+    # 自动同意会 stop_event，之后的监听收不到好友申请，验证消息就记不下来了。广播型，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_bot_event_notify(self, event: AiocqhttpMessageEvent):
+        try:
+            await BotNotifyMixin._handle_bot_event_notify(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 推送进群 / 加好友到备份群出错: {e}")
 
     # F1 入群自动审核：监听加群申请事件（与 _handle_message 共用 ALL 监听，互不干扰）。
     @filter.event_message_type(filter.EventMessageType.ALL)
