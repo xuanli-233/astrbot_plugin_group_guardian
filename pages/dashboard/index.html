@@ -427,6 +427,36 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
     .mn-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--primary-light);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)}
     .mn-steps{margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.9}
+    /* 全局右侧批量任务栏 */
+    .taskbar{width:290px;flex-shrink:0;background:var(--sidebar-bg);border-left:1px solid var(--sidebar-border);display:flex;flex-direction:column;min-height:0;transition:width .2s}
+    .tb-head{display:flex;align-items:center;gap:8px;padding:14px 12px 10px;border-bottom:1px solid var(--border)}
+    .tb-toggle{width:24px;height:24px;border:none;background:none;border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);flex-shrink:0}
+    .tb-toggle:hover{background:rgba(127,127,127,.12)}
+    .tb-toggle svg{width:18px;height:18px;fill:currentColor;transform:rotate(180deg);transition:transform .2s}
+    .tb-title{font-weight:600;font-size:13px;color:var(--text-primary)}
+    .tb-badge{font-size:11px;min-width:18px;padding:0 6px;border-radius:9px;background:var(--primary);color:#fff;text-align:center;line-height:18px}
+    .tb-open{margin-left:auto}
+    .tb-runner{font-size:12px;color:var(--text-secondary);padding:8px 12px;border-bottom:1px solid var(--border);line-height:1.5}
+    .tb-list{flex:1;overflow-y:auto;padding:8px;min-height:0}
+    .tb-job{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+    .tb-job:hover{border-color:var(--primary)}
+    .tb-job.live{border-left:3px solid var(--primary)}
+    .tb-job.paused{border-left:3px solid var(--warning)}
+    .tb-job-head{display:flex;gap:6px;align-items:flex-start}
+    .tb-job-title{flex:1;font-size:12px;font-weight:500;line-height:1.45;color:var(--text-primary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+    .tb-job .bq-bar{margin:6px 0 4px}
+    .tb-job-meta{font-size:11px;color:var(--text-muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .tb-job-meta .fail{color:var(--danger)}
+    .tb-job-actions{display:flex;gap:4px;margin-top:6px}
+    .tb-job-actions .btn{padding:2px 8px;font-size:11px}
+    .tb-foot{font-size:11px;color:var(--text-muted);padding:8px 12px;border-top:1px solid var(--border)}
+    .tb-empty{font-size:12px;color:var(--text-muted);text-align:center;padding:24px 8px;line-height:1.7}
+    .taskbar.collapsed{width:40px}
+    .taskbar.collapsed .tb-head{flex-direction:column;padding:12px 4px;border-bottom:none}
+    .taskbar.collapsed .tb-toggle svg{transform:none}
+    .taskbar.collapsed .tb-title{writing-mode:vertical-rl;letter-spacing:2px;cursor:pointer}
+    .taskbar.collapsed .tb-open,.taskbar.collapsed .tb-runner,.taskbar.collapsed .tb-list,.taskbar.collapsed .tb-foot{display:none}
+    @media(max-width:900px){.taskbar{display:none}}
     .nav-badge{margin-left:auto;font-size:11px;min-width:18px;padding:0 6px;border-radius:9px;background:var(--primary);color:#fff;text-align:center;line-height:18px}
     .bq-job{border-top:1px solid var(--border);padding:12px 18px}
     .bq-job:first-child{border-top:none}
@@ -1395,6 +1425,21 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         </div>
       </div>
     </main>
+
+    <!-- 全局右侧栏：批量任务列表（所有页面可见，可折叠） -->
+    <aside class="taskbar" id="taskbar" aria-label="批量任务">
+      <div class="tb-head">
+        <button class="tb-toggle" id="tbToggle" title="折叠 / 展开批量任务栏" aria-label="折叠或展开批量任务栏">
+          <svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+        <span class="tb-title">批量任务</span>
+        <span class="tb-badge" id="tbBadge" style="display:none"></span>
+        <button class="btn btn-ghost btn-sm tb-open" id="tbOpen" title="打开批量任务页面">管理</button>
+      </div>
+      <div class="tb-runner" id="tbRunner">加载中...</div>
+      <div class="tb-list" id="tbList"></div>
+      <div class="tb-foot" id="tbFoot"></div>
+    </aside>
   </div>
 
   <div class="modal-overlay" id="modalOverlay" style="display:none">
@@ -5299,6 +5344,7 @@ async function loadNames() {
 // 批量任务已创建：显示编号、项数、执行方式，并提供跳转到「批量任务」页面的按钮
 function mnJobCreatedHtml(job, extraLines) {
   if (!job) return '<div class="mn-result no">' + esc((extraLines || []).concat(['没有需要执行的项']).join('\n')) + '</div>';
+  setTimeout(tbJobCreated, 0);
   var mode = job.mode === 'manual' ? '手动执行（请在「批量任务」页面执行）' : '自动执行，预计约 ' + bqFmtSeconds(job.eta_seconds || 0);
   var lines = ['已创建批量任务 #' + job.id + '「' + job.title + '」，共 ' + job.items + ' 项，' + mode].concat(extraLines || []);
   return '<div class="mn-result ok">' + esc(lines.join('\n')) +
@@ -5543,6 +5589,7 @@ async function bqPoll(fillSettings) {
     if (isApiError(res)) { $('#bqJobs').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
     var d = mnData(res) || {};
     BQ.jobs = d.jobs || []; BQ.runner = d.runner || {};
+    tbApply(d);  // 同一份数据更新右侧栏
     if (fillSettings && d.settings) {
       $('#bqInterval').value = d.settings.interval; $('#bqJitter').value = d.settings.jitter;
       $$('input[name=bqMode]').forEach(function(r) { r.checked = r.value === d.settings.mode; });
@@ -5675,6 +5722,147 @@ async function bqSaveDefaults() {
   var mode = ($('input[name=bqMode]:checked') || {}).value || 'auto';
   if (await mnSaveConfig({ batch_interval_seconds: interval, batch_jitter_seconds: jitter, batch_default_mode: mode,
     batch_notify_enabled: $('#bqNotify').checked }, '已保存')) bqPoll();
+}
+
+/* ---- 全局右侧批量任务栏 ---- */
+var TB = { timer: null, inflight: false, collapsed: false, jobs: [], runner: {} };
+var TB_KEY = 'gg_taskbar_collapsed';
+function tbInit() {
+  var saved = null;
+  try { saved = localStorage.getItem(TB_KEY); } catch (e) { saved = null; }
+  // 没有记录时：较窄的屏幕默认折叠，避免挤占主内容
+  TB.collapsed = saved === null ? window.innerWidth < 1280 : saved === '1';
+  tbApplyCollapsed();
+  bindIfExists('tbToggle', function() { tbSetCollapsed(!TB.collapsed); });
+  bindIfExists('tbOpen', function() { switchTab('batch'); });
+  var title = $('#taskbar .tb-title');
+  if (title) title.addEventListener('click', function() { if (TB.collapsed) tbSetCollapsed(false); });
+  document.addEventListener('visibilitychange', function() { if (!document.hidden) tbPoll(); });
+  // 窄屏下栏被隐藏时不轮询；窗口变宽、栏重新出现后恢复
+  var resizeTimer = null;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() { if (tbVisible() && !TB.timer && !TB.inflight) tbPoll(); }, 300);
+  });
+  tbPoll();
+}
+function tbSetCollapsed(v) {
+  TB.collapsed = !!v;
+  try { localStorage.setItem(TB_KEY, TB.collapsed ? '1' : '0'); } catch (e) { /* 存储不可用时只影响本次 */ }
+  tbApplyCollapsed();
+  tbRender();
+  if (!TB.collapsed) tbPoll();
+}
+function tbApplyCollapsed() {
+  var bar = $('#taskbar');
+  if (bar) bar.classList.toggle('collapsed', TB.collapsed);
+}
+function tbVisible() {
+  var bar = $('#taskbar');
+  return !!(bar && bar.offsetParent !== null);  // 窄屏下栏被隐藏
+}
+function tbNextDelay() {
+  var autoBusy = TB.jobs.some(function(j) { return j.state === 'active' && j.mode === 'auto'; });
+  var waiting = TB.jobs.some(function(j) { return j.state === 'active' || j.state === 'paused'; });
+  if (TB.collapsed) return 20000;          // 折叠时只更新数量角标
+  if (autoBusy) return 2000;
+  if (waiting) return 8000;
+  return 20000;
+}
+async function tbPoll() {
+  clearTimeout(TB.timer); TB.timer = null;
+  if (document.hidden || !tbVisible()) return;
+  // 批量任务页打开时，那边的轮询会顺便更新右侧栏，这里不重复请求
+  if (typeof bqActive === 'function' && bqActive()) { TB.timer = setTimeout(tbPoll, tbNextDelay()); return; }
+  if (TB.inflight) return;
+  TB.inflight = true;
+  try {
+    var res = await safeGet('minimal/batch/jobs', { limit: 20 });
+    if (!isApiError(res)) tbApply(mnData(res) || {});
+    else $('#tbRunner').textContent = '获取失败：' + mnErr(res);
+  } finally {
+    TB.inflight = false;
+    if (!document.hidden) TB.timer = setTimeout(tbPoll, tbNextDelay());
+  }
+}
+function tbApply(d) {
+  TB.jobs = (d.jobs || []).slice(0, 20);
+  TB.runner = d.runner || {};
+  TB.settings = d.settings || TB.settings;
+  tbRender();
+}
+function tbRender() {
+  var live = TB.jobs.filter(function(j) { return j.state === 'active' || j.state === 'paused'; });
+  var badge = $('#tbBadge');
+  if (badge) { badge.style.display = live.length ? '' : 'none'; badge.textContent = live.length; }
+  var navBadge = $('#bqNavBadge');
+  if (navBadge) { navBadge.style.display = live.length ? '' : 'none'; navBadge.textContent = live.length; }
+  if (TB.collapsed) return;
+  $('#tbRunner').textContent = bqRunnerText(TB.runner);
+  var s = TB.settings;
+  $('#tbFoot').textContent = s ? ('默认间隔 ' + s.interval + (s.jitter ? '–' + (s.interval + s.jitter) : '') + ' 秒 · 新任务' + (s.mode === 'manual' ? '手动' : '自动') + '执行') : '';
+  var list = $('#tbList');
+  if (!TB.jobs.length) {
+    list.innerHTML = '<div class="tb-empty">还没有批量任务。<br>跨群踢人、全群公告、群名任务等操作会在这里排队执行。</div>';
+    return;
+  }
+  list.innerHTML = TB.jobs.map(function(j) {
+    var c = j.counts || {}, total = j.total || 0;
+    var done = (c.ok || 0) + (c.failed || 0) + (c.skipped || 0) + (c.cancelled || 0);
+    var pct = function(n) { return total ? (100 * n / total) : 0; };
+    var bar = ['ok', 'failed', 'skipped', 'cancelled', 'running'].map(function(k) {
+      return c[k] ? '<span class="' + k + '" style="width:' + pct(c[k]) + '%"></span>' : '';
+    }).join('');
+    var label = j.state === 'active' && j.mode === 'manual' ? '待手动' : (BQ_STATE[j.state] || j.state);
+    var isNext = TB.runner && TB.runner.job_id === j.id && (TB.runner.state === 'waiting' || TB.runner.state === 'running');
+    var meta = '<span>' + done + ' / ' + total + '</span>' +
+      (c.failed ? '<span class="fail">失败 ' + c.failed + '</span>' : '') +
+      (c.skipped ? '<span>跳过 ' + c.skipped + '</span>' : '') +
+      (isNext && TB.runner.state === 'waiting' && TB.runner.wait_seconds != null ? '<span>· ' + TB.runner.wait_seconds + ' 秒后下一项</span>' : '') +
+      (isNext && TB.runner.state === 'running' ? '<span>· 执行中</span>' : '') +
+      '<span style="margin-left:auto">' + esc(liveTime(j.created_at)) + '</span>';
+    var acts = [];
+    if (c.pending && j.state === 'active' && j.mode === 'manual') acts.push(['run_next', '执行下一项', 'btn-primary'], ['auto', '全部执行', 'btn-ghost']);
+    if (c.pending && j.state === 'active' && j.mode === 'auto') acts.push(['pause', '暂停', 'btn-ghost']);
+    if (c.pending && j.state === 'paused') acts.push(['resume', '继续', 'btn-primary']);
+    if (c.failed) acts.push(['retry', '重试失败', 'btn-ghost']);
+    var cls = j.state === 'paused' ? ' paused' : (j.state === 'active' ? ' live' : '');
+    return '<div class="tb-job' + cls + '" data-tb-job="' + j.id + '">' +
+      '<div class="tb-job-head"><span class="tb-job-title">#' + j.id + ' ' + esc(j.title) + '</span>' +
+      '<span class="bq-st ' + escAttr(j.state) + '">' + esc(label) + '</span></div>' +
+      '<div class="bq-bar">' + bar + '</div><div class="tb-job-meta">' + meta + '</div>' +
+      (acts.length ? '<div class="tb-job-actions">' + acts.map(function(a) {
+        return '<button class="btn ' + a[2] + ' btn-sm" data-tb-act="' + a[0] + '" data-job="' + j.id + '">' + esc(a[1]) + '</button>';
+      }).join('') + '</div>' : '') + '</div>';
+  }).join('');
+  $$('[data-tb-job]', list).forEach(function(card) {
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('[data-tb-act]')) return;
+      BQ.open[Number(card.getAttribute('data-tb-job'))] = true;
+      switchTab('batch');
+    });
+  });
+  $$('[data-tb-act]', list).forEach(function(btn) {
+    btn.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      var action = btn.getAttribute('data-tb-act'), jobId = Number(btn.getAttribute('data-job'));
+      if (action === 'auto' && !(await mnConfirm('任务 #' + jobId + ' 改为按间隔自动执行剩余的项？', { okText: '全部执行' }))) return;
+      btn.disabled = true;
+      var res = await safePost('minimal/batch/action', { action: action, job_id: jobId }, 200000);
+      if (isApiError(res)) toast(mnErr(res), 'error');
+      else if (action === 'run_next') {
+        var d = mnData(res) || {};
+        toast((BQ_ITEM[d.result] || d.result || '') + '：' + (d.message || ''), d.result === 'failed' ? 'error' : 'success');
+      }
+      tbPoll();
+      if (bqActive()) bqPoll();
+    });
+  });
+}
+// 新建任务后立刻刷新右侧栏（并在折叠时展开，让用户看到排队情况）
+function tbJobCreated() {
+  if (TB.collapsed && window.innerWidth >= 1280) tbSetCollapsed(false);
+  else tbPoll();
 }
 
 /* ---- 实时日志 ---- */
@@ -5930,6 +6118,7 @@ function initMinimalPages() {
     toast('已开始在后台刷新，可在「群成员缓存」页面查看进度', 'success');
   });
 
+  tbInit();
   bindIfExists('btnBqRefresh', function() { bqPoll(true); });
   bindIfExists('btnBqSave', bqSaveDefaults);
   document.addEventListener('visibilitychange', function() { if (bqActive()) bqPoll(); });
