@@ -563,6 +563,11 @@ class MinimalWebMixin:
             if err:
                 return self._minimal_error(err)
             return jsonify({"status": "success", "data": {}})
+        elif action == "note":
+            err = self._bq_set_note(job_id, data.get("lines"))
+            if err:
+                return self._minimal_error(err)
+            return jsonify({"status": "success", "data": {}})
         elif action == "settings":
             err = self._bq_update_settings(job_id, data.get("interval"), data.get("jitter"))
             if err:

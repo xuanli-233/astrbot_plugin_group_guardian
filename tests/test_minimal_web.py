@@ -333,6 +333,21 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
                               {"action": "settings", "job_id": job_id, "interval": "5", "jitter": ""})
         self.assertEqual(settings["status"], "success")
 
+    async def test_batch_note_is_saved_and_listed(self):
+        out = await call(self.h._web_minimal_broadcast, {"groups": ["10001"], "content": "说明测试"})
+        job_id = out["data"]["job"]["id"]
+        lines = ["111：将从 6 个群踢出", "", "222：跳过"] + ["x" * 500]
+        saved = await call(self.h._web_minimal_batch_action, {"action": "note", "job_id": job_id, "lines": lines})
+        self.assertEqual(saved["status"], "success")
+        web_minimal.quart_request.args = {}
+        listing = await call(self.h._web_minimal_batch_jobs)
+        job = [j for j in listing["data"]["jobs"] if j["id"] == job_id][0]
+        note = job["meta"]["note"]
+        self.assertEqual(note[:2], ["111：将从 6 个群踢出", "222：跳过"])  # 空行去掉
+        self.assertEqual(len(note[2]), self.h.BQ_NOTE_LINE_MAX)  # 超长截断
+        missing = await call(self.h._web_minimal_batch_action, {"action": "note", "job_id": 99999, "lines": ["a"]})
+        self.assertEqual(missing["status"], "error")
+
     async def test_kick_across_groups_with_block(self):
         no_reason = await call(self.h._web_minimal_kick, {"user_ids": "30001", "block": True})
         self.assertIn("需要填写原因", no_reason["message"])

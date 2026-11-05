@@ -48,6 +48,9 @@ MODE_MANUAL = "manual"
 class BatchQueueMixin:
     BQ_ITEM_TIMEOUT = 180
     BQ_MAX_ITEMS = 5000
+    # 创建说明（meta["note"]）的上限：任务列表每次轮询都会带上，不宜过大
+    BQ_NOTE_MAX_LINES = 200
+    BQ_NOTE_LINE_MAX = 300
     BQ_KEEP_JOBS = 300
     BQ_IDLE_POLL = 5.0
 
@@ -335,6 +338,28 @@ class BatchQueueMixin:
         self._record_op("批量任务" + labels.get(action, action), source=source, operator=operator,
                         detail=f"#{jid} {job['title']}")
         self._bq_wake()
+        return ""
+
+    def _bq_set_note(self, job_id: int, lines) -> str:
+        """保存创建任务时页面上显示的说明（每人 / 每群的处理计划等），「批量任务」页可随时查看。
+
+        存在 meta["note"]，最多 BQ_NOTE_MAX_LINES 行、每行 BQ_NOTE_LINE_MAX 字。返回错误说明，成功返回空串。
+        """
+        if not isinstance(lines, (list, tuple)):
+            lines = str(lines or "").splitlines()
+        clean = [str(x)[: self.BQ_NOTE_LINE_MAX] for x in lines if str(x).strip()][: self.BQ_NOTE_MAX_LINES]
+        self._bq_init_db()
+        with self._storage._connect() as conn:
+            row = conn.execute("SELECT meta FROM batch_jobs WHERE id=?", (int(job_id),)).fetchone()
+            if not row:
+                return "任务不存在"
+            try:
+                meta = json.loads(row["meta"] or "{}")
+            except Exception:
+                meta = {}
+            meta["note"] = clean
+            conn.execute("UPDATE batch_jobs SET meta=? WHERE id=?", (json.dumps(meta, ensure_ascii=False), int(job_id)))
+            conn.commit()
         return ""
 
     def _bq_skip_item(self, item_id: int, operator: str = "") -> str:

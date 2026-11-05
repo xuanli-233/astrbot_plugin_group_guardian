@@ -414,6 +414,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-type.regex{background:var(--warning-light);color:var(--warning)}
     .mn-empty{padding:16px;text-align:center;color:var(--text-muted);font-size:12px}
     .mn-result{font-size:12px;border-radius:var(--radius);padding:8px 12px;margin-top:8px;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+    .mn-result.closable{position:relative;padding-right:34px}
+    .mn-result-close{position:absolute;top:4px;right:6px;width:24px;height:24px;border:none;background:none;cursor:pointer;font-size:18px;line-height:24px;color:inherit;opacity:.55;border-radius:4px;padding:0}
+    .mn-result-close:hover{opacity:1;background:rgba(0,0,0,.06)}
     .mn-result.ok{background:var(--success-light);color:var(--success)}
     .mn-result.no{background:var(--info-light);color:var(--text-secondary)}
     .mn-result.err{background:var(--danger-light);color:var(--danger)}
@@ -514,7 +517,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .bq-bar .skipped,.bq-bar .cancelled{background:var(--text-muted);opacity:.5}
     .bq-bar .running{background:var(--primary)}
     .bq-actions{display:flex;gap:6px;flex-wrap:wrap}
-    .bq-items{margin-top:10px;max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius)}
+    .bq-items{margin-top:10px;max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);position:relative}
+    .bq-items tr.bq-cur td{background:var(--primary-light)}
+    .bq-items tr.bq-cur td:first-child{box-shadow:inset 3px 0 0 var(--primary)}
+    .bq-result{font-size:12px;margin-top:6px;color:var(--success)}
+    .bq-result.bad{color:var(--danger)}
+    .bq-note{margin-top:6px;font-size:12px}
+    .bq-note summary{cursor:pointer;color:var(--text-secondary);user-select:none}
+    .bq-note-body{margin-top:6px;padding:8px 10px;background:var(--info-light);border-radius:var(--radius);white-space:pre-wrap;word-break:break-all;line-height:1.7;max-height:260px;overflow:auto;color:var(--text-secondary)}
     .bq-st{font-size:12px;padding:1px 8px;border-radius:10px;white-space:nowrap}
     .bq-st.pending{background:var(--info-light);color:var(--text-secondary)}
     .bq-st.running{background:var(--primary-light);color:var(--primary)}
@@ -1257,7 +1267,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h2>任务</h2><span class="rules-subtle" id="bqCount"></span></div>
+          <div class="card-header"><h2>任务</h2><span class="rules-subtle" id="bqCount"></span>
+            <div class="header-actions">
+              <label class="mn-hint" style="display:flex;align-items:center;gap:4px;cursor:pointer" title="开启后，每次刷新都把已展开的明细表滚到正在处理的那一行；关闭时保持你当前的滚动位置"><input type="checkbox" id="bqFollow" />刷新时自动定位到处理中</label>
+              <button class="btn btn-outline btn-sm" id="btnBqLocate" title="展开正在执行的任务明细并滚动到当前处理的项">定位到处理中</button>
+            </div></div>
           <div id="bqJobs"><p class="empty">加载中...</p></div>
         </div>
       </div>
@@ -2114,7 +2128,7 @@ function switchTab(tabName) {
   if (tabName === 'overview') loadOverview();
   if (tabName === 'records') { loadUsers(); loadLogs(); }
   if (tabName === 'join') loadJoinRules();
-  if (tabName === 'perms') { loadAdmins(); loadSuperAdmins(); loadGrants(); loadBlocks(); }
+  if (tabName === 'perms') { loadAdmins(true); loadSuperAdmins(); loadGrants(); loadBlocks(); }
   if (tabName === 'groupcfg') loadGroupCfgGroups();
   if (tabName === 'tasks') loadUnbans();
   if (tabName === 'guard') loadGuard();
@@ -2385,9 +2399,10 @@ async function fillBotRoles(groupIds, isRetry) {
 
 
 
-async function loadAdmins() {
+// force：重新拉取配置。切到「权限管理」和点刷新时为 true，否则别处（如群指令 /设置管理插件）新增的管理员不会显示
+async function loadAdmins(force) {
   var epoch = beginLoad('admins');
-  var res = await loadConfigCached();
+  var res = await loadConfigCached(!!force);
   if (!isCurrentLoad('admins', epoch)) return;
   if (isApiError(res)) return;
   renderAdmins();
@@ -4065,14 +4080,52 @@ async function loadNames() {
   mnGroupFilter('#namesTable');
 }
 // 批量任务已创建：显示编号、项数、执行方式，并提供跳转到「批量任务」页面的按钮
+// 提示框右上角的 ×：点了就移除整个提示框
+var MN_CLOSE_BTN = '<button type="button" class="mn-result-close" data-mn-close title="关闭">×</button>';
+// 任务结束后自动关闭前的停留时间（毫秒）
+var MN_JOB_RESULT_LINGER = 8000;
 function mnJobCreatedHtml(job, extraLines) {
-  if (!job) return '<div class="mn-result no">' + esc((extraLines || []).concat(['没有需要执行的项']).join('\n')) + '</div>';
+  if (!job) return '<div class="mn-result no closable">' + MN_CLOSE_BTN + esc((extraLines || []).concat(['没有需要执行的项']).join('\n')) + '</div>';
   setTimeout(tbJobCreated, 0);
+  // 创建时的说明（每人 / 每群的处理计划）存到任务里，提示框关掉后仍可在「批量任务」页查看
+  if (extraLines && extraLines.length) {
+    safePost('minimal/batch/action', { action: 'note', job_id: job.id, lines: extraLines }).then(function(r) {
+      if (isApiError(r)) console.warn('保存任务说明失败', mnErr(r));
+    });
+  }
   var mode = job.mode === 'manual' ? '手动执行（请在「批量任务」页面执行）' : '自动执行，预计约 ' + bqFmtSeconds(job.eta_seconds || 0);
   var lines = ['已创建批量任务 #' + job.id + '「' + job.title + '」，共 ' + job.items + ' 项，' + mode].concat(extraLines || []);
-  return '<div class="mn-result ok">' + esc(lines.join('\n')) +
+  // data-job-result：任务结束（已完成 / 已取消）后由 mnSyncJobResults 改成结果摘要并自动关闭
+  return '<div class="mn-result ok closable" data-job-result="' + job.id + '">' + MN_CLOSE_BTN + esc(lines.join('\n')) +
     '\n<button class="btn btn-outline btn-sm" data-goto-job="' + job.id + '" style="margin-top:6px">查看任务进度</button></div>';
 }
+// 每次拿到任务列表（右侧任务栏 / 批量任务页轮询）时调用：结束了的任务，其创建提示改成结果摘要，稍后自动消失
+function mnSyncJobResults(jobs) {
+  var byId = {};
+  (jobs || []).forEach(function(j) { byId[j.id] = j; });
+  $$('[data-job-result]').forEach(function(box) {
+    var j = byId[Number(box.getAttribute('data-job-result'))];
+    if (!j || j.state === 'active' || j.state === 'paused' || box.getAttribute('data-job-ended')) return;
+    box.setAttribute('data-job-ended', '1');
+    var c = j.counts || {};
+    var parts = ['成功 ' + (c.ok || 0)];
+    if (c.failed) parts.push('失败 ' + c.failed);
+    if (c.skipped) parts.push('跳过 ' + c.skipped);
+    if (c.cancelled) parts.push('取消 ' + c.cancelled);
+    box.classList.remove('ok');
+    box.classList.add(c.failed ? 'err' : 'no');
+    box.innerHTML = MN_CLOSE_BTN + esc('批量任务 #' + j.id + '「' + j.title + '」' + (BQ_STATE[j.state] || j.state) + '：' + parts.join('，') +
+      '。' + Math.round(MN_JOB_RESULT_LINGER / 1000) + ' 秒后自动关闭') +
+      '\n<button class="btn btn-outline btn-sm" data-goto-job="' + j.id + '" style="margin-top:6px">查看详情</button>';
+    setTimeout(function() { if (box.parentNode) box.parentNode.removeChild(box); }, MN_JOB_RESULT_LINGER);
+  });
+}
+document.addEventListener('click', function(e) {
+  var btn = e.target && e.target.closest ? e.target.closest('[data-mn-close]') : null;
+  if (!btn) return;
+  var box = btn.closest('.mn-result');
+  if (box && box.parentNode) box.parentNode.removeChild(box);
+});
 function bqFmtSeconds(s) {
   s = Math.round(Number(s) || 0);
   if (s < 60) return s + ' 秒';
@@ -4504,11 +4557,15 @@ async function llShowUser(uid) {
 }
 
 /* ---- 批量任务 ---- */
-var BQ = { open: {}, details: {}, jobs: [], runner: {}, timer: null, inflight: false };
+var BQ = { open: {}, details: {}, noteOpen: {}, jobs: [], runner: {}, timer: null, inflight: false, follow: false };
+var BQ_FOLLOW_KEY = 'gg_bq_follow';
+try { BQ.follow = localStorage.getItem(BQ_FOLLOW_KEY) === '1'; } catch (e) { BQ.follow = false; }
 var BQ_STATE = { active: '执行中', paused: '已暂停', done: '已完成', cancelled: '已取消' };
 var BQ_ITEM = { pending: '待执行', running: '执行中', ok: '成功', failed: '失败', skipped: '跳过', cancelled: '已取消' };
 function bqActive() { var p = $('#tab-batch'); return !!(p && p.classList.contains('active') && !document.hidden); }
 async function loadBatch() {
+  var follow = $('#bqFollow');
+  if (follow) follow.checked = BQ.follow;
   if (!MN.overview) await mnLoadOverview();
   bqPoll(true);
 }
@@ -4554,8 +4611,71 @@ function bqRender() {
   if (badge) { badge.style.display = activeCount ? '' : 'none'; badge.textContent = activeCount; }
   $('#bqCount').textContent = BQ.jobs.length ? '最近 ' + BQ.jobs.length + ' 个' + (activeCount ? '，进行中 ' + activeCount + ' 个' : '') : '';
   if (!BQ.jobs.length) { $('#bqJobs').innerHTML = '<div class="mn-empty">还没有批量任务。跨群踢人、全群公告、群名任务等操作会在这里排队执行。</div>'; return; }
-  $('#bqJobs').innerHTML = BQ.jobs.map(bqJobHtml).join('');
-  $$('[data-bq]', $('#bqJobs')).forEach(function(btn) { btn.addEventListener('click', bqOnAction); });
+  // 轮询每 2 秒重绘一次：先记下页面和各明细表的滚动位置，重绘后恢复，否则会跳回顶部
+  var box = $('#bqJobs');
+  var saved = bqSaveScroll(box);
+  box.innerHTML = BQ.jobs.map(bqJobHtml).join('');
+  $$('[data-bq]', box).forEach(function(btn) { btn.addEventListener('click', bqOnAction); });
+  $$('[data-bq-note]', box).forEach(function(d) {
+    d.addEventListener('toggle', function() { BQ.noteOpen[Number(d.getAttribute('data-bq-note'))] = d.open; });
+  });
+  bqRestoreScroll(box, saved);
+  if (BQ.follow) bqScrollItemsToCurrent(box);
+  if (BQ.locateOnce) bqLocateNow();
+}
+// 页面本身（#bqJobs 的可滚动祖先、window）和每个明细表各自的滚动位置
+function bqSaveScroll(box) {
+  var s = { win: window.scrollY, anc: [], items: {} };
+  for (var el = box.parentElement; el; el = el.parentElement) {
+    if (el.scrollTop) s.anc.push([el, el.scrollTop]);
+  }
+  $$('[data-bq-items]', box).forEach(function(el) { s.items[el.getAttribute('data-bq-items')] = el.scrollTop; });
+  return s;
+}
+function bqRestoreScroll(box, s) {
+  s.anc.forEach(function(p) { p[0].scrollTop = p[1]; });
+  if (Math.abs(window.scrollY - s.win) > 1) window.scrollTo(0, s.win);
+  $$('[data-bq-items]', box).forEach(function(el) {
+    var top = s.items[el.getAttribute('data-bq-items')];
+    if (top != null) el.scrollTop = top;
+  });
+}
+// 自动定位：把每个已展开的明细表滚到「处理中」的那一行（只滚明细表内部，不移动整个页面）
+function bqScrollItemsToCurrent(box) {
+  $$('[data-bq-items]', box).forEach(function(el) {
+    var row = el.querySelector('tr.bq-cur');
+    if (!row) return;
+    var target = row.offsetTop - el.clientHeight / 2 + row.offsetHeight / 2;
+    el.scrollTop = Math.max(0, target);
+  });
+}
+// 「定位到处理中」按钮：展开正在执行（或下一个要执行）的任务明细，页面滚到该任务，明细表滚到当前行
+function bqCurrentJobId() {
+  if (BQ.runner && BQ.runner.job_id && (BQ.runner.state === 'running' || BQ.runner.state === 'waiting')) return BQ.runner.job_id;
+  var live = BQ.jobs.filter(function(j) { return j.state === 'active'; })[0] || BQ.jobs.filter(function(j) { return j.state === 'paused'; })[0];
+  return live ? live.id : 0;
+}
+function bqLocate() {
+  var id = bqCurrentJobId();
+  if (!id) { toast('当前没有正在处理的任务', 'info'); return; }
+  BQ.locateOnce = id;
+  if (!BQ.open[id]) { BQ.open[id] = true; bqPoll(); return; }  // 先拉明细，重绘后再定位
+  bqLocateNow();
+}
+function bqLocateNow() {
+  var id = BQ.locateOnce;
+  if (!id) return;
+  var items = document.querySelector('[data-bq-items="' + id + '"]');
+  if (!items || !BQ.details[id]) return;  // 明细还没加载完，等下一次重绘
+  BQ.locateOnce = 0;
+  var card = items.closest('.bq-job');
+  if (card) card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  bqScrollItemsToCurrent(card || items.parentNode);
+}
+function bqSetFollow(on) {
+  BQ.follow = !!on;
+  try { localStorage.setItem(BQ_FOLLOW_KEY, BQ.follow ? '1' : '0'); } catch (e) { /* 存储不可用时只影响本次 */ }
+  if (BQ.follow) bqScrollItemsToCurrent($('#bqJobs'));
 }
 function bqJobHtml(j) {
   var c = j.counts || {}, total = j.total || 0;
@@ -4591,13 +4711,39 @@ function bqJobHtml(j) {
       var cls = b[0] === 'cancel' ? 'btn-danger' : (b[0] === 'run_next' || b[0] === 'auto' ? 'btn-primary' : 'btn-ghost');
       return '<button class="btn ' + cls + ' btn-sm" data-bq="' + b[0] + '" data-job="' + j.id + '">' + esc(b[1]) + '</button>';
     }).join('') + '</div>';
+  html += bqSummaryHtml(j);
   if (BQ.open[j.id]) html += bqItemsHtml(BQ.details[j.id]);
   return html + '</div>';
+}
+// 任务摘要：结束后的结果一行 + 创建时的说明（可展开）。展开状态记在 BQ.noteOpen，轮询重绘后保持
+function bqSummaryHtml(j) {
+  var c = j.counts || {};
+  var out = '';
+  if (j.state === 'done' || j.state === 'cancelled') {
+    var parts = ['成功 ' + (c.ok || 0)];
+    if (c.failed) parts.push('失败 ' + c.failed);
+    if (c.skipped) parts.push('跳过 ' + c.skipped);
+    if (c.cancelled) parts.push('取消 ' + c.cancelled);
+    out += '<div class="bq-result ' + (c.failed ? 'bad' : '') + '">' + esc((BQ_STATE[j.state] || j.state) + '：' + parts.join('，') +
+      (j.finished_at ? '（' + liveTime(j.finished_at) + '）' : '')) + (c.failed ? '，失败原因见「查看明细」' : '') + '</div>';
+  }
+  var note = (j.meta && j.meta.note) || [];
+  if (note.length) {
+    out += '<details class="bq-note" data-bq-note="' + j.id + '"' + (BQ.noteOpen[j.id] ? ' open' : '') + '>' +
+      '<summary>创建时的说明（' + note.length + ' 行）</summary><div class="bq-note-body">' + esc(note.join('\n')) + '</div></details>';
+  }
+  return out;
 }
 function bqItemsHtml(job) {
   if (!job) return '<div class="bq-items"><p class="empty">加载中...</p></div>';
   var running = BQ.runner && BQ.runner.state === 'waiting' && BQ.runner.job_id === job.id ? BQ.runner.item_id : null;
-  return '<div class="bq-items"><table class="mn-table"><thead><tr><th>#</th><th>群</th><th>行为</th><th>对象</th><th>状态</th><th>结果</th><th>时间</th><th></th></tr></thead><tbody>' +
+  // 「处理中」的一行：正在执行的 → 执行器排好的下一项 → 第一个待执行的（自动定位滚到这里）
+  var allItems = job.items || [];
+  var cur = allItems.filter(function(it) { return it.status === 'running'; })[0] ||
+    (running ? allItems.filter(function(it) { return it.id === running; })[0] : null) ||
+    allItems.filter(function(it) { return it.status === 'pending'; })[0];
+  var curId = cur ? cur.id : null;
+  return '<div class="bq-items" data-bq-items="' + job.id + '"><table class="mn-table"><thead><tr><th>#</th><th>群</th><th>行为</th><th>对象</th><th>状态</th><th>结果</th><th>时间</th><th></th></tr></thead><tbody>' +
     (job.items || []).map(function(it) {
       var ops = '';
       if (it.status === 'pending') ops = '<button class="btn btn-ghost btn-sm" data-bq="run_item" data-item="' + it.id + '" data-job="' + job.id + '">执行</button>' +
@@ -4606,7 +4752,7 @@ function bqItemsHtml(job) {
       var t = it.finished_at || it.started_at;
       var st = BQ_ITEM[it.status] || it.status;
       if (it.id === running) st += '（下一项）';
-      return '<tr><td>' + it.seq + '</td><td>' + esc(it.group_name || it.group_id) + (it.group_name ? '<div class="mn-hint">' + esc(it.group_id) + '</div>' : '') + '</td>' +
+      return '<tr' + (it.id === curId ? ' class="bq-cur"' : '') + '><td>' + it.seq + '</td><td>' + esc(it.group_name || it.group_id) + (it.group_name ? '<div class="mn-hint">' + esc(it.group_id) + '</div>' : '') + '</td>' +
         '<td>' + esc(it.label) + '</td><td>' + (esc(it.target) || '<span class="mn-hint">—</span>') + '</td>' +
         '<td><span class="bq-st ' + escAttr(it.status) + '">' + esc(st) + '</span></td>' +
         '<td style="max-width:320px;word-break:break-all">' + esc(it.result || '') + '</td>' +
@@ -4721,6 +4867,7 @@ function tbApply(d) {
   TB.jobs = (d.jobs || []).slice(0, 20);
   TB.runner = d.runner || {};
   TB.settings = d.settings || TB.settings;
+  mnSyncJobResults(TB.jobs);
   tbRender();
 }
 function tbRender() {
@@ -5305,6 +5452,8 @@ function initMinimalPages() {
   bindIfExists('mmValue', function() { $('#mmWarn').style.display = $('#mmValue').value === '3' ? '' : 'none'; }, 'change');
   bindIfExists('btnMmSave', function() { mnSaveConfig({ auto_msg_mask_value: Number($('#mmValue').value) }, '已保存'); });
   bindIfExists('btnCodesRefresh', function() { loadCodes(); });
+  bindIfExists('btnBqLocate', bqLocate);
+  bindIfExists('bqFollow', function(e) { bqSetFollow(e.target.checked); }, 'change');
   bindIfExists('btnCsFilter', function() { CS.page = 1; csLoadStats(); });
   bindIfExists('csBy', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csHours', function() { CS.page = 1; csLoadStats(); }, 'change');
@@ -5397,7 +5546,7 @@ async function init() {
   bindClick('btnSaveSettings', saveSettings);
   bindClick('btnRefreshJoin', loadJoinRules);
   bindClick('btnSaveJoinRule', saveJoinRule);
-  bindClick('btnRefreshPerms', function() { loadAdmins(); loadSuperAdmins(); loadGrants(); loadBlocks(); });
+  bindClick('btnRefreshPerms', function() { loadAdmins(true); loadSuperAdmins(); loadGrants(); loadBlocks(); });
   bindClick('btnAddSuperAdmin', async function() {
     var gids = ($('#saGroup').value || '').split(/[\s,，]+/).filter(Boolean);
     var uids = ($('#saUser').value || '').split(/[\s,，]+/).filter(Boolean);
