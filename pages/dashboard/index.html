@@ -1986,24 +1986,38 @@ var ROLE_NAME = { owner: '群主', admin: '管理员', member: '成员' };
       : { status: 'error', message: (label || '接口') + '返回格式无效' };
   }
 
+// 顶部连接状态：请求正常返回 = 已连接；抛异常（网络 / 超时 / Bridge 不可用）= 连接异常。下次请求成功会自动恢复
+function mnSetConn(ok, text) {
+  var dot = document.getElementById('statusDot');
+  var txt = document.getElementById('statusText');
+  if (dot) dot.style.background = ok ? 'var(--success)' : 'var(--danger)';
+  if (txt) txt.textContent = text || (ok ? '已连接' : '连接异常');
+}
 async function safeGet(path, params) {
   try {
-    if (!apiGet) return { status: 'error', message: 'API 不可用' };
+    if (!apiGet) { mnSetConn(false, 'API 不可用'); return { status: 'error', message: 'API 不可用' }; }
     var r = await withTimeout(apiGet(path, params), 'GET ' + path);
+    mnSetConn(true);
     return normalizeApiPayload(r, 'GET ' + path);
   } catch(e) {
     console.error('[safeGet]', path, e);
+    mnSetConn(false);
     return { status: 'error', message: String(e) };
   }
 }
 async function safePost(path, body, timeoutMs) {
   try {
-    if (!apiPost) return { status: 'error', message: 'API 不可用' };
+    if (!apiPost) { mnSetConn(false, 'API 不可用'); return { status: 'error', message: 'API 不可用' }; }
     var r = await withTimeout(apiPost(path, body), 'POST ' + path, timeoutMs || API_TIMEOUT_MS);
+    mnSetConn(true);
     return normalizeApiPayload(r, 'POST ' + path);
   } catch(e) {
     console.error('[safePost]', path, e);
-    return { status: 'error', message: String(e) };
+    mnSetConn(false);
+    var msg = String(e);
+    // 前端超时不会取消后端操作：提醒先确认结果，避免重复提交
+    if (/超时/.test(msg)) msg += '（操作可能已在后台执行，请先刷新页面确认结果，再决定是否重试）';
+    return { status: 'error', message: msg };
   }
 }
 async function safeDownload(path, params, filename) {
@@ -2068,14 +2082,23 @@ async function postOrToast(path, body, successMsg, errorPrefix, successType) {
   return true;
 }
 
+// 等待用户选择的弹窗（confirmModal / promptModal）在这里登记取消回调：点右上角 ×、点遮罩、
+// 或被另一个弹窗替换时都按「取消」结束，调用方不会一直等下去
+var MODAL_ON_CLOSE = null;
+function mnModalSettle() {
+  var fn = MODAL_ON_CLOSE;
+  MODAL_ON_CLOSE = null;
+  if (fn) fn();
+}
 function showModal(title, bodyHtml, footerHtml) {
+  mnModalSettle();
   footerHtml = footerHtml || '';
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = bodyHtml;
   $('#modalFooter').innerHTML = footerHtml;
   $('#modalOverlay').style.display = 'flex';
 }
-function closeModal() { $('#modalOverlay').style.display = 'none'; }
+function closeModal() { $('#modalOverlay').style.display = 'none'; mnModalSettle(); }
 
 // 通用确认弹窗：返回 Promise<boolean>。用于替代直接执行的高危操作，统一交互。
 // opts: { title, body(html), okText, cancelText, danger(bool) }
@@ -2091,7 +2114,8 @@ function confirmModal(opts) {
       '<button class="btn btn-ghost btn-sm" id="__cmCancel">' + esc(cancelText) + '</button>' +
       '<button class="btn ' + okCls + ' btn-sm" id="__cmOk">' + esc(okText) + '</button>'
     );
-    var done = function(v) { closeModal(); resolve(v); };
+    var done = function(v) { MODAL_ON_CLOSE = null; closeModal(); resolve(v); };
+    MODAL_ON_CLOSE = function() { resolve(false); };
     $('#__cmCancel').addEventListener('click', function() { done(false); });
     $('#__cmOk').addEventListener('click', function() { done(true); });
   });
@@ -2125,7 +2149,8 @@ function promptModal(opts) {
     );
     var inp = $('#__pmInput');
     if (inp) { inp.focus(); }
-    var done = function(v) { closeModal(); resolve(v); };
+    var done = function(v) { MODAL_ON_CLOSE = null; closeModal(); resolve(v); };
+    MODAL_ON_CLOSE = function() { resolve(null); };
     $('#__pmCancel').addEventListener('click', function() { done(null); });
     $('#__pmOk').addEventListener('click', function() { done((inp && inp.value || '').trim()); });
     if (inp && !opts.multiline) {
@@ -2431,8 +2456,8 @@ function renderAdmins() {
   }).join('');
   $$('.btn-remove', c).forEach(function(btn) {
     btn.addEventListener('click', async function() {
-      var ok = await postOrToast('admin/remove', { user_id: btn.dataset.uid }, '已移除管理员', '移除管理员失败');
-      if (ok) loadAdmins();
+      await postOrToast('admin/remove', { user_id: btn.dataset.uid }, '已移除管理员', '移除管理员失败');
+      loadAdmins(true);  // 成功失败都按后端实际名单重新显示
     });
   });
 }
@@ -3678,8 +3703,12 @@ function mnRenderSwitches(containerId) {
   }).join('');
   $$('[data-mn-key]', c).forEach(function(cb) {
     cb.addEventListener('change', async function() {
-      var values = {}; values[cb.getAttribute('data-mn-key')] = cb.checked;
-      if (!await mnSaveConfig(values, '已' + (cb.checked ? '开启' : '关闭'))) cb.checked = !cb.checked;
+      var want = cb.checked;
+      var values = {}; values[cb.getAttribute('data-mn-key')] = want;
+      cb.disabled = true;  // 保存完成前不能再点，避免连点时请求乱序
+      var ok = await mnSaveConfig(values, '已' + (want ? '开启' : '关闭'));
+      cb.disabled = false;
+      if (!ok) cb.checked = !want;
     });
   });
 }
@@ -3711,16 +3740,32 @@ function mnRenderRules(kind) {
     var err = errors[raw];
     return '<div class="mn-rule' + (err ? ' mn-bad' : '') + '"><span class="mn-type ' + p.type + '">' + esc(MN_TYPES[p.type].label) + '</span>' +
       '<span class="mn-val">' + esc(p.value) + (err ? '<div class="mn-err">' + esc(err) + '</div>' : '') + '</span>' +
-      '<button class="btn btn-ghost btn-sm" data-mn-del="' + i + '">删除</button></div>';
+      '<button class="btn btn-ghost btn-sm" data-mn-del="' + escAttr(raw) + '">删除</button></div>';
   }).join('');
   $$('[data-mn-del]', box).forEach(function(btn) {
     btn.addEventListener('click', function() {
-      var next = list.slice(); next.splice(Number(btn.getAttribute('data-mn-del')), 1);
-      mnSaveRules(kind, next);
+      // 按规则内容删除（不按序号），排队时前面的操作改变了顺序也不会删错
+      var raw = btn.getAttribute('data-mn-del');
+      btn.disabled = true;
+      mnRuleOp(kind, function(cur) {
+        var next = cur.filter(function(r) { return r !== raw; });
+        return next.length === cur.length ? null : next;
+      }).then(function(ok) { if (!ok) btn.disabled = false; });
     });
   });
 }
 
+// 规则增删排队执行：每次都在上一次保存完成后、基于最新的规则列表计算新列表。
+// 以前用点击当时的列表生成完整列表提交，连续操作时后一个请求会覆盖前一个（丢掉新增或恢复已删）。
+var MN_RULE_QUEUE = { kw: Promise.resolve(), wx: Promise.resolve() };
+function mnRuleOp(kind, makeNext) {
+  var run = MN_RULE_QUEUE[kind].then(function() {
+    var next = makeNext((kind === 'kw' ? MN.kw : MN.wx).slice());
+    return next ? mnSaveRules(kind, next) : false;
+  });
+  MN_RULE_QUEUE[kind] = run.catch(function() { return false; });
+  return run;
+}
 async function mnSaveRules(kind, rules) {
   var isKw = kind === 'kw';
   var msg = $(isKw ? '#kwAddMsg' : '#wxAddMsg');
@@ -3860,9 +3905,11 @@ async function loadCodes(page) {
   await Promise.all([csLoadStats(), csLoadLists()]);
 }
 async function csLoadStats() {
+  var loadEp = beginLoad('codes-stats');
   var hoursSel = $('#csHours');
   var res = await safeGet('minimal/codes', { by: $('#csBy').value, hours: hoursSel.value || '', group_id: $('#csGroup').value,
     keyword: $('#csKeyword').value.trim(), page: CS.page, page_size: CS.pageSize });
+  if (!isCurrentLoad('codes-stats', loadEp)) return;
   if (isApiError(res)) { $('#csTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   CS.window = d.window_hours; CS.ttl = d.ttl_hours; CS.items = d.items || [];
@@ -3981,9 +4028,12 @@ async function mnAddRule(kind) {
   var input = $(isKw ? '#kwValue' : '#wxValue');
   var rule = isKw ? mnRuleBuild($('#kwType').value, input.value) : input.value.trim();
   if (!rule) { toast('请输入规则内容', 'warning'); return; }
-  var list = isKw ? MN.kw : MN.wx;
-  if (list.indexOf(rule) >= 0) { toast('这条规则已经存在', 'warning'); return; }
-  if (await mnSaveRules(kind, list.concat([rule]))) input.value = '';
+  var typed = input.value;
+  var ok = await mnRuleOp(kind, function(cur) {
+    if (cur.indexOf(rule) >= 0) { toast('这条规则已经存在', 'warning'); return null; }
+    return cur.concat([rule]);
+  });
+  if (ok && input.value === typed) input.value = '';
 }
 
 function mnImportRules() {
@@ -3992,9 +4042,11 @@ function mnImportRules() {
   bindIfExists('kwImportCancel', closeModal);
   bindIfExists('kwImportOk', async function() {
     var lines = $('#kwImportText').value.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(Boolean);
-    var merged = MN.kw.slice();
-    lines.forEach(function(l) { if (merged.indexOf(l) < 0) merged.push(l); });
-    if (await mnSaveRules('kw', merged)) closeModal();
+    var ok = await mnRuleOp('kw', function(cur) {
+      lines.forEach(function(l) { if (cur.indexOf(l) < 0) cur.push(l); });
+      return cur;
+    });
+    if (ok) closeModal();
   });
 }
 
@@ -4119,9 +4171,11 @@ function mnUpdateCountdownPreview() {
   $('#nmPreview').textContent = '今天显示为：基础名' + text;
 }
 async function loadNames() {
+  var loadEp = beginLoad('names');
   if (!MN.overview) await mnLoadOverview();
   var box = $('#namesTable');
   var res = await safeGet('minimal/names');
+  if (!isCurrentLoad('names', loadEp)) return;
   if (isApiError(res)) { box.innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   MN.names = d.groups || [];
@@ -4158,13 +4212,53 @@ function mnJobCreatedHtml(job, extraLines) {
   var mode = job.mode === 'manual' ? '手动执行（请在「批量任务」页面执行）' : '自动执行，预计约 ' + bqFmtSeconds(job.eta_seconds || 0);
   var lines = ['已创建批量任务 #' + job.id + '「' + job.title + '」，共 ' + job.items + ' 项，' + mode].concat(extraLines || []);
   // data-job-result：任务结束（已完成 / 已取消）后由 mnSyncJobResults 改成结果摘要并自动关闭
+  setTimeout(mnJobWatchKick, 0);
   return '<div class="mn-result ok closable" data-job-result="' + job.id + '">' + MN_CLOSE_BTN + esc(lines.join('\n')) +
     '\n<button class="btn btn-outline btn-sm" data-goto-job="' + job.id + '" style="margin-top:6px">查看任务进度</button></div>';
 }
 // 每次拿到任务列表（右侧任务栏 / 批量任务页轮询）时调用：结束了的任务，其创建提示改成结果摘要，稍后自动消失
+// 提示框的任务状态跟踪：侧栏、批量任务页的轮询会顺带同步；窄屏下侧栏隐藏不轮询、
+// 也不在批量任务页时，由 mnJobWatchTick 自己定时查询，任务不在最近列表里时按 ID 查询
+var JOB_WATCH = { timer: null, inflight: false, seen: {} };
+var JOB_WATCH_INTERVAL = 3000;
+function mnJobWatchKick() {
+  if (!JOB_WATCH.timer) JOB_WATCH.timer = setTimeout(mnJobWatchTick, JOB_WATCH_INTERVAL);
+}
+function mnPendingJobIds() {
+  return $$('[data-job-result]').filter(function(b) { return !b.getAttribute('data-job-ended'); })
+    .map(function(b) { return Number(b.getAttribute('data-job-result')); });
+}
+async function mnJobWatchTick() {
+  JOB_WATCH.timer = null;
+  var ids = mnPendingJobIds();
+  if (!ids.length) return;
+  var now = Date.now();
+  var stale = ids.filter(function(id) { return now - (JOB_WATCH.seen[id] || 0) > JOB_WATCH_INTERVAL + 1000; });
+  if (stale.length && !document.hidden && !JOB_WATCH.inflight) {
+    JOB_WATCH.inflight = true;
+    try {
+      var res = await safeGet('minimal/batch/jobs', { limit: 30 });
+      if (!isApiError(res)) mnSyncJobResults((mnData(res) || {}).jobs || []);
+      var missing = stale.filter(function(id) { return Date.now() - (JOB_WATCH.seen[id] || 0) > JOB_WATCH_INTERVAL + 1000; });
+      for (var i = 0; i < missing.length && i < 3; i++) {
+        var r = await safeGet('minimal/batch/job', { id: missing[i] });
+        var job = isApiError(r) ? null : (mnData(r) || {}).job;
+        if (job) mnSyncJobResults([job]);
+        else if (!isApiError(r) || /不存在/.test(mnErr(r))) {
+          // 任务已被清理：不再跟踪，提示框留着让用户手动关
+          $$('[data-job-result="' + missing[i] + '"]').forEach(function(b) { b.setAttribute('data-job-ended', '1'); });
+        }
+      }
+    } finally {
+      JOB_WATCH.inflight = false;
+    }
+  }
+  mnJobWatchKick();
+}
 function mnSyncJobResults(jobs) {
   var byId = {};
-  (jobs || []).forEach(function(j) { byId[j.id] = j; });
+  var now = Date.now();
+  (jobs || []).forEach(function(j) { byId[j.id] = j; JOB_WATCH.seen[j.id] = now; });
   $$('[data-job-result]').forEach(function(box) {
     var j = byId[Number(box.getAttribute('data-job-result'))];
     if (!j || j.state === 'active' || j.state === 'paused' || box.getAttribute('data-job-ended')) return;
@@ -4373,10 +4467,12 @@ async function dupSaveScope() {
   loadDup();
 }
 async function loadDup() {
+  var loadEp = beginLoad('dup');
   var res = await safeGet('minimal/duplicates', {
     min_groups: $('#dupMin').value, include_exempt: $('#dupExempt').checked ? 1 : 0,
     include_ignored: $('#dupIgnored').checked ? 1 : 0, keyword: $('#dupKeyword').value.trim()
   });
+  if (!isCurrentLoad('dup', loadEp)) return;
   if (isApiError(res)) { $('#dupTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   DUP.items = d.items || [];
@@ -4532,9 +4628,11 @@ async function mnDupIgnore(only) {
 /* ---- 操作记录 ---- */
 var OP_STATE = { page: 1, pageSize: 50 };
 async function loadOplog(page) {
+  var loadEp = beginLoad('oplog');
   if (page) OP_STATE.page = page;
   var res = await safeGet('minimal/oplog', { action: $('#opAction').value, source: $('#opSource').value,
     keyword: $('#opKeyword').value.trim(), page: OP_STATE.page, page_size: OP_STATE.pageSize });
+  if (!isCurrentLoad('oplog', loadEp)) return;
   if (isApiError(res)) { $('#opTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   var sel = $('#opAction'), cur = sel.value;
@@ -4564,6 +4662,7 @@ function llGroupName(gid, name) {
   return (g && g.group_name) || '';
 }
 async function loadLeaveLog(page) {
+  var loadEp = beginLoad('leavelog');
   if (page) LL_STATE.page = page;
   if (!MN.overview) await mnLoadOverview();
   mnRenderSwitches('leaveLogSwitches');
@@ -4571,6 +4670,7 @@ async function loadLeaveLog(page) {
   $('#llMsgCount').value = (mc === undefined || mc === null || mc === '') ? 10 : mc;
   var res = await safeGet('minimal/leavelog', { keyword: $('#llKeyword').value.trim(), kind: $('#llKind').value,
     page: LL_STATE.page, page_size: LL_STATE.pageSize });
+  if (!isCurrentLoad('leavelog', loadEp)) return;
   if (isApiError(res)) { $('#llTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   var items = LL_STATE.items = d.items || [];
@@ -4929,10 +5029,10 @@ async function tbPoll() {
   }
 }
 function tbApply(d) {
+  mnSyncJobResults(d.jobs || []);  // 用完整列表同步提示框，侧栏只显示前 20 个
   TB.jobs = (d.jobs || []).slice(0, 20);
   TB.runner = d.runner || {};
   TB.settings = d.settings || TB.settings;
-  mnSyncJobResults(TB.jobs);
   tbRender();
 }
 function tbRender() {
@@ -5247,7 +5347,8 @@ async function livePoll() {
     return;
   }
   var d = mnData(res) || {};
-  if (d.reset) { LIVE.map = {}; LIVE.open = {}; }
+  // reset：插件重启（序号从头开始）。同时清掉「清空」记下的位置，否则重启后的新日志序号更小、全被过滤
+  if (d.reset) { LIVE.map = {}; LIVE.open = {}; LIVE.clearedBefore = 0; }
   LIVE.epoch = d.epoch; LIVE.seq = d.seq; LIVE.size = d.size || 300; LIVE.enabled = d.enabled !== false;
   Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) LIVE.names[k] = d.group_names[k]; });
   var now = Date.now();
@@ -5332,14 +5433,22 @@ function liveRender() {
 
 /* ---- 群成员缓存 ---- */
 var DIR_POLL = null;
-async function loadDirectory() {
+// fromPoll === true：刷新进度的轮询（每 2 秒）。这时只更新表格，不重填设置输入框和开关，
+// 否则用户正在输入的有效期、接口间隔会被旧配置覆盖。按钮点击传进来的是事件对象，不算轮询。
+async function loadDirectory(fromPoll) {
+  var poll = fromPoll === true;
+  var loadEp = beginLoad('directory');
   if (!await mnLoadOverview()) return;
-  MN_SWITCHES.dirSwitches = [{ key: 'directory_background_refresh_enabled', label: '后台补齐缓存', desc: '每 5 分钟最多刷新 2 个已过期的群' }];
-  mnRenderSwitches('dirSwitches');
-  $('#dirGroupTtl').value = mnCfg('directory_group_ttl') || 3600;
-  $('#dirMemberTtl').value = mnCfg('directory_member_ttl') || 21600;
-  $('#dirInterval').value = mnCfg('directory_min_interval_ms') || 1500;
+  if (!isCurrentLoad('directory', loadEp)) return;
+  if (!poll) {
+    MN_SWITCHES.dirSwitches = [{ key: 'directory_background_refresh_enabled', label: '后台补齐缓存', desc: '每 5 分钟最多刷新 2 个已过期的群' }];
+    mnRenderSwitches('dirSwitches');
+    $('#dirGroupTtl').value = mnCfg('directory_group_ttl') || 3600;
+    $('#dirMemberTtl').value = mnCfg('directory_member_ttl') || 21600;
+    $('#dirInterval').value = mnCfg('directory_min_interval_ms') || 1500;
+  }
   var res = await safeGet('minimal/directory');
+  if (!isCurrentLoad('directory', loadEp)) return;
   if (isApiError(res)) { $('#dirTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   var checked = {}; $$('#dirTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
@@ -5356,7 +5465,7 @@ async function loadDirectory() {
     }).join('') + '</tbody></table>' : '<p class="empty">还没有缓存群列表，点「只刷新群列表」开始</p>';
   mnGroupFilter('#dirTable');
   clearTimeout(DIR_POLL);
-  if (prog && $('#tab-directory').classList.contains('active')) DIR_POLL = setTimeout(loadDirectory, 2000);
+  if (prog && $('#tab-directory').classList.contains('active')) DIR_POLL = setTimeout(function() { loadDirectory(true); }, 2000);
 }
 async function mnDirRefresh(body) {
   var res = await safePost('minimal/directory/refresh', body);
@@ -5391,7 +5500,7 @@ function initMinimalPages() {
   bindIfExists('wxDriver', mnToggleDriverRows, 'change');
   bindIfExists('ocrDriver', mnToggleDriverRows, 'change');
   bindIfExists('btnGuardSave', function() {
-    mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value, hit_notice_template: $('#guardNoticeTpl').value }, '已保存').then(loadGuard);
+    mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value, hit_notice_template: $('#guardNoticeTpl').value }, '已保存').then(function(ok) { if (ok) loadGuard(); });
   });
   bindIfExists('btnWxSave', function() {
     var values = { wxcode_driver: $('#wxDriver').value, wxcode_service_url: $('#wxUrl').value.trim(),
@@ -5402,7 +5511,7 @@ function initMinimalPages() {
       code_undecoded_action: $('#codeUndecoded').value };
     var key = $('#codeDetectKey').value.trim();
     if (key) values.code_detect_api_key = key;  // 留空表示不修改
-    mnSaveConfig(values, '已保存').then(loadGuard);
+    mnSaveConfig(values, '已保存').then(function(ok) { if (ok) loadGuard(); });
   });
   bindIfExists('btnCodeHealth', mnCodeHealth);
   bindIfExists('codeTestFile', mnCodeTestFile, 'change');
@@ -5608,7 +5717,7 @@ function initMinimalPages() {
   });
   bindIfExists('btnDirSave', function() {
     mnSaveConfig({ directory_group_ttl: Number($('#dirGroupTtl').value), directory_member_ttl: Number($('#dirMemberTtl').value),
-      directory_min_interval_ms: Number($('#dirInterval').value) }, '已保存').then(loadDirectory);
+      directory_min_interval_ms: Number($('#dirInterval').value) }, '已保存').then(function(ok) { if (ok) loadDirectory(); });
   });
 }
 
@@ -5735,9 +5844,9 @@ async function init() {
   bindClick('btnAddAdmin', async function() {
     var vals = ($('#adminInput').value || '').split(/[\s,，]+/).filter(Boolean);
     if (!vals.length) return;
-    var ok = await postManyOrToast(vals, 'admin/add', 'user_id', '已添加管理员', '添加管理员失败');
+    await postManyOrToast(vals, 'admin/add', 'user_id', '已添加管理员', '添加管理员失败');
     $('#adminInput').value = '';
-    if (ok) loadAdmins();
+    loadAdmins(true);  // 部分成功时也要刷新，按后端实际名单显示
   });
 
   bindClick('btnBatchDelete', async function() {
@@ -5809,10 +5918,8 @@ async function init() {
     } catch(e) {}
   });
 
-  var statusDot = document.getElementById('statusDot');
-  var statusText = document.getElementById('statusText');
-  if (statusDot) statusDot.style.background = 'var(--success)';
-  if (statusText) statusText.textContent = '已连接';
+  // 连接状态不再直接写「已连接」，由下面第一批请求的结果决定（mnSetConn）
+  if (!apiGet || !apiPost) mnSetConn(false, 'API 不可用');
 
   loadOverview();
   loadAdmins();
