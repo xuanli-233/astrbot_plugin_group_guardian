@@ -59,6 +59,7 @@ class LiveLog:
 def _public(entry: dict) -> dict:
     out = dict(entry)
     out["steps"] = [list(s) for s in entry.get("steps", [])]
+    out["detail"] = list(entry.get("detail") or [])
     if out["status"] == STATUS_RUNNING:
         out["ms"] = int((time.time() - entry["ts"]) * 1000)
     return out
@@ -81,6 +82,32 @@ def live_stage(text: str) -> None:
     steps = entry["steps"]
     if len(steps) < LIVE_MAX_STEPS:
         steps.append((int((time.time() - entry["ts"]) * 1000), text))
+    log.bump(entry)
+
+
+LIVE_MAX_DETAIL_LINES = 16
+LIVE_DETAIL_LINE_CHARS = 200
+
+
+def live_detail(lines, append: bool = True) -> None:
+    """记录识别到的内容（每张图 / 每个码一行，OCR 文字等），显示在实时日志的内容列下方。"""
+    cur = _current()
+    if not cur:
+        return
+    log, entry = cur
+    if entry["status"] != STATUS_RUNNING:
+        return
+    if isinstance(lines, str):
+        lines = [lines]
+    clean = [str(x)[:LIVE_DETAIL_LINE_CHARS] for x in (lines or []) if str(x).strip()]
+    if not clean:
+        return
+    old = [x for x in (entry.get("detail") or []) if not x.startswith("…（另有")] if append else []
+    merged = old + clean
+    if len(merged) > LIVE_MAX_DETAIL_LINES:
+        hidden = len(merged) - (LIVE_MAX_DETAIL_LINES - 1)
+        merged = merged[:LIVE_MAX_DETAIL_LINES - 1] + [f"…（另有 {hidden} 行未显示）"]
+    entry["detail"] = merged
     log.bump(entry)
 
 
@@ -143,7 +170,7 @@ class LiveLogMixin:
                 "ts": time.time(), "group_id": str(group_id), "user_id": str(user_id or ""),
                 "user_name": str(user_name)[:32], "text": text, "images": images,
                 "stage": "收到", "status": STATUS_RUNNING, "final": "", "result": "", "reason": "",
-                "steps": [], "ms": 0,
+                "steps": [], "detail": [], "ms": 0,
             }
             log.add(entry)
             handle = (log, entry)

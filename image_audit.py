@@ -2,6 +2,7 @@
 """图片 OCR、二维码解码及受控下载。"""
 
 import asyncio
+import contextvars
 import importlib
 import ipaddress
 import socket
@@ -32,6 +33,26 @@ IMAGE_EVIDENCE_MAX_CHARS = 1000
 IMAGE_BRANCH_EVIDENCE_MAX_CHARS = 20_000
 IMAGE_COMBINED_AUDIT_MAX_CHARS = 92_000
 IMAGE_WORKER_CONCURRENCY = 4
+
+# 最近一次 _download_bytes 失败的原因（返回 None 时设置），供识别流水线 / 实时日志说明为什么没识别。
+DOWNLOAD_ERROR = contextvars.ContextVar("group_guardian_download_error", default="")
+
+
+def last_download_error() -> str:
+    return DOWNLOAD_ERROR.get()
+
+
+def _url_brief(url: str) -> str:
+    """日志里的图片地址：只留协议和主机（QQ 图片地址带 rkey 等参数，不完整输出）。"""
+    text = str(url or "")
+    try:
+        parsed = urlparse(text)
+        if parsed.scheme and parsed.hostname:
+            return f"{parsed.scheme}://{parsed.hostname}"
+    except Exception:
+        pass
+    return (text[:40] + "…") if len(text) > 40 else text
+
 
 _QR_DECODER = None      # "cv2" | "pyzbar" | None
 _QR_PROBED = False
@@ -698,6 +719,7 @@ class ImageAuditMixin:
     async def _is_safe_image_url(self, url: str) -> bool:
         parsed = urlparse(url)
         if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+            DOWNLOAD_ERROR.set(f"图片地址不是 http(s) 链接（{_url_brief(url)}），协议端可能没有上报图片 URL")
             return False
         loop = asyncio.get_running_loop()
         try:
@@ -707,11 +729,15 @@ class ImageAuditMixin:
             )
         except asyncio.TimeoutError:
             logger.debug(f"[GroupMgr] 图片地址 DNS 解析超时: {parsed.hostname}")
+            DOWNLOAD_ERROR.set(f"图片域名 DNS 解析超时（{parsed.hostname}）")
             return False
         if is_private:
             logger.debug(
                 f"[GroupMgr] 拒绝下载内网/不可解析地址图片: {parsed.hostname}"
             )
+            DOWNLOAD_ERROR.set(
+                f"图片域名 {parsed.hostname} 解析到了内网 / 保留地址或无法解析，出于安全考虑拒绝下载"
+                "（使用代理的 fake-ip 模式时常见，可让该域名直连 / 走真实 DNS）")
         return not is_private
 
     async def _get_image_http_session(self):
@@ -755,6 +781,7 @@ class ImageAuditMixin:
         """在共享 I/O 限额内下载图片，并逐跳校验重定向地址。"""
         semaphore = getattr(self, "_image_io_semaphore", None)
         acquired = False
+        DOWNLOAD_ERROR.set("")
         try:
             if semaphore is not None:
                 await asyncio.wait_for(
@@ -763,6 +790,7 @@ class ImageAuditMixin:
                 acquired = True
             session = await self._get_image_http_session()
             if session is None:
+                DOWNLOAD_ERROR.set("无法创建 HTTP 会话（aiohttp 不可用或插件正在停止）")
                 return None
             import aiohttp
 
@@ -778,10 +806,14 @@ class ImageAuditMixin:
                     if response.status in {301, 302, 303, 307, 308}:
                         location = response.headers.get("Location", "")
                         if not location or redirect_count >= IMAGE_MAX_REDIRECTS:
+                            DOWNLOAD_ERROR.set("图片地址重定向次数过多或缺少跳转地址")
                             return None
                         current_url = urljoin(current_url, location)
                         continue
                     if response.status != 200:
+                        DOWNLOAD_ERROR.set(
+                            f"图片服务器返回 HTTP {response.status}（{_url_brief(current_url)}，"
+                            "QQ 图片链接过期或需要协议端重新获取时常见）")
                         return None
                     chunks = []
                     total = 0
@@ -793,13 +825,17 @@ class ImageAuditMixin:
                             return b"".join(chunks)
                         chunks.append(chunk)
                         total += len(chunk)
+                    DOWNLOAD_ERROR.set(f"图片超过 {max_bytes // (1024 * 1024)} MB，未下载")
                     return None
+            DOWNLOAD_ERROR.set("图片地址重定向次数过多")
             return None
         except asyncio.TimeoutError:
             logger.debug(f"[GroupMgr] 图片下载排队或请求超时({url[:60]})")
+            DOWNLOAD_ERROR.set(f"图片下载超时（{_url_brief(url)}）")
             return None
         except Exception as exc:
             logger.debug(f"[GroupMgr] 下载图片失败({url[:60]}): {exc}")
+            DOWNLOAD_ERROR.set(f"图片下载出错：{type(exc).__name__}: {str(exc)[:120]}")
             return None
         finally:
             if acquired:

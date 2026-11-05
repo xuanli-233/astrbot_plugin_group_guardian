@@ -21,15 +21,18 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 
 try:  # 实时日志进度（live_log.py）
-    from .live_log import live_set, live_stage
+    from .live_log import live_detail, live_set, live_stage
 except ImportError:
     try:
-        from live_log import live_set, live_stage
+        from live_log import live_detail, live_set, live_stage
     except ImportError:
         def live_set(*_a, **_k):
             return None
 
         def live_stage(*_a, **_k):
+            return None
+
+        def live_detail(*_a, **_k):
             return None
 
 
@@ -218,6 +221,8 @@ class KeywordGuardMixin:
         if not image_urls:
             return False, None
 
+        if not self._cfg("wxcode_enabled", False, group_id=group_id):
+            live_detail("葵花码识别未开启，图片未做码识别")
         if self._cfg("wxcode_enabled", False, group_id=group_id):
             driver = self._cfg_str("wxcode_driver", "two_stage").strip().lower()
             if driver == "two_stage" and callable(getattr(self, "_code_scan_images", None)):
@@ -229,6 +234,10 @@ class KeywordGuardMixin:
                 )
                 joined = "\n".join(self._code_texts(scans))
                 summary = self._code_describe(scans)
+                live_lines = getattr(self, "_code_live_lines", None)
+                if callable(live_lines):
+                    live_detail(live_lines(scans, hit_rule=lambda t: self._match_rules(
+                        t, "wxcode_regex_rules", regex_only=True)))
                 rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
                 reason = f"码内容规则: {rule}" if rule else ""
                 if not rule and self._code_undecoded(scans) and \
@@ -246,6 +255,8 @@ class KeywordGuardMixin:
                 texts = await self._recognize_images(image_urls, "wxcode")
                 joined = "\n".join(texts)
                 rule = self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                live_detail([f"码内容：{t}" + (f" ← 命中规则 {rule}" if rule and self._match_rules(
+                    t, "wxcode_regex_rules", regex_only=True) else "") for t in texts] or ["识别模块未返回码内容"])
                 if rule:
                     notice = await self._execute_hit_action(
                         event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
@@ -259,6 +270,9 @@ class KeywordGuardMixin:
             texts = await self._recognize_images(image_urls, "local_ocr")
             joined = "\n".join(texts)
             rule = self._match_rules(joined, "keyword_rules")
+            ocr_text = " ".join(t.strip() for t in texts if t and t.strip())
+            live_detail([f"OCR 文字：{ocr_text[:150]}" + ("…" if len(ocr_text) > 150 else "")
+                         + (f" ← 命中规则 {rule}" if rule else "")] if ocr_text else ["OCR 未识别到文字"])
             if rule:
                 notice = await self._execute_hit_action(
                     event, group_id, user_id, user_name, text or "[图片]", f"图片文字关键词: {rule}",

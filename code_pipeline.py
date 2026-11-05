@@ -32,6 +32,18 @@ except ImportError:
         def live_stage(*_a, **_k):
             return None
 
+try:  # 下载失败原因（image_audit.py）
+    from .image_audit import last_download_error
+except ImportError:
+    try:
+        from image_audit import last_download_error
+    except ImportError:
+        def last_download_error():
+            return ""
+
+# 识别用的图片下载上限：超过定位服务限制（10 MiB）的图片会先缩小再检测，所以下载上限放宽到 20 MiB
+CODE_DOWNLOAD_MAX_BYTES = 20 * 1024 * 1024
+
 CODE_CLASS_LABELS ={0: "ArUco", 1: "条形码", 2: "葵花码", 3: "二维码", 4: "PDF417", 5: "DataMatrix"}
 DETECT_MAX_BYTES = 10 * 1024 * 1024
 DETECT_MAX_PIXELS = 12_000_000
@@ -264,6 +276,7 @@ class CodePipelineMixin:
         ratio = self._cfg_int("code_box_expand_ratio", 20)
         if not dets:
             live_stage(f"{label}未发现码")
+        out["over_limit"] = max(0, len(dets) - limit)
         for index, det in enumerate(dets[:limit], 1):
             cid = int(det.get("class_id"))
             bbox = [float(v) * scale for v in (det.get("bbox") or [0, 0, 0, 0])[:4]]
@@ -335,12 +348,15 @@ class CodePipelineMixin:
             label = f"图 {len(seen)}/{min(len(image_urls), getattr(self, 'RECOGNIZE_MAX_IMAGES', 4))}："
             try:
                 live_stage(f"{label}下载图片")
-                data = await self._download_bytes(url)
+                data = await self._code_fetch_image(url)
             except Exception as e:
-                results.append({"url": url, "has_code": False, "codes": [], "error": f"图片下载失败：{e}"})
-                continue
+                data, reason = None, f"{type(e).__name__}: {e}"
+            else:
+                reason = "" if data else (last_download_error() or "未知原因")
             if not data:
-                results.append({"url": url, "has_code": False, "codes": [], "error": "图片下载失败"})
+                live_stage(f"{label}下载失败")
+                self._code_warn_download(reason)
+                results.append({"url": url, "has_code": False, "codes": [], "error": f"图片下载失败：{reason}"})
                 continue
             key = hashlib.sha1(data).hexdigest()
             hit = cache.get(key)
@@ -367,6 +383,63 @@ class CodePipelineMixin:
             return bool(text) and bool(stop_when(text))
         except Exception:
             return False
+
+    async def _code_fetch_image(self, url: str) -> Optional[bytes]:
+        """取图片字节：base64:// 直接解码，其余走受控下载（拒绝内网地址，上限 CODE_DOWNLOAD_MAX_BYTES）。"""
+        text = str(url or "")
+        if text.startswith("base64://"):
+            try:
+                data = base64.b64decode(text[len("base64://"):], validate=False)
+            except Exception:
+                return None
+            return data if 0 < len(data) <= CODE_DOWNLOAD_MAX_BYTES else None
+        return await self._download_bytes(text, max_bytes=CODE_DOWNLOAD_MAX_BYTES)
+
+    def _code_warn_download(self, reason: str) -> None:
+        """图片下载失败写一条 warning；同一原因每 10 分钟只写一次，避免刷屏。"""
+        seen = getattr(self, "_code_dl_warned", None)
+        if seen is None:
+            seen = self._code_dl_warned = {}
+        now = time.time()
+        key = str(reason)[:80]
+        if now - seen.get(key, 0) < 600:
+            return
+        if len(seen) > 200:
+            seen.clear()
+        seen[key] = now
+        logger.warning(f"[GroupMgr] 二维码 / 葵花码识别：图片下载失败（已放行）：{reason}")
+
+    def _code_live_lines(self, scans: List[dict], hit_rule=None) -> List[str]:
+        """实时日志里逐图、逐码列出识别结果。hit_rule(text) 返回命中的规则或 None。"""
+        lines = []
+        multi = len(scans) > 1
+        for idx, scan in enumerate(scans, 1):
+            prefix = f"图{idx} " if multi else ""
+            cached = "（缓存）" if scan.get("cached") else ""
+            if scan.get("error"):
+                lines.append(f"{prefix}{scan['error']}")
+                continue
+            codes = scan.get("codes") or []
+            if not codes:
+                lines.append(f"{prefix}未发现{'码' if not scan.get('has_code') else '选中类别的码'}{cached}")
+                continue
+            total = len(codes)
+            for n, c in enumerate(codes, 1):
+                head = f"{prefix}{c.get('label', '码')}" + (f" {n}/{total}" if total > 1 else "")
+                score = c.get("score")
+                if isinstance(score, (int, float)):
+                    head += f"（{float(score):.2f}）"
+                if c.get("decoded"):
+                    text = self._code_item_text(c)
+                    shown = (text[:120] + "…") if len(text) > 120 else text
+                    rule = hit_rule(text) if (hit_rule and text) else None
+                    mark = f" ← 命中规则 {rule}" if rule else ""
+                    lines.append(f"{head}：{shown}{mark}{cached}")
+                else:
+                    lines.append(f"{head}：{c.get('error') or '未能解出'}{cached}")
+            if scan.get("over_limit"):
+                lines.append(f"{prefix}另有 {scan['over_limit']} 个码超过每张图上限（code_max_per_image），未解码")
+        return lines
 
     @staticmethod
     def _code_describe(scans: List[dict]) -> str:

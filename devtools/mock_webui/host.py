@@ -587,9 +587,16 @@ async def _mock_code_http_post(self, url, field, data, filename, headers, timeou
         content = MOCK_CODE_IMAGES.get(hashlib.sha1(data).hexdigest())
         if content is None:
             return 200, {"has_code": False, "has_kuihua": False, "detections": []}, {}
-        MOCK_CODE_PENDING.append(content)
-        return 200, {"has_code": True, "has_kuihua": True, "detections": [
-            {"class_id": 2, "class_name": "kuihua", "score": 0.91, "bbox": [120, 70, 280, 230]}]}, {}
+        # 「内容1||内容2」= 一张图里有多个码（第 1 个是葵花码，其余是二维码）；NOCODE = 定位到但解不出
+        parts = [p for p in content.split("||") if p] or ["NOCODE"]
+        MOCK_CODE_PENDING[:] = parts
+        dets = []
+        for i, _part in enumerate(parts):
+            x = 10 + (i % 3) * 130
+            y = 10 + (i // 3) * 140
+            dets.append({"class_id": 2 if i == 0 else 3, "class_name": "kuihua" if i == 0 else "qrcode",
+                         "score": round(0.93 - i * 0.04, 2), "bbox": [x, y, x + 110, y + 110]})
+        return 200, {"has_code": True, "has_kuihua": True, "detections": dets}, {}
     content = MOCK_CODE_PENDING.pop(0) if MOCK_CODE_PENDING else "NOCODE"
     if content == "NOCODE":
         return 422, {"error": {"code": "NO_CODE", "message": "未能解出支持的二维码或葵花码"}}, {}
@@ -634,9 +641,17 @@ def boot(plugin_parent: str):
     Main = main_mod.Main
     schema = json.loads((Path(plugin_parent) / PLUGIN_NAME / "_conf_schema.json").read_text(encoding="utf-8"))
 
+    image_audit_mod = __import__(f"{PLUGIN_NAME}.image_audit", fromlist=["DOWNLOAD_ERROR"])
+
     async def fake_download(self, url, *a, **k):
         if url.startswith("mock://wxcode/"):
-            return _mock_code_png(urllib.parse.unquote(url[len("mock://wxcode/"):]))
+            content = urllib.parse.unquote(url[len("mock://wxcode/"):])
+            if content.startswith("!下载失败"):
+                # 模拟真实环境里常见的下载失败：协议端给的图片域名被解析到内网（代理 fake-ip）
+                image_audit_mod.DOWNLOAD_ERROR.set(
+                    "图片域名 multimedia.nt.qq.com.cn 解析到了内网 / 保留地址或无法解析，出于安全考虑拒绝下载（模拟）")
+                return None
+            return _mock_code_png(content)
         return f"mock-image:{url}".encode()
     Main._download_bytes = fake_download
     Main._code_http_post = _mock_code_http_post
@@ -769,8 +784,9 @@ def sim_send(payload_json: str) -> str:
     segments = []
     if text:
         segments.append({"type": "text", "data": {"text": text}})
-    if p.get("wxcode"):
-        url = "mock://wxcode/" + urllib.parse.quote(p["wxcode"])
+    wxcodes = p.get("wxcode") or []
+    for code in (wxcodes if isinstance(wxcodes, list) else [wxcodes]):  # 列表 = 一条消息多张图
+        url = "mock://wxcode/" + urllib.parse.quote(str(code))
         segments.append({"type": "image", "data": {"url": url, "file": url}})
     if p.get("ocr"):
         url = "mock://ocr/" + urllib.parse.quote(p["ocr"])

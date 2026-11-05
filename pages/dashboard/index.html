@@ -441,6 +441,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .lv-steps td{background:var(--bg-secondary, rgba(127,127,127,.04));font-size:12px;color:var(--text-secondary)}
     .lv-steps span{display:inline-block;margin-right:14px;white-space:nowrap}
     .lv-ms{font-variant-numeric:tabular-nums;white-space:nowrap}
+    .lv-detail{font-size:12px;line-height:1.6;color:var(--text-secondary);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all;margin-top:2px}
+    .lv-detail.hit{color:var(--danger)}
+    .lv-detail.bad{color:var(--warning)}
     .lv-slow{color:var(--warning)}
   </style>
 </head>
@@ -5519,6 +5522,12 @@ function liveRender() {
       var badge = '<span class="lv-badge ' + escAttr(e.status) + '">' + (e.status === 'running' ? '<span class="lv-dot"></span>' : '') + esc(label) + '</span>';
       var reason = e.reason ? '<div class="mn-hint">' + esc(e.reason) + '</div>' : '';
       var content = (e.text ? esc(e.text) : '') + (e.images ? ' <span class="mn-hint">[图片×' + e.images + ']</span>' : '');
+      // 识别到的内容：每张图 / 每个码一行（命中规则的行标红）
+      var detail = (e.detail || []).map(function(line) {
+        var hit = line.indexOf('← 命中规则') >= 0, bad = /下载失败|识别失败|超时|出错|HTTP \d/.test(line);
+        return '<div class="lv-detail' + (hit ? ' hit' : (bad ? ' bad' : '')) + '">' + esc(line) + '</div>';
+      }).join('');
+      if (detail) content += detail;
       var gname = LIVE.names[e.group_id];
       var html = '<tr class="lv-row" data-lv="' + e.id + '"><td style="white-space:nowrap">' + esc(liveTime(e.ts)) + '</td>' +
         '<td>' + esc(gname || e.group_id) + (gname ? '<div class="mn-hint">' + esc(e.group_id) + '</div>' : '') + '</td>' +
