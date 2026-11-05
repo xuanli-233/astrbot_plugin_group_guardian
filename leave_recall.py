@@ -14,7 +14,8 @@
   1. 本地记录：插件收到的每条群消息都记下 (消息ID, 时间)，按 (群, 成员) 分桶，每人最多保留
      LEAVE_TRACK_PER_USER 条，超过 LEAVE_TRACK_KEEP_SECONDS 的旧记录会被清掉。不调用接口。
   2. 群历史兜底（leave_recall_use_history，默认开）：插件重启后本地记录是空的，此时额外拉一次
-     get_group_msg_history（最近 100 条），从中筛出该成员的消息。
+     get_group_msg_history（最近 100 条），从中筛出该成员的消息。只在插件启动后 6 小时内拉取
+     （之后本地记录已经覆盖），同一个群 60 秒内只拉一次、与退群记录共用（批量踢人时不会每人拉一次）。
 两者按消息 ID 去重。撤回在后台进行，不阻塞事件链；结果写入操作记录。
 """
 import asyncio
@@ -34,6 +35,8 @@ class LeaveRecallMixin:
     LEAVE_RECALL_INTERVAL = 0.3
     LEAVE_RECALLED_MEMORY = 2000
     LEAVE_HISTORY_COUNT = 100
+    HISTORY_USEFUL_SECONDS = 6 * 3600
+    HISTORY_CACHE_SECONDS = 60
 
     # ------------------------------------------------------------------
     # 本地消息记录
@@ -116,15 +119,50 @@ class LeaveRecallMixin:
                 break
         return picked
 
-    async def _lr_history(self, client, group_id: str, user_id: str) -> List[Tuple[str, float]]:
+    async def _recent_group_history(self, client, group_id: str) -> list:
+        """群最近 LEAVE_HISTORY_COUNT 条消息（退群撤回、退群记录共用）。
+
+        插件启动 HISTORY_USEFUL_SECONDS 之后不再拉取：那之后发的消息本地都记下了，历史接口补不了什么；
+        同一个群 HISTORY_CACHE_SECONDS 内只拉一次，并发请求合并（批量踢人时不会每人拉一次）。
+        """
+        started = float(getattr(self, "_plugin_started_at", 0) or 0)
+        if started and time.time() - started > self.HISTORY_USEFUL_SECONDS:
+            return []
+        gid = str(group_id)
+        cache = getattr(self, "_history_cache", None)
+        if cache is None:
+            cache = self._history_cache = {}
+        hit = cache.get(gid)
+        if hit and time.time() - hit[0] < self.HISTORY_CACHE_SECONDS:
+            return hit[1]
+        inflight = getattr(self, "_history_inflight", None)
+        if inflight is None:
+            inflight = self._history_inflight = {}
+        fut = inflight.get(gid)
+        if fut is None:
+            fut = asyncio.ensure_future(self._fetch_group_history(client, gid))
+            inflight[gid] = fut
+            fut.add_done_callback(lambda _f, g=gid: inflight.pop(g, None))
+        msgs = await asyncio.shield(fut)
+        cache[gid] = (time.time(), msgs)
+        if len(cache) > 500:
+            for key in sorted(cache, key=lambda k: cache[k][0])[:250]:
+                cache.pop(key, None)
+        return msgs
+
+    async def _fetch_group_history(self, client, gid: str) -> list:
         ok, data, err = await self._call_group_api_result(
             client, "get_group_msg_history", "获取群历史消息",
-            group_id=self._safe_int(group_id, 0), count=self.LEAVE_HISTORY_COUNT,
+            group_id=self._safe_int(gid, 0), count=self.LEAVE_HISTORY_COUNT,
         )
         if not ok:
-            logger.debug(f"[GroupMgr] 退群撤回：获取群 {group_id} 历史消息失败: {err}")
+            logger.debug(f"[GroupMgr] 获取群 {gid} 历史消息失败: {err}")
             return []
         msgs = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        return [m for m in (msgs or []) if isinstance(m, dict)]
+
+    async def _lr_history(self, client, group_id: str, user_id: str) -> List[Tuple[str, float]]:
+        msgs = await self._recent_group_history(client, group_id)
         found = []
         for msg in msgs or []:
             if not isinstance(msg, dict):
@@ -167,6 +205,17 @@ class LeaveRecallMixin:
         candidates = [(m, t) for m, t in candidates if m not in done]
         targets = self._lr_select(candidates, opts["count"], opts["minutes"], time.time(), self.LEAVE_RECALL_MAX)
         result["total"] = len(targets)
+        # 所有退群撤回排队执行：批量踢人时几百人同时触发，也只是一条一条地撤回
+        lock = getattr(self, "_lr_lock", None)
+        if lock is None:
+            lock = self._lr_lock = asyncio.Lock()
+        async with lock:
+            await self._lr_delete_all(client, targets, result)
+        self._lr_store().pop((gid, uid), None)
+        return self._lr_finish(gid, uid, trigger, operator, opts, result)
+
+    async def _lr_delete_all(self, client, targets: List[str], result: Dict) -> None:
+        done = self._lr_recalled()
         for mid in targets:
             ok, err = await self._call_group_api(
                 client, "delete_msg", "撤回消息", message_id=self._safe_int(mid, 0) or mid,
@@ -181,8 +230,8 @@ class LeaveRecallMixin:
                 if err and err not in result["errors"]:
                     result["errors"].append(err)
             await asyncio.sleep(self.LEAVE_RECALL_INTERVAL)
-        self._lr_store().pop((gid, uid), None)
 
+    def _lr_finish(self, gid: str, uid: str, trigger: str, operator: str, opts: Dict, result: Dict) -> Dict:
         if result["total"]:
             scope = []
             if opts["count"] > 0:

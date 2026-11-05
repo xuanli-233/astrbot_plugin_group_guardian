@@ -15,6 +15,7 @@ wxcode_regex_rules 每条都按正则处理（同样不区分大小写）。
 正则长度上限 REGEX_MAX_LEN，含嵌套量词（如 (a+)+）的正则会被跳过，防止灾难性回溯。
 """
 import re
+import time
 from typing import List, Optional, Tuple
 
 from astrbot.api import logger
@@ -157,6 +158,26 @@ class KeywordGuardMixin:
     # ------------------------------------------------------------------
     # 命中处理
     # ------------------------------------------------------------------
+    HIT_THROTTLE_SECONDS = 60
+
+    def _hit_throttled(self, kind: str, group_id: str, user_id: str) -> bool:
+        """同一个人连续命中时，群内提示 / 禁言 / 警告 HIT_THROTTLE_SECONDS 秒内只做一次（撤回照常每条都做）。
+
+        返回 True = 本次应跳过；False = 本次执行并开始计时。
+        """
+        store = getattr(self, "_hit_throttle", None)
+        if store is None:
+            store = self._hit_throttle = {}
+        now = time.time()
+        key = (kind, str(group_id), str(user_id))
+        if now - store.get(key, 0) < self.HIT_THROTTLE_SECONDS:
+            return True
+        store[key] = now
+        if len(store) > 5000:
+            for k in [k for k, t in store.items() if now - t >= self.HIT_THROTTLE_SECONDS]:
+                store.pop(k, None)
+        return False
+
     async def _execute_hit_action(self, event: AstrMessageEvent, group_id: str, user_id: str,
                                   user_name: str, text: str, reason: str,
                                   kind: str = "keyword", extra_text: str = "",
@@ -170,7 +191,8 @@ class KeywordGuardMixin:
         recalled = recall_result is True
 
         muted = False
-        if self._cfg("hit_mute_enabled", False, group_id=group_id):
+        if self._cfg("hit_mute_enabled", False, group_id=group_id) and \
+                not self._hit_throttled("mute", group_id, user_id):
             duration = self._cfg_int("moderation_ban_duration", 1800, group_id=group_id)
             muted = await self._mute_member(event, duration)
             if muted and hasattr(self, "_schedule_unban"):
@@ -194,7 +216,8 @@ class KeywordGuardMixin:
         self._log_moderation(group_id, user_id, user_name, log_text, action, reason, image_urls or [])
         event.stop_event()
 
-        if recalled and self._cfg("hit_notice_enabled", False, group_id=group_id):
+        if recalled and self._cfg("hit_notice_enabled", False, group_id=group_id) and \
+                not self._hit_throttled("notice", group_id, user_id):
             template = self._cfg_str(
                 "hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id,
             )

@@ -455,7 +455,16 @@ class OneBotMixin:
             if client:
                 uin = await self._get_bot_uin(client)
                 if uin:
-                    role = await self._get_role_by_id(client, gid, uin)
+                    # 群成员缓存（group_directory）里就有机器人自己的角色，未过期时不调接口；
+                    # 管理员任免通知会实时更新缓存。几十个大群时可省掉每群每 5 分钟一次的查询。
+                    dir_role = getattr(self, "_dir_member_role", None)
+                    if callable(dir_role):
+                        try:
+                            role = dir_role(gid, uin) or ""
+                        except Exception:
+                            role = ""
+                    if not role:
+                        role = await self._get_role_by_id(client, gid, uin)
         except Exception as e:
             logger.debug(f"[GroupMgr] 查询机器人群角色失败({gid}): {e}")
             role = ""

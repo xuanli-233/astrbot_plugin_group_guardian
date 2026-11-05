@@ -184,7 +184,10 @@ class GroupBlacklistMixin:
         roles = None if assume_present else await self._get_member_roles(client, gid)
         bot_role = (roles or {}).get(str(bot_uin), "") if bot_uin else ""
         if not bot_role and bot_uin:
-            bot_role = await self._get_role_by_id(client, gid, bot_uin)
+            # 走带缓存的机器人角色（5 分钟），批量踢人时不必每一项都查一次
+            cached_role = getattr(self, "_get_bot_group_role", None)
+            bot_role = (await cached_role(None, str(gid)) if callable(cached_role) else "") or \
+                await self._get_role_by_id(client, gid, bot_uin)
         if bot_role not in ("admin", "owner"):
             result["skipped"] = "机器人不是管理员"
             return result

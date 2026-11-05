@@ -77,6 +77,8 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         # 过期后先返回旧值并后台刷新（见 _get_member_role），管理员变动通知会立即失效，
         # 因此不必用很短的 TTL 换取"下管理"及时生效。
         self._admin_role_cache_ttl = 30.0
+        # 插件启动时间：启动一段时间后本地消息记录已完整，退群撤回 / 退群记录不再拉群历史
+        self._plugin_started_at = time.time()
         # 当日统计缓存，reset 键是 today_start 时间戳，跨日自动清零
         self._stats_cache = {"today_start": 0, "blocked": 0, "passed": 0, "total": 0, "group_stats": {}, "user_stats": {}}
         # WebUI 慢接口缓存：群列表/成员列表依赖 OneBot API，短 TTL 避免页面切换时反复阻塞。

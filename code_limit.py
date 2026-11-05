@@ -123,6 +123,9 @@ class CodeLimitMixin:
     def _cl_warning(self, group_id: str, user_id: str, user_name: str, over: dict) -> Optional[str]:
         if not self._cfg("code_limit_warn_enabled", True, group_id=group_id):
             return None
+        throttled = getattr(self, "_hit_throttled", None)
+        if callable(throttled) and throttled("code_limit_warn", group_id, user_id):
+            return None  # 同一个人连续超限时 60 秒内只警告一次
         template = self._cfg_str("code_limit_warn_template", DEFAULT_WARN, group_id=group_id) or DEFAULT_WARN
         return (template.replace("{name}", user_name or user_id).replace("{uid}", str(user_id))
                 .replace("{group}", str(group_id)).replace("{hours}", str(over["hours"]))

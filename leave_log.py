@@ -9,7 +9,8 @@
   1. 本地记录：开启后插件收到的每条群消息按 (群, 成员) 记下最近 N 条的摘要（文字最多 120 字，
      图片 / 表情 / 卡片等写成 [图片] 这样的占位），只存内存，最多记 LEAVE_LOG_USERS_MAX 个成员。
   2. 群历史兜底（leave_log_use_history，默认开）：本地记录不足 N 条（如插件刚重启）时，
-     后台拉一次 get_group_msg_history（最近 100 条）补上。
+     后台拉一次 get_group_msg_history（最近 100 条）补上。与退群撤回共用 _recent_group_history：
+     只在插件启动后 6 小时内拉取，同一个群 60 秒内只拉一次。
 
 退群自动拉黑（group_blacklist.py）按这里的记录计次：leave_auto_blacklist_days 天内
 主动退群达到 leave_auto_blacklist_times 次才拉黑。
@@ -161,14 +162,18 @@ class LeaveLogMixin:
         self._ll_track(raw.get("group_id"), user_id, raw.get("message_id"), raw.get("time"), text, name)
 
     async def _ll_history(self, client, group_id: str, user_id: str) -> List[dict]:
-        ok, data, err = await self._call_group_api_result(
-            client, "get_group_msg_history", "获取群历史消息",
-            group_id=self._safe_int(group_id, 0), count=self.LEAVE_LOG_HISTORY_COUNT,
-        )
-        if not ok:
-            logger.debug(f"[GroupMgr] 退群记录：获取群 {group_id} 历史消息失败: {err}")
-            return []
-        msgs = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        shared = getattr(self, "_recent_group_history", None)
+        if callable(shared):
+            msgs = await shared(client, group_id)
+        else:  # 单独测试本模块时
+            ok, data, err = await self._call_group_api_result(
+                client, "get_group_msg_history", "获取群历史消息",
+                group_id=self._safe_int(group_id, 0), count=self.LEAVE_LOG_HISTORY_COUNT,
+            )
+            if not ok:
+                logger.debug(f"[GroupMgr] 退群记录：获取群 {group_id} 历史消息失败: {err}")
+                return []
+            msgs = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         found = []
         for msg in msgs or []:
             if not isinstance(msg, dict):
