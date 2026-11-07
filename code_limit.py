@@ -50,9 +50,10 @@ def _compress_image(data: bytes, max_bytes: int) -> Tuple[bytes, str, Tuple[int,
     except Exception:
         return data, "bin", (0, 0)
     try:
-        image = ImageOps.exif_transpose(Image.open(io.BytesIO(data)))
+        opened = Image.open(io.BytesIO(data))
+        fmt = (opened.format or "").lower()  # exif_transpose 返回的副本没有 format，要先取
+        image = ImageOps.exif_transpose(opened)
         size = image.size
-        fmt = (image.format or "").lower()
     except Exception:
         return data, "bin", (0, 0)
     if len(data) <= max_bytes:
@@ -90,11 +91,11 @@ def _crop_image(data: bytes, box) -> Optional[bytes]:
         return None
 
 
-def _thumb(data: bytes) -> str:
+def _thumb(data: bytes, size: int = CODE_IMAGE_THUMB) -> str:
     try:
         from PIL import Image
         image = Image.open(io.BytesIO(data)).convert("RGB")
-        image.thumbnail((CODE_IMAGE_THUMB, CODE_IMAGE_THUMB))
+        image.thumbnail((size, size))
         buf = io.BytesIO()
         image.save(buf, format="JPEG", quality=75)
         return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
@@ -133,8 +134,56 @@ class CodeLimitMixin:
                 "width INTEGER NOT NULL DEFAULT 0, height INTEGER NOT NULL DEFAULT 0, thumb TEXT NOT NULL DEFAULT '', "
                 "created_at INTEGER NOT NULL, last_used INTEGER NOT NULL)"
             )
+            # 按人长期累计（不随 code_store_ttl_hours 清理）：每个 (人, 码, 群) 一行计数；
+            # code_thumbs 每个码保留一张小缩略图，原图被清理后「按人统计」仍能看到码长什么样。
+            fresh = not conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='code_user_stats'").fetchone()
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS code_user_stats ("
+                "user_id TEXT NOT NULL, code_hash TEXT NOT NULL, group_id TEXT NOT NULL, "
+                "code_text TEXT NOT NULL DEFAULT '', user_name TEXT NOT NULL DEFAULT '', "
+                "total INTEGER NOT NULL DEFAULT 0, passed INTEGER NOT NULL DEFAULT 0, "
+                "limited INTEGER NOT NULL DEFAULT 0, ruled INTEGER NOT NULL DEFAULT 0, "
+                "allowed INTEGER NOT NULL DEFAULT 0, first_ts INTEGER NOT NULL DEFAULT 0, "
+                "last_ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, code_hash, group_id))"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_code_user_stats_last ON code_user_stats(last_ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_code_user_stats_code ON code_user_stats(code_hash)")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS code_thumbs ("
+                "code_hash TEXT PRIMARY KEY, thumb TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL DEFAULT 0)"
+            )
+            if fresh:  # 第一次建表：把还没清理的码记录补进累计
+                conn.execute(
+                    "INSERT OR IGNORE INTO code_user_stats(user_id, code_hash, group_id, code_text, user_name, total, "
+                    "passed, limited, ruled, allowed, first_ts, last_ts) "
+                    "SELECT user_id, code_hash, group_id, MAX(code_text), MAX(user_name), COUNT(*), "
+                    "SUM(outcome='pass'), SUM(outcome='limit'), SUM(outcome='rule'), SUM(outcome='allow'), "
+                    "MIN(ts), MAX(ts) FROM code_sends GROUP BY user_id, code_hash, group_id"
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO code_thumbs(code_hash, thumb, ts) "
+                    "SELECT s.code_hash, i.thumb, MAX(s.ts) FROM code_sends s JOIN code_images i ON i.hash = s.crop_hash "
+                    "WHERE s.crop_hash != '' AND i.thumb != '' GROUP BY s.code_hash"
+                )
             conn.commit()
         self._cl_db_ready = True
+
+    @staticmethod
+    def _cu_bump(conn, group_id: str, user_id: str, code_hash: str, text: str, user_name: str,
+                 outcome: str, now: int) -> None:
+        """按人长期累计 +1（与 code_sends 写在同一个事务里）。"""
+        flags = [int(outcome == k) for k in ("pass", "limit", "rule", "allow")]
+        conn.execute(
+            "INSERT INTO code_user_stats(user_id, code_hash, group_id, code_text, user_name, total, passed, limited, "
+            "ruled, allowed, first_ts, last_ts) VALUES(?,?,?,?,?,1,?,?,?,?,?,?) "
+            "ON CONFLICT(user_id, code_hash, group_id) DO UPDATE SET total=total+1, passed=passed+excluded.passed, "
+            "limited=limited+excluded.limited, ruled=ruled+excluded.ruled, allowed=allowed+excluded.allowed, "
+            "last_ts=MAX(last_ts, excluded.last_ts), "
+            "user_name=CASE WHEN excluded.user_name != '' THEN excluded.user_name ELSE user_name END",
+            (str(user_id), code_hash, str(group_id), str(text)[:CODE_LIMIT_TEXT_MAX], str(user_name or "")[:64],
+             *flags, int(now), int(now)),
+        )
 
     @staticmethod
     def _cl_hash(text: str) -> str:
@@ -196,6 +245,7 @@ class CodeLimitMixin:
                      str(user_name or "")[:64], outcome),
                 )
                 rows[text] = int(cur.lastrowid or 0)
+                self._cu_bump(conn, group_id, user_id, code_hash, text, user_name, outcome, now)
             conn.commit()
         self._cs_maybe_clean(now)
         return rows
@@ -380,6 +430,11 @@ class CodeLimitMixin:
                 with self._storage._connect() as conn:
                     conn.execute("UPDATE code_sends SET img_hash=?, crop_hash=? WHERE id=?",
                                  (img_hash, crop_hash, row_id))
+                    if crop_hash:  # 长期保留一张缩略图（按人统计用）
+                        conn.execute(
+                            "INSERT OR REPLACE INTO code_thumbs(code_hash, thumb, ts) "
+                            "SELECT ?, thumb, ? FROM code_images WHERE hash=? AND thumb != ''",
+                            (self._cl_hash(t), int(time.time()), crop_hash))
                     conn.commit()
 
     async def _cs_store_bytes(self, folder: Path, kind: str, data: bytes, max_bytes: int) -> str:
@@ -538,3 +593,181 @@ class CodeLimitMixin:
         text = rows[0]["code_text"] if rows else ""
         return {"code_hash": code_hash, "text": text, "sends": sends, "images": images,
                 "ttl_hours": self._cs_ttl_hours()}
+
+    # ------------------------------------------------------------------
+    # 按人长期累计（WebUI「码管理 → 按人统计」）
+    # ------------------------------------------------------------------
+    # 排序方式 → ORDER BY（固定写法，不拼接用户输入）
+    CU_SORTS = {
+        "codes": "codes DESC, total DESC, last_ts DESC",   # 发过的不同码最多
+        "total": "total DESC, codes DESC, last_ts DESC",   # 发码总次数最多
+        "bad": "bad DESC, total DESC, last_ts DESC",       # 被撤回（规则 + 超限）最多
+        "recent": "last_ts DESC, total DESC",              # 最近发过码
+    }
+
+    def _cu_users(self, keyword: str = "", group_id: str = "", sort: str = "codes",
+                  page: int = 1, page_size: int = 50) -> Tuple[List[dict], int]:
+        """按人汇总（全部历史）：发过几个不同的码、总次数、被撤回次数、涉及几个群。
+        keyword 匹配 QQ 号（完全一致）、昵称或码内容（包含）。"""
+        self._cl_init_db()
+        where, args = ["1=1"], []
+        if group_id:
+            where.append("group_id=?")
+            args.append(str(group_id))
+        keyword = str(keyword or "").strip()
+        if keyword:
+            where.append("(user_id=? OR user_name LIKE ? OR code_text LIKE ?)")
+            args += [keyword, f"%{keyword}%", f"%{keyword}%"]
+        cond = " AND ".join(where)
+        page = max(1, int(page or 1))
+        page_size = min(max(int(page_size or 50), 1), 200)
+        order = self.CU_SORTS.get(str(sort or ""), self.CU_SORTS["codes"])
+        with self._storage._connect() as conn:
+            # 关键词按码内容命中时，只用来挑出「发过这个码的人」，汇总仍按此人全部的码计算
+            users_sql = f"SELECT DISTINCT user_id FROM code_user_stats WHERE {cond}"
+            base_where = "user_id IN (" + users_sql + ")" + (" AND group_id=?" if group_id else "")
+            base_args = args + ([str(group_id)] if group_id else [])
+            total = int(conn.execute(f"SELECT COUNT(*) AS c FROM ({users_sql})", args).fetchone()["c"] or 0)
+            rows = conn.execute(
+                f"SELECT user_id, MAX(user_name) AS user_name, COUNT(DISTINCT code_hash) AS codes, "
+                f"SUM(total) AS total, SUM(passed) AS passed, SUM(limited) AS limited, SUM(ruled) AS ruled, "
+                f"SUM(allowed) AS allowed, SUM(limited) + SUM(ruled) AS bad, COUNT(DISTINCT group_id) AS groups, "
+                f"MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts "
+                f"FROM code_user_stats WHERE {base_where} GROUP BY user_id ORDER BY {order} LIMIT ? OFFSET ?",
+                base_args + [page_size, (page - 1) * page_size]).fetchall()
+            # 昵称取最近一次发码时的
+            names = {}
+            ids = [r["user_id"] for r in rows]
+            if ids:
+                marks = ",".join("?" * len(ids))
+                for r in conn.execute(
+                        f"SELECT user_id, user_name FROM code_user_stats WHERE user_id IN ({marks}) AND user_name != '' "
+                        f"ORDER BY last_ts ASC", ids):
+                    names[r["user_id"]] = r["user_name"]
+        items = []
+        for r in rows:
+            items.append({
+                "user_id": r["user_id"], "user_name": names.get(r["user_id"], r["user_name"] or ""),
+                "codes": int(r["codes"] or 0), "total": int(r["total"] or 0), "passed": int(r["passed"] or 0),
+                "limited": int(r["limited"] or 0), "ruled": int(r["ruled"] or 0), "allowed": int(r["allowed"] or 0),
+                "groups": int(r["groups"] or 0), "first_ts": int(r["first_ts"] or 0), "last_ts": int(r["last_ts"] or 0),
+            })
+        return items, total
+
+    def _cu_user_detail(self, user_id: str, limit: int = 500) -> dict:
+        """某个人发过的全部码（全部历史）：每个码的次数、处理结果、所在的群、首次 / 最近时间、缩略图。"""
+        self._cl_init_db()
+        user_id = str(user_id or "").strip()
+        with self._storage._connect() as conn:
+            rows = conn.execute(
+                "SELECT code_hash, MAX(code_text) AS code_text, SUM(total) AS total, SUM(passed) AS passed, "
+                "SUM(limited) AS limited, SUM(ruled) AS ruled, SUM(allowed) AS allowed, "
+                "GROUP_CONCAT(group_id) AS group_ids, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts "
+                "FROM code_user_stats WHERE user_id=? GROUP BY code_hash ORDER BY last_ts DESC LIMIT ?",
+                (user_id, min(max(int(limit), 1), 2000))).fetchall()
+            name_row = conn.execute(
+                "SELECT user_name FROM code_user_stats WHERE user_id=? AND user_name != '' ORDER BY last_ts DESC LIMIT 1",
+                (user_id,)).fetchone()
+            hashes = [r["code_hash"] for r in rows]
+            thumbs = {}
+            if hashes:
+                marks = ",".join("?" * len(hashes))
+                for r in conn.execute(f"SELECT code_hash, thumb FROM code_thumbs WHERE code_hash IN ({marks})", hashes):
+                    thumbs[r["code_hash"]] = r["thumb"]
+            per_group = conn.execute(
+                "SELECT group_id, SUM(total) AS total, COUNT(DISTINCT code_hash) AS codes, MAX(last_ts) AS last_ts "
+                "FROM code_user_stats WHERE user_id=? GROUP BY group_id ORDER BY total DESC", (user_id,)).fetchall()
+        allow = getattr(self, "_code_allowed", lambda _t: False)
+        block = getattr(self, "_code_block_set", lambda: set())()
+        codes = []
+        for r in rows:
+            text = r["code_text"]
+            codes.append({
+                "code_hash": r["code_hash"], "text": text, "total": int(r["total"] or 0),
+                "passed": int(r["passed"] or 0), "limited": int(r["limited"] or 0), "ruled": int(r["ruled"] or 0),
+                "allowed": int(r["allowed"] or 0),
+                "group_ids": sorted({g for g in str(r["group_ids"] or "").split(",") if g}),
+                "first_ts": int(r["first_ts"] or 0), "last_ts": int(r["last_ts"] or 0),
+                "thumb": thumbs.get(r["code_hash"], ""),
+                "state": "allow" if allow(text) else ("block" if text in block else ""),
+            })
+        return {
+            "user_id": user_id, "user_name": name_row["user_name"] if name_row else "",
+            "codes": codes, "code_count": len(codes), "total": sum(c["total"] for c in codes),
+            "groups": [{"group_id": g["group_id"], "total": int(g["total"] or 0), "codes": int(g["codes"] or 0),
+                        "last_ts": int(g["last_ts"] or 0)} for g in per_group],
+        }
+
+    # ------------------------------------------------------------------
+    # 大屏（WebUI「码大屏」）：时段汇总、按小时走势、排行
+    # ------------------------------------------------------------------
+    def _cs_screen(self, hours: int = 24, top: int = 10, now: Optional[int] = None) -> dict:
+        """最近 hours 小时（不超过记录保留时长）的发码汇总；另附全部历史的累计人数 / 码数 / 次数。"""
+        self._cl_init_db()
+        now = int(now or time.time())
+        ttl = self._cs_ttl_hours()
+        hours = min(max(int(hours or 24), 1), ttl)
+        since = now - hours * 3600
+        top = min(max(int(top or 10), 1), 50)
+        bad = "SUM(outcome IN ('limit','rule'))"
+        with self._storage._connect() as conn:
+            t = conn.execute(
+                f"SELECT COUNT(*) AS sends, COUNT(DISTINCT code_hash) AS codes, COUNT(DISTINCT user_id) AS users, "
+                f"COUNT(DISTINCT group_id) AS groups, {bad} AS bad, SUM(outcome='allow') AS allowed "
+                f"FROM code_sends WHERE ts>=?", (since,)).fetchone()
+            # 按小时：桶的起点对齐到整点（本地时间由前端换算显示）
+            first_bucket = since - since % 3600
+            buckets = {}
+            for r in conn.execute(
+                    f"SELECT (ts - ts % 3600) AS b, COUNT(*) AS c, {bad} AS bad FROM code_sends WHERE ts>=? GROUP BY b",
+                    (since,)):
+                buckets[int(r["b"])] = (int(r["c"] or 0), int(r["bad"] or 0))
+            series = []
+            b = first_bucket
+            while b <= now:
+                c, x = buckets.get(b, (0, 0))
+                series.append({"ts": b, "sends": c, "bad": x})
+                b += 3600
+            top_codes = conn.execute(
+                f"SELECT code_hash, MAX(code_text) AS text, COUNT(*) AS total, COUNT(DISTINCT user_id) AS users, "
+                f"COUNT(DISTINCT group_id) AS groups, {bad} AS bad, MAX(ts) AS last_ts FROM code_sends WHERE ts>=? "
+                f"GROUP BY code_hash ORDER BY total DESC, last_ts DESC LIMIT ?", (since, top)).fetchall()
+            top_users = conn.execute(
+                f"SELECT user_id, MAX(user_name) AS user_name, COUNT(*) AS total, COUNT(DISTINCT code_hash) AS codes, "
+                f"COUNT(DISTINCT group_id) AS groups, {bad} AS bad, MAX(ts) AS last_ts FROM code_sends WHERE ts>=? "
+                f"GROUP BY user_id ORDER BY total DESC, last_ts DESC LIMIT ?", (since, top)).fetchall()
+            top_groups = conn.execute(
+                f"SELECT group_id, COUNT(*) AS total, COUNT(DISTINCT code_hash) AS codes, COUNT(DISTINCT user_id) AS users, "
+                f"{bad} AS bad FROM code_sends WHERE ts>=? GROUP BY group_id ORDER BY total DESC LIMIT ?",
+                (since, top)).fetchall()
+            hashes = [r["code_hash"] for r in top_codes]
+            thumbs = {}
+            if hashes:
+                marks = ",".join("?" * len(hashes))
+                for r in conn.execute(f"SELECT code_hash, thumb FROM code_thumbs WHERE code_hash IN ({marks})", hashes):
+                    thumbs[r["code_hash"]] = r["thumb"]
+            life = conn.execute("SELECT COUNT(DISTINCT user_id) AS users, COUNT(DISTINCT code_hash) AS codes, "
+                                "SUM(total) AS sends FROM code_user_stats").fetchone()
+        allow = getattr(self, "_code_allowed", lambda _t: False)
+        block = getattr(self, "_code_block_set", lambda: set())()
+
+        def state(text):
+            return "allow" if allow(text) else ("block" if text in block else "")
+
+        return {
+            "hours": hours, "ttl_hours": ttl, "now": now,
+            "totals": {"sends": int(t["sends"] or 0), "codes": int(t["codes"] or 0), "users": int(t["users"] or 0),
+                       "groups": int(t["groups"] or 0), "bad": int(t["bad"] or 0), "allowed": int(t["allowed"] or 0)},
+            "lifetime": {"users": int(life["users"] or 0), "codes": int(life["codes"] or 0),
+                         "sends": int(life["sends"] or 0)},
+            "series": series,
+            "top_codes": [{"code_hash": r["code_hash"], "text": r["text"], "total": int(r["total"] or 0),
+                           "users": int(r["users"] or 0), "groups": int(r["groups"] or 0), "bad": int(r["bad"] or 0),
+                           "last_ts": int(r["last_ts"] or 0), "thumb": thumbs.get(r["code_hash"], ""),
+                           "state": state(r["text"])} for r in top_codes],
+            "top_users": [{"user_id": r["user_id"], "user_name": r["user_name"] or "", "total": int(r["total"] or 0),
+                           "codes": int(r["codes"] or 0), "groups": int(r["groups"] or 0), "bad": int(r["bad"] or 0),
+                           "last_ts": int(r["last_ts"] or 0)} for r in top_users],
+            "top_groups": [{"group_id": r["group_id"], "total": int(r["total"] or 0), "codes": int(r["codes"] or 0),
+                            "users": int(r["users"] or 0), "bad": int(r["bad"] or 0)} for r in top_groups],
+        }

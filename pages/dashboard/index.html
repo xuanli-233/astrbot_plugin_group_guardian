@@ -456,6 +456,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .cb-orig{display:flex;justify-content:center;background:var(--info-light);padding:6px;cursor:zoom-in}
     .cb-orig img{max-width:100%;max-height:240px;border-radius:4px}
     .cb-codes{padding:4px 10px 8px}
+    .mn-chip{display:inline-block;font-size:12px;line-height:18px;padding:0 6px;margin:2px;border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);background:var(--surface)}
     .cb-code{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
     .cb-code:first-child{border-top:none}
     .cb-crop{width:84px;height:84px;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--info-light);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in}
@@ -552,6 +553,67 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .lv-detail.hit{color:var(--danger)}
     .lv-detail.bad{color:var(--warning)}
     .lv-slow{color:var(--warning)}
+
+/* ---- 码大屏：固定深色，适合挂在第二块屏幕上 ---- */
+#tab-bigscreen{--bs-bg:#0b1220;--bs-surface:#111a2e;--bs-border:#22304d;--bs-text:#e6edf3;--bs-muted:#8b9bb4;
+  --bs-pass:#3b8eea;--bs-bad:#f85149;--bs-ok:#3fb950;background:var(--bs-bg);color:var(--bs-text);
+  margin:-24px -32px;padding:20px 24px;min-height:100vh;box-sizing:border-box}
+#tab-bigscreen.active{display:flex;flex-direction:column;gap:14px}
+.bs-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bs-head h1{font-size:24px;margin:0;color:var(--bs-text);letter-spacing:1px}
+.bs-clock{font-size:20px;font-variant-numeric:tabular-nums;color:var(--bs-muted)}
+.bs-head .bs-tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bs-head select,.bs-head button{background:var(--bs-surface);color:var(--bs-text);border:1px solid var(--bs-border);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
+.bs-head button:hover{border-color:var(--bs-pass)}
+.bs-note{font-size:12px;color:var(--bs-muted)}
+.bs-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.bs-kpi{background:var(--bs-surface);border:1px solid var(--bs-border);border-radius:8px;padding:12px 14px}
+.bs-kpi .k{font-size:13px;color:var(--bs-muted)}
+.bs-kpi .v{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:4px}
+.bs-kpi .s{font-size:12px;color:var(--bs-muted)}
+.bs-kpi.bad .v{color:var(--bs-bad)}
+.bs-panel{background:var(--bs-surface);border:1px solid var(--bs-border);border-radius:8px;padding:12px 14px;min-width:0}
+.bs-panel h2{font-size:15px;margin:0 0 10px;color:var(--bs-text);display:flex;align-items:center;gap:10px}
+.bs-panel h2 .bs-note{font-weight:400}
+.bs-legend{display:flex;gap:14px;font-size:12px;color:var(--bs-muted);margin-left:auto}
+.bs-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.bs-chart{position:relative;height:150px;display:flex;align-items:flex-end;gap:2px;padding-bottom:18px}
+.bs-bar{flex:1;display:flex;flex-direction:column-reverse;gap:2px;height:100%;justify-content:flex-start;position:relative;cursor:default;min-width:3px}
+.bs-bar .p{background:var(--bs-pass);border-radius:0}
+.bs-bar .b{background:var(--bs-bad);border-radius:4px 4px 0 0}
+.bs-bar .p.top{border-radius:4px 4px 0 0}
+.bs-bar:hover{background:rgba(255,255,255,.04)}
+.bs-bar .t{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--bs-muted);white-space:nowrap}
+.bs-tip{position:fixed;z-index:9999;background:#1c2740;border:1px solid var(--bs-border);color:var(--bs-text);border-radius:6px;padding:6px 10px;font-size:12px;pointer-events:none;display:none;white-space:nowrap}
+.bs-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.bs-rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.bs-rank li{display:flex;align-items:center;gap:10px;min-width:0;font-size:13px}
+.bs-rank .n{width:20px;text-align:right;color:var(--bs-muted);font-variant-numeric:tabular-nums;flex-shrink:0}
+.bs-rank .main{flex:1;min-width:0}
+.bs-rank .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs-rank .sub{font-size:11px;color:var(--bs-muted)}
+.bs-rank .meter{height:4px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:3px;overflow:hidden}
+.bs-rank .meter span{display:block;height:100%;background:var(--bs-pass);border-radius:2px}
+.bs-rank .cnt{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0}
+.bs-rank img{width:36px;height:36px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0}
+.bs-rank .noimg{width:36px;height:36px;border:1px dashed var(--bs-border);border-radius:4px;flex-shrink:0}
+.bs-tag{font-size:11px;padding:0 5px;border-radius:3px;margin-left:4px;border:1px solid currentColor}
+.bs-tag.block{color:var(--bs-bad)}.bs-tag.allow{color:var(--bs-ok)}
+.bs-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.bs-card{border:1px solid var(--bs-border);border-radius:8px;padding:8px;display:flex;gap:8px;min-width:0;background:rgba(255,255,255,.02)}
+.bs-card.hit{border-color:var(--bs-bad);background:rgba(248,81,73,.08)}
+.bs-card.new{animation:bsFlash 1.6s ease-out}
+@keyframes bsFlash{0%{box-shadow:0 0 0 3px var(--bs-pass)}100%{box-shadow:0 0 0 0 transparent}}
+.bs-card img{width:64px;height:64px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0}
+.bs-card .info{min-width:0;font-size:12px;display:flex;flex-direction:column;gap:2px}
+.bs-card .who{color:var(--bs-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs-card .txt{word-break:break-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bs-card .res{font-weight:600}.bs-card.hit .res{color:var(--bs-bad)}
+.bs-empty{color:var(--bs-muted);font-size:13px;padding:16px 0;text-align:center}
+body.bs-full .sidebar,body.bs-full .mobile-nav,body.bs-full .taskbar{display:none!important}
+body.bs-full .main-content{padding:0}
+body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
+@media (max-width:900px){.bs-cols{grid-template-columns:1fr}#tab-bigscreen{margin:-16px;padding:16px}.bs-kpi .v{font-size:26px}}
   </style>
 </head>
 <body>
@@ -584,6 +646,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
         <a class="nav-item" data-tab="livelog">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
           <span>实时日志</span>
+        </a>
+        <a class="nav-item" data-tab="bigscreen">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM6 15h2v-5H6v5zm4 0h2V7h-2v8zm4 0h2v-3h-2v3z"/></svg>
+          <span>码大屏</span>
         </a>
         <a class="nav-item" data-tab="records">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
@@ -1017,6 +1083,17 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="log-container" id="csTable"><p class="empty">加载中...</p></div>
           <div class="mn-body" style="padding-top:0"><div class="mn-row" id="csPager"></div></div>
         </div>
+        <div class="card">
+          <div class="card-header"><h2>按人统计</h2><span class="rules-subtle">长期累计，不随码记录的保留时长清理</span>
+            <div class="header-actions">
+              <select class="input-sm" id="cuSort" style="width:170px" title="排列顺序"><option value="codes">按发过的码数（多→少）</option><option value="total">按发码总次数（多→少）</option><option value="bad">按被撤回次数（多→少）</option><option value="recent">按最近发码</option></select>
+              <select class="input-sm" id="cuGroup" style="width:180px"><option value="">所有群</option></select>
+              <input class="input-sm" id="cuKeyword" placeholder="QQ号 / 昵称 / 码内容" style="width:170px" />
+              <button class="btn btn-outline btn-sm" id="btnCuFilter">筛选</button>
+            </div></div>
+          <div class="log-container" id="cuTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="cuPager"></div></div>
+        </div>
         <div class="mn-grid">
           <div class="card">
             <div class="card-header"><h2>白名单</h2><span class="rules-subtle" id="csAllowCount"></span></div>
@@ -1035,6 +1112,34 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="tab-panel" id="tab-bigscreen">
+        <div class="bs-head">
+          <h1>码监控大屏</h1><span class="bs-clock" id="bsClock"></span>
+          <div class="bs-tools">
+            <span class="bs-note" id="bsUpdated"></span>
+            <select id="bsHours" title="统计时段"><option value="1">最近 1 小时</option><option value="6">最近 6 小时</option><option value="24" selected>最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select>
+            <button id="btnBsFull" type="button">全屏</button>
+          </div>
+        </div>
+        <div class="bs-note" id="bsNotice" style="display:none"></div>
+        <div class="bs-kpis" id="bsKpis"></div>
+        <div class="bs-panel">
+          <h2>每小时发码次数 <span class="bs-note" id="bsChartNote"></span>
+            <span class="bs-legend"><span><i style="background:var(--bs-pass)"></i>放行</span><span><i style="background:var(--bs-bad)"></i>撤回（规则 + 超限）</span></span></h2>
+          <div class="bs-chart" id="bsChart" role="img" aria-label="每小时发码次数"></div>
+        </div>
+        <div class="bs-cols">
+          <div class="bs-panel"><h2>发得最多的码</h2><ul class="bs-rank" id="bsTopCodes"></ul></div>
+          <div class="bs-panel"><h2>发码最多的人</h2><ul class="bs-rank" id="bsTopUsers"></ul></div>
+          <div class="bs-panel"><h2>发码最多的群</h2><ul class="bs-rank" id="bsTopGroups"></ul></div>
+        </div>
+        <div class="bs-panel">
+          <h2>实时识别 <span class="bs-note">最新在前，每 3 秒更新；红框 = 命中处理（已撤回）</span></h2>
+          <div class="bs-feed" id="bsFeed"></div>
+        </div>
+        <div class="bs-tip" id="bsTip"></div>
       </div>
 
       <div class="tab-panel" id="tab-broadcast">
@@ -1357,8 +1462,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
           <div class="card-header"><h2>设置</h2></div>
           <div class="settings-list" id="leaveLogSwitches"></div>
           <div class="mn-body">
-            <div class="mn-row"><label style="width:150px">保存退群前几条消息</label><input type="number" min="0" max="30" class="input-sm" id="llMsgCount" style="width:100px" /><span class="mn-hint">0–30，0 = 只记退群不存消息</span><button class="btn btn-primary btn-sm" id="btnLlSave">保存</button></div>
-            <p class="mn-hint">消息只记开启之后插件收到的（文字最多 120 字，图片 / 表情 / 卡片写成 [图片] 这样的占位），只存内存；插件重启后靠群历史兜底（最近 100 条）。被撤回的消息群历史里可能已经没有了。</p>
+            <div class="mn-row"><label style="width:150px">保存退群前几条消息</label><input type="number" min="0" max="30" class="input-sm" id="llMsgCount" style="width:100px" /><span class="mn-hint">0–30，0 = 只记退群不存消息</span></div>
+            <div class="mn-row"><label style="width:150px">图片保留</label><input type="number" min="1" max="3650" class="input-sm" id="llImgDays" style="width:100px" /><span class="mn-hint">天（1–3650），到期只删图片</span><button class="btn btn-primary btn-sm" id="btnLlSave">保存</button></div>
+            <p class="mn-hint">消息只记开启之后插件收到的（文字最多 120 字，表情 / 卡片写成 [表情] 这样的占位），只存内存；插件重启后靠群历史兜底（最近 100 条）。被撤回的消息群历史里可能已经没有了。开启「保存图片」后，退群时把这些消息里的图片下载保存（每条最多 4 张），点缩略图看大图；退群前很久发的图片链接可能已失效，会显示「图片未能保存」。</p>
           </div>
         </div>
         <div class="card" id="llUserCard" style="display:none">
@@ -1531,6 +1637,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     <a class="mobile-nav-item" data-tab="livelog">
       <svg viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
       <span>实时日志</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="bigscreen">
+      <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM6 15h2v-5H6v5zm4 0h2V7h-2v8zm4 0h2v-3h-2v3z"/></svg>
+      <span>码大屏</span>
     </a>
     <a class="mobile-nav-item" data-tab="records">
       <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
@@ -2179,6 +2289,7 @@ function switchTab(tabName) {
   if (tabName === 'leavelog') loadLeaveLog(1);
   if (tabName === 'codes') loadCodes(1);
   if (tabName === 'livelog') loadLive();
+  if (tabName === 'bigscreen') loadBigScreen(); else bsSetFull(false);
   if (tabName === 'batch') loadBatch();
   if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
   if (tabName === 'directory') loadDirectory();
@@ -2740,6 +2851,8 @@ var MANUAL_SETTING_KEYS = {
   leave_log_enabled: true,
   leave_log_msg_count: true,
   leave_log_use_history: true,
+  leave_log_save_images: true,
+  leave_log_image_days: true,
   leave_auto_blacklist_times: true,
   leave_auto_blacklist_days: true,
   card_parse_enabled: true,
@@ -3555,7 +3668,8 @@ var MN_SWITCHES = {
   ],
   leaveLogSwitches: [
     { key: 'leave_log_enabled', label: '记录退群', desc: '成员主动退群 / 被踢时写一条记录（总开关）' },
-    { key: 'leave_log_use_history', label: '用群历史兜底', desc: '本地记录不足时（如插件刚重启）额外拉一次最近 100 条群消息' }
+    { key: 'leave_log_use_history', label: '用群历史兜底', desc: '本地记录不足时（如插件刚重启）额外拉一次最近 100 条群消息' },
+    { key: 'leave_log_save_images', label: '保存图片', desc: '退群时把退群前消息里的图片下载保存，下方可设置保留天数' }
   ],
   mmSwitches: [
     { key: 'auto_msg_mask_enabled', label: '进群后自动设置消息提醒', desc: '机器人进新群后，把该群消息设为下面选的方式' }
@@ -3903,7 +4017,84 @@ async function loadCodes(page) {
   var g = $('#csGroup'), cur = g.value;
   g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   g.value = cur;
-  await Promise.all([csLoadStats(), csLoadLists()]);
+  var ug = $('#cuGroup'), ucur = ug.value;
+  ug.innerHTML = g.innerHTML;
+  ug.value = ucur;
+  await Promise.all([csLoadStats(), csLoadLists(), cuLoad()]);
+}
+/* 按人统计（长期累计，code_user_stats） */
+var CU = { page: 1, pageSize: 30, items: [] };
+function cuGroupName(gid) {
+  var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
+  return g && g.group_name ? g.group_name : '';
+}
+async function cuLoad() {
+  var loadEp = beginLoad('codes-users');
+  var res = await safeGet('minimal/codes/users', { sort: $('#cuSort').value, group_id: $('#cuGroup').value,
+    keyword: $('#cuKeyword').value.trim(), page: CU.page, page_size: CU.pageSize });
+  if (!isCurrentLoad('codes-users', loadEp)) return;
+  if (isApiError(res)) { $('#cuTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res);
+  CU.items = d.items || [];
+  $('#cuTable').innerHTML = CU.items.length ? '<table class="mn-table"><thead><tr><th>发送者</th><th>不同的码</th><th>总次数</th><th>群</th><th>首次 / 最近</th><th>操作</th></tr></thead><tbody>' +
+    CU.items.map(function(it, i) {
+      var bad = it.limited + it.ruled;
+      return '<tr><td>' + esc(it.user_id) + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' +
+        '<td><strong>' + it.codes + '</strong> 个</td>' +
+        '<td style="white-space:nowrap"><strong>' + it.total + '</strong>' + (bad ? '<br><span class="mn-hint" style="color:var(--danger)">撤回 ' + bad + '</span>' : '') + '</td>' +
+        '<td>' + it.groups + ' 个</td>' +
+        '<td style="white-space:nowrap"><span class="mn-hint">' + esc(mnTime(it.first_ts)) + '</span><br>' + esc(mnTime(it.last_ts)) + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm" data-cu-user="' + i + '">查看发过的码</button></td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '还没有记录' : '码记录已关闭，不累计') + '</p>';
+  var pages = Math.max(1, Math.ceil((d.total || 0) / CU.pageSize));
+  $('#cuPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 人，第 ' + CU.page + ' / ' + pages + ' 页</span>' +
+    '<button class="btn btn-ghost btn-sm" id="cuPrev"' + (CU.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+    '<button class="btn btn-ghost btn-sm" id="cuNext"' + (CU.page >= pages ? ' disabled' : '') + '>下一页</button>';
+  bindIfExists('cuPrev', function() { CU.page -= 1; cuLoad(); });
+  bindIfExists('cuNext', function() { CU.page += 1; cuLoad(); });
+}
+async function cuShowUser(userId) {
+  var res = await safeGet('minimal/codes/user', { user_id: userId });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var d = mnData(res);
+  CU.detail = d;
+  var groups = (d.groups || []).map(function(g) {
+    return '<span class="mn-chip">' + esc(cuGroupName(g.group_id) || g.group_id) + '：' + g.total + ' 次 / ' + g.codes + ' 个码</span>';
+  }).join('');
+  var rows = (d.codes || []).map(function(c, i) {
+    var tag = c.state === 'allow' ? '<span class="cb-tag allowed">白名单</span>' : (c.state === 'block' ? '<span class="cb-tag blocked">已拉黑</span>' : '');
+    var parts = ['放行 ' + c.passed];
+    if (c.limited) parts.push('<span style="color:var(--danger)">超限 ' + c.limited + '</span>');
+    if (c.ruled) parts.push('<span style="color:var(--danger)">规则 ' + c.ruled + '</span>');
+    if (c.allowed) parts.push('白名单 ' + c.allowed);
+    var short = c.text.length > 120 ? c.text.slice(0, 120) + '…' : c.text;
+    var gs = c.group_ids.map(function(gid) { return esc(cuGroupName(gid) || gid); }).join('、');
+    return '<tr><td style="width:56px">' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" style="width:48px;height:48px;object-fit:contain" />' : '<span class="mn-hint">无图</span>') + '</td>' +
+      '<td style="max-width:300px;word-break:break-all">' + esc(short) + ' ' + tag + '</td>' +
+      '<td style="white-space:nowrap"><strong>' + c.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
+      '<td style="max-width:180px">' + gs + '</td>' +
+      '<td style="white-space:nowrap"><span class="mn-hint">' + esc(mnTime(c.first_ts)) + '</span><br>' + esc(mnTime(c.last_ts)) + '</td>' +
+      '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-cu-act="copy" data-i="' + i + '">复制</button>' +
+      (c.state === 'block' ? '<button class="btn btn-outline btn-sm" data-cu-act="unblock" data-i="' + i + '">解除拉黑</button>'
+        : '<button class="btn btn-danger btn-sm" data-cu-act="block" data-i="' + i + '">拉黑</button>') + '</div></td></tr>';
+  }).join('');
+  showModal('发过的码：' + d.user_id + (d.user_name ? '（' + d.user_name + '）' : ''),
+    '<div class="mn-row" style="margin-bottom:6px"><span>共 <b>' + d.code_count + '</b> 个不同的码，发了 <b>' + d.total + '</b> 次</span></div>' +
+    (groups ? '<div style="margin-bottom:8px">' + groups + '</div>' : '') +
+    '<p class="mn-hint" style="margin-bottom:6px">全部历史累计。缩略图长期保留，原图按「记录和图片保留」时长清理。</p>' +
+    (rows ? '<div id="cuDetailBox" style="max-height:60vh;overflow:auto"><table class="mn-table"><thead><tr><th>码</th><th>内容</th><th>次数</th><th>群</th><th>首次 / 最近</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p class="empty">没有记录</p>'),
+    '<button class="btn btn-primary btn-sm" id="cuDetailClose">关闭</button>');
+  $('#cuDetailClose').addEventListener('click', closeModal);
+  var box = document.getElementById('cuDetailBox');
+  if (box) box.addEventListener('click', function(e) {
+    var b = e.target.closest('[data-cu-act]');
+    if (!b) return;
+    var c = (CU.detail.codes || [])[Number(b.getAttribute('data-i'))];
+    if (!c) return;
+    var act = b.getAttribute('data-cu-act');
+    if (act === 'copy') { cbCopy(c.text); return; }
+    codeListSet('block', c.text, act === 'block').then(function(ok) { if (ok) { csAfterListChange(); cuShowUser(d.user_id); } });
+  });
 }
 async function csLoadStats() {
   var loadEp = beginLoad('codes-stats');
@@ -3936,7 +4127,7 @@ async function csLoadStats() {
           : '<button class="btn btn-danger btn-sm" data-cs-act="block" data-i="' + i + '">拉黑</button>');
       return '<tr><td style="width:60px">' + (it.thumb ? '<img alt="码" src="' + escAttr(it.thumb) + '" style="width:48px;height:48px;object-fit:contain;cursor:pointer" data-cs-act="detail" data-i="' + i + '" />' : '<span class="mn-hint">无图</span>') + '</td>' +
         '<td style="max-width:320px;word-break:break-all">' + esc(short) + ' ' + tag + '</td>' +
-        (byUser ? '<td>' + esc(it.user_id) + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' : '') +
+        (byUser ? '<td><a href="javascript:void(0)" title="查看此人发过的全部码" data-cu-uid="' + escAttr(it.user_id) + '">' + esc(it.user_id) + '</a>' + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' : '') +
         '<td style="white-space:nowrap"><strong>' + it.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
         '<td style="white-space:nowrap">' + it.groups + ' 群 / ' + it.users + ' 人</td>' +
         '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
@@ -3994,6 +4185,8 @@ async function csShowDetail(it) {
   $('#csDetailClose').addEventListener('click', closeModal);
 }
 function csOnClick(e) {
+  var uidLink = e.target.closest('[data-cu-uid]');
+  if (uidLink) { cuShowUser(uidLink.getAttribute('data-cu-uid')); return; }
   var btn = e.target.closest('[data-cs-act]');
   if (btn) {
     var it = CS.items[Number(btn.getAttribute('data-i'))];
@@ -4698,6 +4891,7 @@ async function loadLeaveLog(page) {
   mnRenderSwitches('leaveLogSwitches');
   var mc = mnCfg('leave_log_msg_count');
   $('#llMsgCount').value = (mc === undefined || mc === null || mc === '') ? 10 : mc;
+  $('#llImgDays').value = Number(mnCfg('leave_log_image_days')) || 30;
   var res = await safeGet('minimal/leavelog', { keyword: $('#llKeyword').value.trim(), kind: $('#llKind').value,
     page: LL_STATE.page, page_size: LL_STATE.pageSize });
   if (!isCurrentLoad('leavelog', loadEp)) return;
@@ -4708,12 +4902,13 @@ async function loadLeaveLog(page) {
     items.map(function(r, i) {
       var msgs = r.messages || [];
       var last = msgs.length ? msgs[msgs.length - 1].text : '';
+      var imgCount = msgs.reduce(function(n, m) { return n + (m.images || []).length; }, 0);
       return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td>' +
         '<td><a href="javascript:void(0)" data-ll-user="' + escAttr(r.user_id) + '">' + esc(r.user_id) + '</a>' + (r.nickname ? '<br><span class="mn-hint">' + esc(r.nickname) + '</span>' : '') + '</td>' +
         '<td>' + esc(llGroupName(r.group_id, r.group_name)) + '<br><span class="mn-hint">' + esc(r.group_id) + '</span></td>' +
         '<td>' + esc(r.kind_label) + (r.operator_id ? '<br><span class="mn-hint">操作人 ' + esc(r.operator_id) + '</span>' : '') + '</td>' +
         '<td style="white-space:nowrap">退 ' + (r.user_leaves || 0) + ' 次' + (r.user_kicks ? '<br><span class="mn-hint">被踢 ' + r.user_kicks + ' 次</span>' : '') + '</td>' +
-        '<td style="max-width:360px">' + (msgs.length ? '<a href="javascript:void(0)" data-ll-msgs="' + i + '">' + msgs.length + ' 条</a>' + (r.msg_source ? ' <span class="mn-hint">（' + esc(r.msg_source) + '）</span>' : '') +
+        '<td style="max-width:360px">' + (msgs.length ? '<a href="javascript:void(0)" data-ll-msgs="' + i + '">' + msgs.length + ' 条</a>' + (r.msg_source ? ' <span class="mn-hint">（' + esc(r.msg_source) + '）</span>' : '') + (imgCount ? ' <span class="mn-chip">' + imgCount + ' 张图</span>' : '') +
           '<div class="mn-hint" style="word-break:break-all">最后一条：' + esc(last) + '</div>' : '<span class="mn-hint">没有记录到</span>') + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
   var pages = Math.max(1, Math.ceil((d.total || 0) / LL_STATE.pageSize));
@@ -4730,10 +4925,29 @@ function llShowMessages(r) {
   var body = '<p class="mn-hint" style="margin-bottom:8px">' + esc(r.user_id) + (r.nickname ? '（' + esc(r.nickname) + '）' : '') + ' 于 ' + esc(mnTime(r.ts)) + ' ' + esc(r.kind_label) +
     '：' + esc(llGroupName(r.group_id, r.group_name)) + '（' + esc(r.group_id) + '）</p>' +
     (r.messages || []).map(function(m) {
-      return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="mn-hint">' + esc(mnTime(m.ts)) + '</span><div style="word-break:break-all">' + esc(m.text) + '</div></div>';
+      var pics = (m.thumbs || []).map(function(t) {
+        if (t.expired || !t.thumb) return '<span class="mn-hint" style="display:inline-block;width:80px;height:80px;line-height:80px;text-align:center;border:1px dashed var(--border);border-radius:4px;margin:4px 4px 0 0">图片已清理</span>';
+        return '<img alt="图片" src="' + escAttr(t.thumb) + '" data-ll-img="' + escAttr(t.hash) + '" title="点击看大图" style="max-width:120px;max-height:120px;border-radius:4px;margin:4px 4px 0 0;cursor:zoom-in;border:1px solid var(--border)" />';
+      }).join('');
+      var failed = m.img_failed ? '<div class="mn-hint">' + m.img_failed + ' 张图片未能保存（链接已失效或下载失败）</div>' : '';
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="mn-hint">' + esc(mnTime(m.ts)) + '</span><div style="word-break:break-all">' + esc(m.text) + '</div>' +
+        (pics ? '<div>' + pics + '</div>' : '') + failed + '</div>';
     }).join('');
-  showModal('退群前的消息', body, '<button class="btn btn-ghost btn-sm" id="btnLlMsgClose">关闭</button>');
+  showModal('退群前的消息', '<div id="llMsgBox">' + body + '</div>', '<button class="btn btn-ghost btn-sm" id="btnLlMsgClose">关闭</button>');
   $('#btnLlMsgClose').addEventListener('click', closeModal);
+  $('#llMsgBox').addEventListener('click', function(e) {
+    var img = e.target.closest('[data-ll-img]');
+    if (img) llShowImage(img.getAttribute('data-ll-img'), r);
+  });
+}
+async function llShowImage(hash, r) {
+  var res = await safeGet('minimal/leavelog/image', { hash: hash });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var d = mnData(res);
+  showModal('图片', '<div style="text-align:center"><img alt="图片" src="' + escAttr(d.image) + '" style="max-width:100%;max-height:75vh" /></div>',
+    '<button class="btn btn-ghost btn-sm" id="btnLlImgBack">返回消息</button><button class="btn btn-primary btn-sm" id="btnLlImgClose">关闭</button>');
+  $('#btnLlImgBack').addEventListener('click', function() { llShowMessages(r); });
+  $('#btnLlImgClose').addEventListener('click', closeModal);
 }
 async function llShowUser(uid) {
   var res = await safeGet('minimal/leavelog/user', { user_id: uid });
@@ -5154,6 +5368,159 @@ function liveSetView(view) {
   $('#lvView').style.display = LIVE_VIEW === 'board' ? 'none' : '';
   $$('#tab-livelog .lv-view').forEach(function(el) { el.style.display = LIVE_VIEW === 'board' ? 'none' : ''; });
   if (LIVE_VIEW === 'board') { clearTimeout(LIVE.timer); loadCodeBoard(); } else { clearTimeout(CB.timer); livePoll(); }
+}
+
+/* ---- 码大屏 ---- */
+var BS = { statsTimer: null, feedTimer: null, clockTimer: null, epoch: 0, seq: 0, map: {}, ids: [], seen: {}, names: {}, inflight: false, feedInflight: false, first: true };
+function bsActive() {
+  var p = $('#tab-bigscreen');
+  return !!(p && p.classList.contains('active') && !document.hidden);
+}
+function bsNum(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+function bsClock() {
+  var d = new Date(), pad = function(x) { return (x < 10 ? '0' : '') + x; };
+  $('#bsClock').textContent = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+async function loadBigScreen() {
+  if (!MN.overview) await mnLoadOverview();
+  mnGroups().forEach(function(g) { if (g.group_name) BS.names[g.group_id] = g.group_name; });
+  clearInterval(BS.clockTimer); bsClock(); BS.clockTimer = setInterval(function() { if (bsActive()) bsClock(); }, 1000);
+  bsLoadStats(); bsPollFeed();
+}
+async function bsLoadStats() {
+  clearTimeout(BS.statsTimer); BS.statsTimer = null;
+  if (!bsActive() || BS.inflight) return;
+  BS.inflight = true;
+  try {
+    var res = await safeGet('minimal/codes/screen', { hours: $('#bsHours').value, top: 10 });
+    if (isApiError(res)) { $('#bsUpdated').textContent = '获取失败：' + mnErr(res); return; }
+    bsRender(mnData(res) || {});
+    var d = new Date();
+    $('#bsUpdated').textContent = '统计更新于 ' + d.toTimeString().slice(0, 8);
+  } finally {
+    BS.inflight = false;
+    if (bsActive()) BS.statsTimer = setTimeout(bsLoadStats, 15000);
+  }
+}
+function bsRender(d) {
+  var t = d.totals || {}, life = d.lifetime || {};
+  var notes = [];
+  if (!d.wxcode_enabled) notes.push('葵花码 / 二维码识别没有开启（「关键词与识别」页面），不会有新的数据。');
+  if (!d.store_enabled) notes.push('码记录已关闭（「码管理」页面），统计不会增加。');
+  if (Number($('#bsHours').value) > d.hours) notes.push('码记录只保留 ' + d.ttl_hours + ' 小时，按最近 ' + d.hours + ' 小时统计（可在「码管理 → 记录和图片保留」调长）。');
+  $('#bsNotice').style.display = notes.length ? '' : 'none';
+  $('#bsNotice').textContent = notes.join(' ');
+  var kpi = function(k, v, s, cls) { return '<div class="bs-kpi' + (cls ? ' ' + cls : '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + bsNum(v) + '</div><div class="s">' + s + '</div></div>'; };
+  $('#bsKpis').innerHTML =
+    kpi('发码次数', t.sends, '最近 ' + d.hours + ' 小时') +
+    kpi('撤回次数', t.bad, t.sends ? '占 ' + Math.round(t.bad * 100 / t.sends) + '%' : '规则 + 超限', 'bad') +
+    kpi('不同的码', t.codes, '白名单放行 ' + bsNum(t.allowed) + ' 次') +
+    kpi('发码人数', t.users, '涉及 ' + bsNum(t.groups) + ' 个群') +
+    kpi('累计发码人', life.users, '全部历史，共 ' + bsNum(life.codes) + ' 个码 / ' + bsNum(life.sends) + ' 次');
+  bsRenderChart(d.series || []);
+  var topCodes = d.top_codes || [], topUsers = d.top_users || [], topGroups = d.top_groups || [];
+  var maxOf = function(list) { return list.reduce(function(m, x) { return Math.max(m, x.total); }, 1); };
+  var meter = function(v, max) { return '<div class="meter"><span style="width:' + Math.max(2, Math.round(v * 100 / max)) + '%"></span></div>'; };
+  var mc = maxOf(topCodes), mu = maxOf(topUsers), mg = maxOf(topGroups);
+  $('#bsTopCodes').innerHTML = topCodes.length ? topCodes.map(function(c, i) {
+    var tag = c.state === 'block' ? '<span class="bs-tag block">已拉黑</span>' : (c.state === 'allow' ? '<span class="bs-tag allow">白名单</span>' : '');
+    return '<li><span class="n">' + (i + 1) + '</span>' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" />' : '<span class="noimg"></span>') +
+      '<div class="main"><div class="name" title="' + escAttr(c.text) + '">' + esc(c.text) + tag + '</div><div class="sub">' + c.users + ' 人 · ' + c.groups + ' 群' + (c.bad ? ' · 撤回 ' + c.bad : '') + '</div>' + meter(c.total, mc) + '</div>' +
+      '<span class="cnt">' + bsNum(c.total) + '</span></li>';
+  }).join('') : '<li class="bs-empty">这段时间没有码</li>';
+  $('#bsTopUsers').innerHTML = topUsers.length ? topUsers.map(function(u, i) {
+    return '<li><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(u.user_name || u.user_id) + (u.user_name ? ' <span class="sub">' + esc(u.user_id) + '</span>' : '') + '</div>' +
+      '<div class="sub">' + u.codes + ' 个码 · ' + u.groups + ' 群' + (u.bad ? ' · 撤回 ' + u.bad : '') + '</div>' + meter(u.total, mu) + '</div><span class="cnt">' + bsNum(u.total) + '</span></li>';
+  }).join('') : '<li class="bs-empty">这段时间没有人发码</li>';
+  $('#bsTopGroups').innerHTML = topGroups.length ? topGroups.map(function(g, i) {
+    if (g.group_name) BS.names[g.group_id] = g.group_name;
+    return '<li><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(g.group_name || g.group_id) + '</div>' +
+      '<div class="sub">' + g.users + ' 人 · ' + g.codes + ' 个码' + (g.bad ? ' · 撤回 ' + g.bad : '') + '</div>' + meter(g.total, mg) + '</div><span class="cnt">' + bsNum(g.total) + '</span></li>';
+  }).join('') : '<li class="bs-empty">这段时间没有群出现码</li>';
+}
+function bsRenderChart(series) {
+  var box = $('#bsChart');
+  var max = series.reduce(function(m, x) { return Math.max(m, x.sends); }, 0);
+  $('#bsChartNote').textContent = max ? '峰值 ' + bsNum(max) + ' 次 / 小时' : '';
+  if (!max) { box.innerHTML = '<div class="bs-empty" style="width:100%">这段时间没有发码</div>'; return; }
+  var every = Math.max(1, Math.ceil(series.length / 12));
+  box.innerHTML = series.map(function(x, i) {
+    var pass = x.sends - x.bad;
+    var hp = pass ? Math.max(2, pass * 100 / max) : 0, hb = x.bad ? Math.max(2, x.bad * 100 / max) : 0;
+    var d = new Date(x.ts * 1000), label = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':00';
+    var showDay = d.getHours() === 0 || i === 0;
+    var tick = i % every === 0 ? '<span class="t">' + (showDay && series.length > 24 ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' : '') + label + '</span>' : '';
+    return '<div class="bs-bar" data-bs-i="' + i + '">' +
+      (hp ? '<div class="p' + (hb ? '' : ' top') + '" style="height:' + hp + '%"></div>' : '') +
+      (hb ? '<div class="b" style="height:' + hb + '%"></div>' : '') + tick + '</div>';
+  }).join('');
+  BS.series = series;
+}
+function bsTipMove(e) {
+  var bar = e.target.closest('[data-bs-i]'), tip = $('#bsTip');
+  if (!bar || !BS.series) { tip.style.display = 'none'; return; }
+  var x = BS.series[Number(bar.getAttribute('data-bs-i'))];
+  if (!x) return;
+  var d = new Date(x.ts * 1000), pad = function(v) { return (v < 10 ? '0' : '') + v; };
+  tip.innerHTML = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':00–' + pad((d.getHours() + 1) % 24) + ':00<br>发码 <b>' + bsNum(x.sends) + '</b> 次：放行 ' + bsNum(x.sends - x.bad) + '，撤回 ' + bsNum(x.bad);
+  tip.style.display = 'block';
+  var w = tip.offsetWidth;
+  tip.style.left = Math.min(window.innerWidth - w - 8, e.clientX + 12) + 'px';
+  tip.style.top = (e.clientY - 48) + 'px';
+}
+async function bsPollFeed() {
+  clearTimeout(BS.feedTimer); BS.feedTimer = null;
+  if (!bsActive() || BS.feedInflight) return;
+  BS.feedInflight = true;
+  try {
+    var res = await safeGet('minimal/codeboard', { since: BS.seq, epoch: BS.epoch });
+    if (isApiError(res)) return;
+    var d = mnData(res) || {};
+    if (d.reset) BS.map = {};
+    BS.epoch = d.epoch; BS.seq = d.seq; BS.ids = d.ids || [];
+    Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) BS.names[k] = d.group_names[k]; });
+    (d.items || []).forEach(function(e) {
+      var old = BS.map[e.id];
+      if (old && !e.orig) { e.orig = old.orig; (e.codes || []).forEach(function(c, i) { if (old.codes[i]) c.crop = old.codes[i].crop; }); }
+      BS.map[e.id] = e;
+    });
+    var keep = {}; BS.ids.forEach(function(id) { keep[id] = true; });
+    Object.keys(BS.map).forEach(function(id) { if (!keep[id]) delete BS.map[id]; });
+    bsRenderFeed();
+  } finally {
+    BS.feedInflight = false;
+    if (bsActive()) BS.feedTimer = setTimeout(bsPollFeed, 3000);
+  }
+}
+function bsRenderFeed() {
+  var all = BS.ids.slice().reverse().map(function(id) { return BS.map[id]; }).filter(function(e) { return e && (e.codes || []).length; }).slice(0, 24);
+  if (!all.length) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">还没有识别到码。二维码看板需要开启（「实时日志 → 二维码看板」设置）。</div>'; BS.first = false; return; }
+  $('#bsFeed').innerHTML = all.map(function(e) {
+    var c = (e.codes || []).filter(function(x) { return x.decoded; })[0] || e.codes[0];
+    var isNew = !BS.first && !BS.seen[e.id];
+    BS.seen[e.id] = true;
+    var img = c.crop || e.orig;
+    var res = e.outcome === 'hit' ? ('已撤回' + (e.reason ? '：' + e.reason : '')) : '放行';
+    var more = e.codes.length > 1 ? ' 等 ' + e.codes.length + ' 个码' : '';
+    return '<div class="bs-card' + (e.outcome === 'hit' ? ' hit' : '') + (isNew ? ' new' : '') + '">' +
+      (img ? '<img alt="码" src="' + escAttr(img) + '" />' : '') +
+      '<div class="info"><div class="who">' + esc(liveTime(e.ts)) + ' · ' + esc(BS.names[e.group_id] || e.group_id) + '</div>' +
+      '<div class="who">' + esc(e.user_name || e.user_id) + (e.user_name ? '（' + esc(e.user_id) + '）' : '') + '</div>' +
+      '<div class="txt">' + esc(c.decoded ? c.text : (c.error || '未能解出')) + esc(more) + '</div>' +
+      '<div class="res">' + esc(res) + '</div></div></div>';
+  }).join('');
+  BS.first = false;
+}
+function bsSetFull(on) {
+  document.body.classList.toggle('bs-full', !!on);
+  var btn = document.getElementById('btnBsFull');
+  if (btn) btn.textContent = on ? '退出全屏' : '全屏';
+  if (on) {
+    var el = document.documentElement;
+    try { if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(function() {}); } catch (e) {}
+  } else if (document.fullscreenElement && document.exitFullscreen) {
+    try { document.exitFullscreen().catch(function() {}); } catch (e) {}
+  }
 }
 
 /* ---- 二维码看板 ---- */
@@ -5683,6 +6050,22 @@ function initMinimalPages() {
   bindIfExists('btnCsBlockAdd', function() { var t = $('#csBlockAdd').value.trim(); if (!t) return; codeListSet('block', t, true, true).then(function(ok) { if (ok) { $('#csBlockAdd').value = ''; csAfterListChange(); } }); });
   var tabCodes = document.getElementById('tab-codes');
   if (tabCodes) tabCodes.addEventListener('click', csOnClick);
+  bindIfExists('btnCuFilter', function() { CU.page = 1; cuLoad(); });
+  bindIfExists('btnBsFull', function() { bsSetFull(!document.body.classList.contains('bs-full')); });
+  var bsHours = document.getElementById('bsHours');
+  if (bsHours) bsHours.addEventListener('change', function() { bsLoadStats(); });
+  var bsChart = document.getElementById('bsChart');
+  if (bsChart) { bsChart.addEventListener('mousemove', bsTipMove); bsChart.addEventListener('mouseleave', function() { $('#bsTip').style.display = 'none'; }); }
+  document.addEventListener('keydown', function(ev) { if (ev.key === 'Escape' && document.body.classList.contains('bs-full')) bsSetFull(false); });
+  document.addEventListener('visibilitychange', function() { if (bsActive()) { bsLoadStats(); bsPollFeed(); } });
+  ['cuSort', 'cuGroup'].forEach(function(id) { var el = document.getElementById(id); if (el) el.addEventListener('change', function() { CU.page = 1; cuLoad(); }); });
+  var cuKw = document.getElementById('cuKeyword');
+  if (cuKw) cuKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { CU.page = 1; cuLoad(); } });
+  var cuTable = document.getElementById('cuTable');
+  if (cuTable) cuTable.addEventListener('click', function(e) {
+    var b = e.target.closest('[data-cu-user]');
+    if (b) { var it = CU.items[Number(b.getAttribute('data-cu-user'))]; if (it) cuShowUser(it.user_id); }
+  });
   bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
   bindIfExists('btnLlFilter', function() { loadLeaveLog(1); });
   bindIfExists('btnLlUserClose', function() { $('#llUserCard').style.display = 'none'; });
@@ -5690,8 +6073,10 @@ function initMinimalPages() {
   if (llKw) llKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') loadLeaveLog(1); });
   bindIfExists('btnLlSave', function() {
     var n = Number($('#llMsgCount').value);
-    if (!(n >= 0 && n <= 30) || Math.floor(n) !== n) { toast('填 0–30 的整数', 'warning'); return; }
-    mnSaveConfig({ leave_log_msg_count: n }, '已保存');
+    var days = Number($('#llImgDays').value);
+    if (!(n >= 0 && n <= 30) || Math.floor(n) !== n) { toast('消息条数填 0–30 的整数', 'warning'); return; }
+    if (!(days >= 1 && days <= 3650) || Math.floor(days) !== days) { toast('图片保留天数填 1–3650 的整数', 'warning'); return; }
+    mnSaveConfig({ leave_log_msg_count: n, leave_log_image_days: days }, '已保存');
   });
   bindIfExists('btnLabSave', function() {
     var t = Number($('#labTimes').value), dd = Number($('#labDays').value);

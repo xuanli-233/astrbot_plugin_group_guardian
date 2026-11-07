@@ -227,5 +227,119 @@ class LeaveLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(h._ll_names()), 3)
 
 
+def _png(color="red"):
+    try:
+        from PIL import Image
+    except Exception:
+        return b"\x89PNG fake"
+    import io
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+class _ImageHarness(_Harness):
+    """带图片下载的替身：http://ok* 能下载；http://dead 失效，走 get_image 取协议端本地缓存。"""
+
+    def __init__(self, cfg=None, local_file=""):
+        super().__init__(cfg)
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self._data_dir = self._tmp.name
+        self.local_file = local_file
+        self.get_image_calls = []
+        self.downloads = []
+
+    async def _download_bytes(self, url, max_bytes=0, timeout=0):
+        self.downloads.append(url)
+        if url.startswith("http://ok"):
+            return _png("blue" if url.endswith("2") else "red")
+        return None
+
+    async def _call_group_api_result(self, client, action, name="", **kw):
+        if action == "get_image":
+            self.get_image_calls.append(kw.get("file"))
+            return (True, {"file": self.local_file}, "") if self.local_file else (False, None, "not found")
+        return await super()._call_group_api_result(client, action, name, **kw)
+
+
+def _img_seg(url, file="f.jpg"):
+    return {"type": "image", "data": {"url": url, "file": file}}
+
+
+class ImageTests(unittest.IsolatedAsyncioTestCase):
+    def test_extract_images_from_segments_and_cq(self):
+        ext = leave_log.LeaveLogMixin._ll_extract_images
+        self.assertEqual(ext([{"type": "text", "data": {"text": "x"}}, _img_seg("http://a"),
+                              {"type": "mface", "data": {"url": "http://m"}}]),
+                         [{"url": "http://a", "file": "f.jpg"}, {"url": "http://m", "file": ""}])
+        self.assertEqual(ext("看[CQ:image,file=abc.jpg,url=http://q?a=1&amp;b=2]"),
+                         [{"url": "http://q?a=1&b=2", "file": "abc.jpg"}])
+        self.assertEqual(len(ext([_img_seg(f"http://{i}") for i in range(10)])),
+                         leave_log.LeaveLogMixin.LEAVE_LOG_IMG_PER_MSG)
+
+    async def _leave_with(self, h, segments_list):
+        now = int(time.time())
+        for i, segs in enumerate(segments_list):
+            h._ll_track_event(_msg(i + 1, "", now - 10 + i, segments=segs))
+        await h._handle_leave_log(_leave())
+        await asyncio.gather(*list(getattr(h, "_ll_tasks", set())))
+        items, _ = h._ll_list()
+        return items[0]["messages"]
+
+    async def test_images_saved_with_thumbs_and_viewable(self):
+        h = _ImageHarness()
+        msgs = await self._leave_with(h, [
+            [{"type": "text", "data": {"text": "看图"}}, _img_seg("http://ok1"), _img_seg("http://ok2")],
+            [{"type": "text", "data": {"text": "纯文字"}}],
+        ])
+        self.assertEqual(msgs[0]["text"], "看图[图片][图片]")
+        self.assertEqual(len(msgs[0]["images"]), 2)
+        self.assertNotIn("imgs", msgs[0])  # 图片地址不写进数据库
+        self.assertEqual([t["expired"] for t in msgs[0]["thumbs"]], [False, False])
+        self.assertTrue(h._ll_read_image(msgs[0]["images"][0]).startswith("data:image/"))
+        self.assertNotIn("images", msgs[1])
+        with h._storage._connect() as conn:
+            raw = conn.execute("SELECT messages FROM leave_logs").fetchone()["messages"]
+        self.assertNotIn("http://ok1", raw)
+
+    async def test_dead_link_falls_back_to_get_image_local_file(self):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        path = os.path.join(tmp.name, "cache.png")
+        with open(path, "wb") as f:
+            f.write(_png("green"))
+        h = _ImageHarness(local_file=path)
+        msgs = await self._leave_with(h, [[_img_seg("http://dead", file="abc")]])
+        self.assertEqual(h.get_image_calls, ["abc"])
+        self.assertEqual(len(msgs[0]["images"]), 1)
+        tmp.cleanup()
+
+    async def test_failed_image_is_counted(self):
+        h = _ImageHarness()
+        msgs = await self._leave_with(h, [[_img_seg("http://dead"), _img_seg("http://ok1")]])
+        self.assertEqual((len(msgs[0]["images"]), msgs[0]["img_failed"]), (1, 1))
+
+    async def test_switch_off_saves_nothing_and_drops_urls(self):
+        h = _ImageHarness({"leave_log_save_images": False})
+        msgs = await self._leave_with(h, [[_img_seg("http://ok1")]])
+        self.assertEqual(h.downloads, [])
+        self.assertNotIn("images", msgs[0])
+        self.assertNotIn("imgs", msgs[0])
+
+    async def test_clean_removes_old_images(self):
+        h = _ImageHarness({"leave_log_image_days": 1})
+        msgs = await self._leave_with(h, [[_img_seg("http://ok1")]])
+        hsh = msgs[0]["images"][0]
+        self.assertEqual(h._ll_clean_images(int(time.time()) + 2 * 86400), 1)
+        self.assertEqual(h._ll_read_image(hsh), "")
+        items, _ = h._ll_list()
+        self.assertTrue(items[0]["messages"][0]["thumbs"][0]["expired"])
+
+    def test_read_image_rejects_bad_hash(self):
+        h = _ImageHarness()
+        self.assertEqual(h._ll_read_image("../../etc/passwd"), "")
+
+
 if __name__ == "__main__":
     unittest.main()

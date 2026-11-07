@@ -226,6 +226,77 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(left, ["new"])
 
 
+class UserStatsTests(unittest.TestCase):
+    """按人长期累计（code_user_stats）：不随码记录清理，按人汇总、按人看全部码。"""
+
+    def test_user_totals_survive_cleanup(self):
+        h = _Harness({"code_limit_window_hours": 2, "code_limit_max": 100})
+        h._cl_process("1", "a", ["x"], now=T0 - 10 * HOUR, user_name="甲")
+        h._cl_process("2", "a", ["x", "y"], now=T0 - 1 * HOUR, user_name="甲改名")
+        h._cl_process("1", "b", ["x"], now=T0, user_name="乙")
+        h._cs_clean(T0)  # 4 小时前的 code_sends 被清理
+        items, total = h._cu_users()
+        self.assertEqual(total, 2)
+        a = next(i for i in items if i["user_id"] == "a")
+        self.assertEqual((a["codes"], a["total"], a["groups"], a["passed"]), (2, 3, 2, 3))
+        self.assertEqual(a["user_name"], "甲改名")
+        self.assertEqual(items[0]["user_id"], "a")  # 默认按不同码数排序
+        detail = h._cu_user_detail("a")
+        self.assertEqual(detail["code_count"], 2)
+        x = next(c for c in detail["codes"] if c["text"] == "x")
+        self.assertEqual((x["total"], x["group_ids"]), (2, ["1", "2"]))
+        self.assertEqual({g["group_id"]: g["total"] for g in detail["groups"]}, {"1": 1, "2": 2})
+
+    def test_outcomes_keyword_group_and_sort(self):
+        h = _Harness({"code_limit_max": 1})
+        h._cl_process("1", "a", ["c"], now=T0)
+        h._cl_process("1", "a", ["c"], now=T0 + 1)  # 超限
+        h._cs_log_rule("1", "b", "", ["zzz"])  # 规则撤回
+        h._cl_process("2", "b", ["d"], now=T0 + 2)
+        by_bad, _ = h._cu_users(sort="bad")
+        a = next(i for i in by_bad if i["user_id"] == "a")
+        self.assertEqual((a["passed"], a["limited"]), (1, 1))
+        # 关键词按码内容：挑出发过 zzz 的人，汇总仍含此人全部的码
+        items, total = h._cu_users(keyword="zzz")
+        self.assertEqual((total, items[0]["user_id"], items[0]["codes"]), (1, "b", 2))
+        items, total = h._cu_users(group_id="2")
+        self.assertEqual((total, items[0]["user_id"], items[0]["codes"]), (1, "b", 1))
+        self.assertEqual(h._cu_users(keyword="a")[1], 1)  # QQ 号完全一致
+        self.assertEqual(h._cu_user_detail("nobody")["codes"], [])
+
+    def test_screen_totals_series_and_ranking(self):
+        h = _Harness({"code_limit_max": 1, "code_store_ttl_hours": 48})
+        h._cl_process("1", "a", ["c"], now=T0 - 2 * HOUR, user_name="甲")
+        h._cl_process("1", "a", ["c"], now=T0 - 2 * HOUR + 1)  # 超限
+        h._cl_process("2", "b", ["d"], now=T0 - 30)
+        h._cl_process("2", "b", ["old"], now=T0 - 30 * HOUR)  # 不在 24 小时内
+        d = h._cs_screen(hours=24, now=T0)
+        self.assertEqual(d["hours"], 24)
+        self.assertEqual(d["totals"], {"sends": 3, "codes": 2, "users": 2, "groups": 2, "bad": 1, "allowed": 0})
+        self.assertEqual(sum(x["sends"] for x in d["series"]), 3)
+        self.assertEqual(sum(x["bad"] for x in d["series"]), 1)
+        self.assertEqual(len(d["series"]), 25)  # 起点所在整点到当前整点
+        self.assertEqual([c["text"] for c in d["top_codes"]], ["c", "d"])
+        self.assertEqual(d["top_users"][0]["user_id"], "a")
+        self.assertEqual(d["lifetime"]["sends"], 4)
+        # 超过保留时长的时段按保留时长算
+        self.assertEqual(h._cs_screen(hours=168, now=T0)["hours"], 48)
+
+    def test_backfill_from_existing_records(self):
+        h = _Harness()
+        h._cl_init_db()
+        with h._storage._connect() as conn:  # 模拟升级前：只有 code_sends 有数据，还没有累计表
+            conn.execute("DROP TABLE code_user_stats")
+            conn.execute("DELETE FROM code_sends")
+            conn.execute("INSERT INTO code_sends(ts, group_id, user_id, code_hash, code_text, outcome) "
+                         "VALUES(?,?,?,?,?,?)", (T0, "1", "a", h._cl_hash("old"), "old", "rule"))
+            conn.commit()
+        h._cl_db_ready = False
+        h._cl_init_db()
+        detail = h._cu_user_detail("a")
+        self.assertEqual((detail["code_count"], detail["codes"][0]["ruled"]), (1, 1))
+
+
 def _png():
     image = Image.new("RGB", (200, 200), "white")
     buf = io.BytesIO()

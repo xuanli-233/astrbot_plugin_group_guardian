@@ -29,7 +29,9 @@
 | 群名任务 | 各群群名一览，勾选群改后缀（立即 / 定时）、设置 / 停止 / 刷新倒计时；「刷新群列表」从 QQ 重新拉取所有群的最新群名；每行「改名」直接修改当前群名 |
 | 踢人与黑名单 | 跨群踢人 / 踢出并拉黑（拉黑必须填原因）、自动拉黑开关、插件用户黑名单（显示拉黑原因、来源、时间） |
 | 重复成员 | 同一 QQ 号在 2 个及以上勾选的群里：显示头像、所在的群与入群时间。默认逐个「处理」：先选「只保留一个群」（默认最早加入的群，可选被踢群 QQ 拉黑）或「全部踢出」（可选加入插件黑名单）并填原因，再确认一次要踢的群；也可打开「批量处理」一次处理多人（同样二次确认）；「忽略」 |
-| 退群记录 | 每次退群 / 被踢：时间、群、方式、退群前的消息；点 QQ 号看此人一共退过几次、退过哪些群 |
+| 退群记录 | 每次退群 / 被踢：时间、群、方式、退群前的消息（含图片缩略图，点开看大图）；点 QQ 号看此人一共退过几次、退过哪些群 |
+| 码管理 | 码统计（按码 / 按码 + 人）、**按人统计**（长期累计：每个人发过哪些码、各几次、在哪些群，不随码记录清理）、白名单 / 黑名单、发送次数限制 |
+| 码大屏 | 深色全屏监控页：时段内发码次数 / 撤回次数 / 不同的码 / 发码人数、全部历史累计、每小时走势、发得最多的码 / 人 / 群、实时识别流（每 3 秒）；「全屏」隐藏侧边栏 |
 | 操作记录 | 插件执行的所有写操作，可按操作类型、来源、QQ 号 / 群号 / 原因筛选 |
 | 群成员缓存 | 各群缓存状态、手动刷新、缓存有效期与接口间隔设置、查找某个 QQ 号在哪些群 |
 
@@ -173,7 +175,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 10 | **关键词撤回 → 葵花码 / 二维码识别 → OCR 文字**（`keyword_guard.py`，见第零节） | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回，可选禁言（`hit_mute_enabled`，时长 `moderation_ban_duration`） |
 | 10.5 | **码白名单**：`wxcode_allow_codes` 里的码（内容完全一致）一律放行，不按正则撤回、不计次；与黑名单 `wxcode_block_codes` 互斥 | — | 空 | 放行 |
 | 10.6 | **同一个码的发送次数**：解出的码没命中规则时计次，`code_limit_window_hours` 小时内超过 `code_limit_max` 次撤回（`code_limit.py`） | `code_limit_enabled`、`code_limit_scope`（global 所有群合计 / group 每群单独）、`code_limit_count_by`（code 按码 / user 按人）、`code_limit_warn_enabled` + `code_limit_warn_template` | 默认关；5 小时 3 次，按码，警告开 | 同上，另发警告 |
-| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_store_ttl_hours` 小时后自动删除（0 = `code_limit_window_hours × 2`，不短于统计窗口）；WebUI「码管理」查看 | `code_store_enabled`、`code_image_max_kb`、`code_store_ttl_hours` | 开；500KB；0 | — |
+| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_store_ttl_hours` 小时后自动删除（0 = `code_limit_window_hours × 2`，不短于统计窗口）；WebUI「码管理」查看。同时按 (人, 码, 群) 长期累计到 `code_user_stats`（不随上面的保留时长清理），每个码在 `code_thumbs` 留一张小缩略图，供「按人统计」使用；升级后第一次启动会把还没清理的 `code_sends` 补进累计 | `code_store_enabled`、`code_image_max_kb`、`code_store_ttl_hours` | 开；500KB；0 | — |
 
 每一步都会写入实时日志（`live_log.py`）。
 
@@ -220,6 +222,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 踢黑名单时 QQ 原生拉黑 | `onebot.py:_kick_member` | `blacklist_native_block_enabled` | 启用 |
 | 退群自动拉黑（全群通用）：`leave_auto_blacklist_days` 天内主动退群达到 `leave_auto_blacklist_times` 次才拉黑（按退群记录计次，被踢不算；次数 1 = 一退群就拉黑。协议端上报为主动退群但操作人是别人时按被踢算；同一次退群的重复通知——同群、同人、同操作人、同一秒——只记一次） | `group_blacklist.py` | `leave_auto_blacklist_enabled`、`_times`、`_days` | 默认关；30 天 3 次 |
 | 退群记录：主动退群 / 被踢时记录时间、群、方式、操作人和退群前最近 N 条消息（摘要只存内存，不足时群历史兜底），WebUI「退群记录」按 QQ / 群查询、看某人汇总 | `leave_log.py`（表 `leave_logs`，保留 5 万条） | `leave_log_enabled`、`leave_log_msg_count`、`leave_log_use_history` | 默认开，10 条 |
+| 退群记录图片：记录消息时顺带记下图片地址（每条最多 4 张，只在内存）；退群时后台下载、压缩到 500KB 以内存到数据目录 `leave_images/`，链接失效时用 `get_image` 向协议端取本地缓存；WebUI 显示缩略图、点开看大图；保留 `leave_log_image_days` 天后只删图片 | `leave_log.py`（表 `leave_images`） | `leave_log_save_images`、`leave_log_image_days` | 默认开；30 天 |
 | 自动同意好友申请 / 自动接受进群邀请 | `auto_accept.py`（main `_on_friend_request`、`_on_group_request` 先于入群审核处理 invite） | `auto_accept_friend_enabled` / `_friend_scope`（all / admin / whitelist）、`auto_accept_invite_enabled` / `_invite_scope`（admin / all / whitelist）、白名单 `auto_accept_{friend,invite}_wl_users` / `_wl_groups`、`auto_accept_delay_seconds` | 都默认关；邀请默认仅接受插件管理员的；黑名单用户好友申请拒绝、邀请不接受；不在范围内的留给人工。白名单 = 插件管理员 + 白名单 QQ + 成员来源群（`_wl_groups`，从这些群提取群成员）的群成员，好友申请和邀请各一套，不在白名单的不处理；只决定是否自动通过，与管理范围的群白名单 / 群黑名单无关；群成员先查本地缓存，没找到时把超过 60 秒没拉取的成员来源群重新拉一次成员列表再比对（每群 60 秒最多一次）。WebUI「踢人与黑名单」可测试某个 QQ 能否通过（接口 `/minimal/accept/check`） |
 | 二维码看板：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |
 | 实时日志：WebUI 查看近期消息处理进度与耗时 | `live_log.py`、`web_minimal.py:_web_minimal_livelog` | `live_log_enabled`、`live_log_show_text`、`live_log_size` | 默认开（只存内存，300 条） |
@@ -274,7 +277,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 ## 八、WebUI 管理面板（`web.py` + `web_minimal.py` + `pages/dashboard/index.html`）
 
-侧边栏分组：消息审核（关键词与识别、码管理、实时日志、违规记录）、成员管理（踢人与黑名单、重复成员、退群记录、入群审核、定时解禁）、群运营（批量公告、群名任务、批量任务）、系统（群成员缓存、操作记录、权限管理、多群配置、设置）。第零节以外的页面：
+侧边栏分组：消息审核（关键词与识别、码管理、实时日志、码大屏、违规记录）、成员管理（踢人与黑名单、重复成员、退群记录、入群审核、定时解禁）、群运营（批量公告、群名任务、批量任务）、系统（群成员缓存、操作记录、权限管理、多群配置、设置）。第零节以外的页面：
 
 | 页面 | 内容 |
 | --- | --- |

@@ -50,7 +50,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_auto_blacklist_enabled", "blacklist_reject_join_enabled",
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
-    "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history",
+    "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history", "leave_log_save_images", "leave_log_image_days",
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
@@ -488,6 +488,12 @@ class MinimalWebMixin:
         )
         return jsonify({"status": "success", "data": {"items": items, "total": total}})
 
+    async def _web_minimal_leavelog_image(self):
+        data_url = self._ll_read_image(str(quart_request.args.get("hash", "") or ""))
+        if not data_url:
+            return self._minimal_error("图片不存在或已过期清理")
+        return jsonify({"status": "success", "data": {"image": data_url}})
+
     async def _web_minimal_msgmask(self):
         client = await self._get_client()
         groups = []
@@ -530,6 +536,39 @@ class MinimalWebMixin:
             return self._minimal_error("缺少 code_hash")
         return jsonify({"status": "success", "data": self._cs_detail(
             code_hash, user_id=str(args.get("user_id", "") or "").strip())})
+
+    async def _web_minimal_codes_users(self):
+        args = quart_request.args
+        sort = str(args.get("sort", "") or "codes")
+        items, total = self._cu_users(
+            keyword=str(args.get("keyword", "") or ""), group_id=str(args.get("group_id", "") or "").strip(),
+            sort=sort, page=self._safe_int(args.get("page", 1), 1),
+            page_size=self._safe_int(args.get("page_size", 50), 50),
+        )
+        return jsonify({"status": "success", "data": {
+            "items": items, "total": total, "sort": sort if sort in self.CU_SORTS else "codes",
+            "store_enabled": bool(self._cfg("code_store_enabled", True)),
+        }})
+
+    async def _web_minimal_codes_user(self):
+        user_id = str(quart_request.args.get("user_id", "") or "").strip()
+        if not user_id:
+            return self._minimal_error("缺少 user_id")
+        return jsonify({"status": "success", "data": self._cu_user_detail(user_id)})
+
+    async def _web_minimal_codes_screen(self):
+        args = quart_request.args
+        data = self._cs_screen(hours=self._safe_int(args.get("hours", 24), 24), top=self._safe_int(args.get("top", 10), 10))
+        names = {}
+        try:
+            names = {gid: (g or {}).get("group_name") or "" for gid, g in self._dir()["groups"].items()}
+        except Exception:
+            names = {}
+        for g in data["top_groups"]:
+            g["group_name"] = names.get(g["group_id"], "")
+        data["store_enabled"] = bool(self._cfg("code_store_enabled", True))
+        data["wxcode_enabled"] = bool(self._cfg("wxcode_enabled", False))
+        return jsonify({"status": "success", "data": data})
 
     async def _web_minimal_codes_lists(self):
         return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})

@@ -14,16 +14,37 @@
 
 退群自动拉黑（group_blacklist.py）按这里的记录计次：leave_auto_blacklist_days 天内
 主动退群达到 leave_auto_blacklist_times 次才拉黑。
+图片（leave_log_save_images，默认开）：记录消息时顺带记下图片的地址（每条最多 LEAVE_LOG_IMG_PER_MSG 张，
+只在内存）；有人退群时在后台把这些图片下载下来（压缩后）存到插件数据目录 leave_images/，WebUI 显示缩略图、
+点开看大图。QQ 图片链接过一段时间会失效，所以必须在退群时立刻下载；链接失效时再用 get_image 向协议端取一次。
+图片保留 leave_log_image_days 天（默认 30）后删除，记录里的文字不受影响。
 """
 import asyncio
+import base64
+import hashlib
+import html
 import json
+import os
 import re
 import time
+from pathlib import Path
 from collections import OrderedDict, deque
 from typing import Dict, List, Optional, Tuple
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
+
+try:  # 图片压缩 / 缩略图与码记录共用
+    from .code_limit import _compress_image, _thumb
+except ImportError:
+    try:
+        from code_limit import _compress_image, _thumb
+    except ImportError:  # 没有 Pillow 相关实现时原样保存
+        def _compress_image(data, max_bytes):
+            return data, "bin", (0, 0)
+
+        def _thumb(data, size=96):
+            return ""
 
 KIND_LEAVE = "leave"
 KIND_KICK = "kick"
@@ -60,6 +81,9 @@ _SEGMENT_LABEL = {
     "location": "[位置]", "contact": "[名片]", "shake": "[窗口抖动]",
 }
 _CQ_RE = re.compile(r"\[CQ:(\w+)([^\]]*)\]")
+_CQ_PARAM_RE = re.compile(r"(?:^|,)(url|file)=([^,]*)")
+_IMAGE_SEGMENTS = ("image", "mface")
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 
 
 class LeaveLogMixin:
@@ -68,6 +92,11 @@ class LeaveLogMixin:
     LEAVE_LOG_MSG_MAX = 30
     LEAVE_LOG_USERS_MAX = 5000
     LEAVE_LOG_HISTORY_COUNT = 100
+    LEAVE_LOG_IMG_PER_MSG = 4
+    LEAVE_LOG_IMG_MAX_BYTES = 500 * 1024      # 存盘前压缩到不超过这么大
+    LEAVE_LOG_IMG_DOWNLOAD_MAX = 15 * 1024 * 1024
+    LEAVE_LOG_IMG_THUMB = 160
+    LEAVE_LOG_IMG_CLEAN_INTERVAL = 3600
 
     # ------------------------------------------------------------------
     # 存储
@@ -87,6 +116,12 @@ class LeaveLogMixin:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_leave_logs_user ON leave_logs(user_id, ts)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_leave_logs_ts ON leave_logs(ts)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_leave_logs_group ON leave_logs(group_id)")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS leave_images ("
+                "hash TEXT PRIMARY KEY, path TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, "
+                "thumb TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_leave_images_created ON leave_images(created_at)")
             conn.commit()
         self._ll_db_ready = True
 
@@ -132,6 +167,33 @@ class LeaveLogMixin:
             summary = summary[:cls.LEAVE_LOG_TEXT_MAX] + "…"
         return summary or "[空消息]"
 
+    @classmethod
+    def _ll_extract_images(cls, message, raw_message: str = "") -> List[dict]:
+        """消息里的图片 / 商城表情 → [{"url":..., "file":...}]，最多 LEAVE_LOG_IMG_PER_MSG 个。"""
+        found: List[dict] = []
+        if isinstance(message, list):
+            for seg in message:
+                if not isinstance(seg, dict) or str(seg.get("type") or "") not in _IMAGE_SEGMENTS:
+                    continue
+                data = seg.get("data") if isinstance(seg.get("data"), dict) else {}
+                url, file = str(data.get("url") or ""), str(data.get("file") or "")
+                if not url and file.startswith(("http://", "https://")):
+                    url = file
+                if url or file:
+                    found.append({"url": url, "file": file})
+        else:
+            text = str(message if isinstance(message, str) else raw_message or "")
+            for m in _CQ_RE.finditer(text):
+                if m.group(1) not in _IMAGE_SEGMENTS:
+                    continue
+                params = {k: html.unescape(v) for k, v in _CQ_PARAM_RE.findall(m.group(2) or "")}
+                url, file = params.get("url", ""), params.get("file", "")
+                if not url and file.startswith(("http://", "https://")):
+                    url = file
+                if url or file:
+                    found.append({"url": url, "file": file})
+        return found[:cls.LEAVE_LOG_IMG_PER_MSG]
+
     # ------------------------------------------------------------------
     # 本地记录（内存）
     # ------------------------------------------------------------------
@@ -149,7 +211,8 @@ class LeaveLogMixin:
             self._ll_name_cache = names
         return names
 
-    def _ll_track(self, group_id, user_id, message_id, ts, text: str, name: str = "") -> None:
+    def _ll_track(self, group_id, user_id, message_id, ts, text: str, name: str = "",
+                  images: Optional[List[dict]] = None) -> None:
         gid, uid = str(group_id or ""), str(user_id or "")
         keep = self._ll_msg_count(gid)
         if not gid or not uid or keep <= 0:
@@ -161,7 +224,10 @@ class LeaveLogMixin:
             bucket = deque(bucket or [], maxlen=keep)
             store[key] = bucket
         store.move_to_end(key)
-        bucket.append({"id": str(message_id or ""), "ts": int(float(ts or time.time())), "text": text})
+        entry = {"id": str(message_id or ""), "ts": int(float(ts or time.time())), "text": text}
+        if images:
+            entry["imgs"] = list(images)
+        bucket.append(entry)
         while len(store) > self.LEAVE_LOG_USERS_MAX:
             store.popitem(last=False)
         if name:
@@ -182,7 +248,10 @@ class LeaveLogMixin:
         sender = raw.get("sender") if isinstance(raw.get("sender"), dict) else {}
         name = str(sender.get("card") or sender.get("nickname") or "")
         text = self._ll_summarize(raw.get("message"), str(raw.get("raw_message") or ""))
-        self._ll_track(raw.get("group_id"), user_id, raw.get("message_id"), raw.get("time"), text, name)
+        images = None
+        if self._cfg("leave_log_save_images", True, group_id=str(raw.get("group_id") or "")):
+            images = self._ll_extract_images(raw.get("message"), str(raw.get("raw_message") or ""))
+        self._ll_track(raw.get("group_id"), user_id, raw.get("message_id"), raw.get("time"), text, name, images)
 
     async def _ll_history(self, client, group_id: str, user_id: str) -> List[dict]:
         shared = getattr(self, "_recent_group_history", None)
@@ -208,8 +277,12 @@ class LeaveLogMixin:
                 ts = int(float(msg.get("time") or 0))
             except (TypeError, ValueError):
                 ts = 0
-            found.append({"id": str(msg.get("message_id") or ""), "ts": ts,
-                          "text": self._ll_summarize(msg.get("message"), str(msg.get("raw_message") or ""))})
+            entry = {"id": str(msg.get("message_id") or ""), "ts": ts,
+                     "text": self._ll_summarize(msg.get("message"), str(msg.get("raw_message") or ""))}
+            images = self._ll_extract_images(msg.get("message"), str(msg.get("raw_message") or ""))
+            if images:
+                entry["imgs"] = images
+            found.append(entry)
         return found
 
     @staticmethod
@@ -326,6 +399,7 @@ class LeaveLogMixin:
             rows = conn.execute(f"SELECT * FROM leave_logs{cond} ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?",
                                 args + [page_size, (page - 1) * page_size]).fetchall()
             items = [self._ll_row(r) for r in rows]
+            self._ll_attach_thumbs(items)
             uids = sorted({it["user_id"] for it in items})
             counts = {}
             if uids:
@@ -403,29 +477,227 @@ class LeaveLogMixin:
         if dup:
             logger.debug(f"[GroupMgr] 重复的退群通知，已忽略：群 {group_id} 成员 {user_id}（记录 {dup}）")
             return dup
+        # 图片地址（imgs）只在内存里，不写进数据库；图片在后台下载后以 images: [hash] 写回
         row_id = self._ll_insert(
-            group_id=group_id, user_id=user_id, kind=kind, operator_id=operator, messages=messages,
+            group_id=group_id, user_id=user_id, kind=kind, operator_id=operator,
+            messages=[self._ll_strip_imgs(m) for m in messages],
             msg_source="本地" if messages else "", ts=ts, nickname=self._ll_member_name(group_id, user_id),
             group_name=self._ll_group_name(group_id),
         )
-        if 0 < limit and len(messages) < limit and self._cfg("leave_log_use_history", True, group_id=group_id):
+        need_history = 0 < limit and len(messages) < limit and \
+            self._cfg("leave_log_use_history", True, group_id=group_id)
+        save_images = bool(self._cfg("leave_log_save_images", True, group_id=group_id))
+        if need_history or (save_images and any(m.get("imgs") for m in messages)):
             client = await self._get_client(event)
-            if client:
-                self._ll_spawn(self._ll_fill_from_history(client, row_id, group_id, user_id, messages, limit))
+            if client or save_images:
+                self._ll_spawn(self._ll_finish(client, row_id, group_id, user_id, messages, limit,
+                                               need_history and client is not None, save_images))
         return row_id
+
+    @staticmethod
+    def _ll_strip_imgs(m: dict) -> dict:
+        if "imgs" not in m:
+            return m
+        out = dict(m)
+        out.pop("imgs", None)
+        return out
+
+    async def _ll_finish(self, client, row_id: int, group_id: str, user_id: str, local: List[dict],
+                         limit: int, need_history: bool, save_images: bool) -> None:
+        """后台：本地消息不足时用群历史补，再把图片下载存盘，最后一次写回记录。"""
+        messages, source = list(local), ("本地" if local else "")
+        if need_history:
+            try:
+                history = await self._ll_history(client, group_id, user_id)
+                merged = self._ll_merge(history, local, limit=limit) if history else []
+                if len(merged) > len(local):
+                    messages, source = merged, ("本地 + 群历史" if local else "群历史")
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 退群记录补充历史消息失败({group_id}/{user_id}): {e}")
+        has_images = save_images and any(m.get("imgs") for m in messages)
+        if has_images:
+            try:
+                messages = await self._ll_save_message_images(client, messages)
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 退群记录保存图片失败({group_id}/{user_id}): {e}")
+        if has_images or len(messages) != len(local):
+            self._ll_update_messages(row_id, [self._ll_strip_imgs(m) for m in messages], source)
 
     async def _ll_fill_from_history(self, client, row_id: int, group_id: str, user_id: str,
                                     local: List[dict], limit: int) -> None:
+        """只补群历史、不存图片（保留给旧调用）。"""
+        await self._ll_finish(client, row_id, group_id, user_id, local, limit, True, False)
+
+    # ------------------------------------------------------------------
+    # 图片
+    # ------------------------------------------------------------------
+    def _ll_image_dir(self) -> Optional[Path]:
+        base = getattr(self, "_data_dir", None)
+        if not base:
+            return None
+        path = Path(base) / "leave_images"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _ll_image_days(self) -> int:
+        return min(max(self._cfg_int("leave_log_image_days", 30), 1), 3650)
+
+    @staticmethod
+    async def _ll_offload(fn, *args):
+        loop = asyncio.get_running_loop()
         try:
-            history = await self._ll_history(client, group_id, user_id)
-            if not history:
-                return
-            merged = self._ll_merge(history, local, limit=limit)
-            if len(merged) > len(local):
-                source = "本地 + 群历史" if local else "群历史"
-                self._ll_update_messages(row_id, merged, source)
+            return await loop.run_in_executor(None, fn, *args)
+        except RuntimeError:
+            return fn(*args)
+
+    async def _ll_fetch_image(self, client, img: dict) -> Optional[bytes]:
+        """先按 url 下载；失败（链接过期等）再用 get_image 向协议端要它的本地缓存。"""
+        download = getattr(self, "_download_bytes", None)
+        url = str(img.get("url") or "")
+        if url and callable(download):
+            data = await download(url, max_bytes=self.LEAVE_LOG_IMG_DOWNLOAD_MAX)
+            if data:
+                return data
+        file = str(img.get("file") or "")
+        if not file or client is None or not hasattr(self, "_call_group_api_result"):
+            return None
+        ok, data, _err = await self._call_group_api_result(client, "get_image", "获取图片", file=file)
+        if not ok or not isinstance(data, dict):
+            return None
+        b64 = str(data.get("base64") or "")
+        if b64:
+            try:
+                raw = base64.b64decode(b64.split(",", 1)[-1])
+            except (ValueError, TypeError):
+                return None
+            return raw if len(raw) <= self.LEAVE_LOG_IMG_DOWNLOAD_MAX else None
+        path = str(data.get("file") or data.get("path") or "")
+        # 协议端（与插件同一台机器）的图片缓存：只读常见图片扩展名的文件，有大小上限
+        if path and os.path.isabs(path) and Path(path).suffix.lower() in _IMAGE_EXTS:
+            def read():
+                p = Path(path)
+                if not p.is_file() or p.stat().st_size > self.LEAVE_LOG_IMG_DOWNLOAD_MAX:
+                    return None
+                return p.read_bytes()
+            try:
+                return await self._ll_offload(read)
+            except OSError:
+                return None
+        other = str(data.get("url") or "")
+        if other and other != url and callable(download):
+            return await download(other, max_bytes=self.LEAVE_LOG_IMG_DOWNLOAD_MAX)
+        return None
+
+    async def _ll_store_image(self, data: bytes) -> str:
+        folder = self._ll_image_dir()
+        if folder is None:
+            return ""
+        h = hashlib.sha1(data).hexdigest()
+        self._ll_init_db()
+        with self._storage._connect() as conn:
+            row = conn.execute("SELECT path FROM leave_images WHERE hash=?", (h,)).fetchone()
+        if row and Path(row["path"]).exists():
+            return h
+        out, ext, _size = await self._ll_offload(_compress_image, data, self.LEAVE_LOG_IMG_MAX_BYTES)
+        thumb = await self._ll_offload(_thumb, out, self.LEAVE_LOG_IMG_THUMB)
+        path = folder / f"{h}.{ext}"
+        await self._ll_offload(path.write_bytes, out)
+        with self._storage._connect() as conn:
+            conn.execute("INSERT OR REPLACE INTO leave_images(hash, path, bytes, thumb, created_at) VALUES(?,?,?,?,?)",
+                         (h, str(path), len(out), thumb or "", int(time.time())))
+            conn.commit()
+        return h
+
+    async def _ll_save_message_images(self, client, messages: List[dict]) -> List[dict]:
+        """消息里记下的图片地址 → 下载存盘，写成 images: [hash]；取不到的张数记在 img_failed。"""
+        out = []
+        for m in messages:
+            imgs = m.get("imgs") or []
+            if not imgs:
+                out.append(m)
+                continue
+            m = dict(m)
+            hashes, failed = [], 0
+            for img in imgs[:self.LEAVE_LOG_IMG_PER_MSG]:
+                h = ""
+                try:
+                    data = await self._ll_fetch_image(client, img)
+                    if data:
+                        h = await self._ll_store_image(data)
+                except Exception as e:
+                    logger.debug(f"[GroupMgr] 退群记录下载图片失败: {e}")
+                if h:
+                    hashes.append(h)
+                else:
+                    failed += 1
+            if hashes:
+                m["images"] = hashes
+            if failed:
+                m["img_failed"] = failed
+            out.append(m)
+        self._ll_maybe_clean_images()
+        return out
+
+    def _ll_maybe_clean_images(self, now: Optional[int] = None) -> None:
+        now = int(now or time.time())
+        if now - int(getattr(self, "_ll_img_last_clean", 0) or 0) < self.LEAVE_LOG_IMG_CLEAN_INTERVAL:
+            return
+        self._ll_img_last_clean = now
+        try:
+            self._ll_clean_images(now)
         except Exception as e:
-            logger.debug(f"[GroupMgr] 退群记录补充历史消息失败({group_id}/{user_id}): {e}")
+            logger.debug(f"[GroupMgr] 清理退群记录图片失败: {e}")
+
+    def _ll_clean_images(self, now: Optional[int] = None) -> int:
+        """删除保存超过 leave_log_image_days 天的图片（记录里的文字不动）。返回删除的张数。"""
+        cutoff = int(now or time.time()) - self._ll_image_days() * 86400
+        self._ll_init_db()
+        with self._storage._connect() as conn:
+            rows = conn.execute("SELECT hash, path FROM leave_images WHERE created_at < ?", (cutoff,)).fetchall()
+            for r in rows:
+                try:
+                    os.remove(r["path"])
+                except OSError:
+                    pass
+                conn.execute("DELETE FROM leave_images WHERE hash=?", (r["hash"],))
+            conn.commit()
+        return len(rows)
+
+    def _ll_attach_thumbs(self, items: List[dict]) -> None:
+        """列表里每条消息附上缩略图：thumbs = [{hash, thumb, expired}]。"""
+        hashes = sorted({h for it in items for m in it.get("messages") or [] for h in (m.get("images") or [])})
+        found = {}
+        if hashes:
+            with self._storage._connect() as conn:
+                for i in range(0, len(hashes), 500):
+                    part = hashes[i:i + 500]
+                    marks = ",".join("?" * len(part))
+                    for r in conn.execute(f"SELECT hash, thumb FROM leave_images WHERE hash IN ({marks})", part):
+                        found[r["hash"]] = r["thumb"] or ""
+        for it in items:
+            for m in it.get("messages") or []:
+                if m.get("images"):
+                    m["thumbs"] = [{"hash": h, "thumb": found.get(h, ""), "expired": h not in found}
+                                   for h in m["images"]]
+
+    def _ll_read_image(self, h: str) -> str:
+        """图片 → data URL（WebUI 点开看大图）。没有或已清理返回空。"""
+        h = str(h or "").strip().lower()
+        if len(h) != 40 or not all(c in "0123456789abcdef" for c in h):
+            return ""
+        self._ll_init_db()
+        with self._storage._connect() as conn:
+            row = conn.execute("SELECT path FROM leave_images WHERE hash=?", (h,)).fetchone()
+        if not row:
+            return ""
+        try:
+            data = Path(row["path"]).read_bytes()
+        except OSError:
+            return ""
+        ext = Path(row["path"]).suffix.lower().lstrip(".")
+        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif",
+                "webp": "image/webp", "bmp": "image/bmp"}.get(ext, "application/octet-stream")
+        return f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
 
     def _ll_spawn(self, coro) -> None:
         tasks = getattr(self, "_ll_tasks", None)
