@@ -255,9 +255,13 @@ class ImageAuditMixin:
         """本地路径 / file:// → Path；不是本地路径返回 None；在允许目录之外返回 False（原因写入 DOWNLOAD_ERROR）。"""
         text = str(url or "").strip()
         if text.lower().startswith("file://"):
-            path = unquote(urlparse(text).path or "")
-            if re.match(r"^/[A-Za-z]:[\\/]", path):  # file:///D:/x → D:/x
-                path = path[1:]
+            rest = text[len("file://"):]
+            if self._WIN_ABS_PATH.match(rest):  # Windows 上直接拼出来的 file://D:\x（少一个斜杠）
+                path = unquote(rest)
+            else:
+                path = unquote(urlparse(text).path or "")
+                if re.match(r"^/[A-Za-z]:[\\/]", path):  # file:///D:/x → D:/x
+                    path = path[1:]
         elif self._WIN_ABS_PATH.match(text) or text.startswith("/"):
             path = text
         else:

@@ -665,6 +665,10 @@ class UtilitiesMixin:
             self._storage.add_log(log_entry)
         except Exception:
             logger.exception("save moderation log to sqlite failed")
+        # 图片落盘（media_store.py）：本机路径 / 会过期的链接换成插件保存的图片
+        schedule_images = getattr(self, "_ml_schedule_images", None)
+        if valid_urls and callable(schedule_images):
+            schedule_images(log_entry)
         today_start = self._today_start()
         sc = self._stats_cache
         if sc["today_start"] == today_start:

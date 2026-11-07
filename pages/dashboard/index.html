@@ -1943,9 +1943,24 @@ function parseIntOrDefault(value, fallback) {
   return Number.isNaN(n) ? fallback : n;
 }
 
-function renderMessageDetail(fullText, imgUrls) {
+function renderMessageDetail(fullText, imgUrls, detail) {
   var body = $('#modalBody');
   body.innerHTML = '';
+  detail = detail || {};
+  var saved = detail.images || [];
+  if (saved.length || detail.image_failed) {
+    var picSection = document.createElement('div');
+    picSection.style.marginBottom = '12px';
+    picSection.innerHTML = saved.map(function(t) {
+      if (t.expired || !t.thumb) return '<span class="mn-hint" style="display:inline-block;width:96px;height:96px;line-height:96px;text-align:center;border:1px dashed var(--border);border-radius:4px;margin:0 6px 6px 0">图片已清理</span>';
+      return '<img alt="图片" src="' + escAttr(t.thumb) + '" data-log-img="' + escAttr(t.hash) + '" title="点击看大图" style="max-width:140px;max-height:140px;border-radius:4px;margin:0 6px 6px 0;cursor:zoom-in;border:1px solid var(--border)" />';
+    }).join('') + (detail.image_failed ? '<div class="mn-hint">' + detail.image_failed + ' 张图片未能保存（文件已被清理或链接已失效，或是开启「保存图片」之前的旧记录）</div>' : '');
+    picSection.addEventListener('click', function(e) {
+      var img = e.target.closest('[data-log-img]');
+      if (img) logShowImage(img.getAttribute('data-log-img'));
+    });
+    body.appendChild(picSection);
+  }
   if (imgUrls && imgUrls.length) {
     var linkSection = document.createElement('div');
     linkSection.style.marginBottom = '12px';
@@ -1954,7 +1969,7 @@ function renderMessageDetail(fullText, imgUrls) {
     title.style.fontWeight = '600';
     title.style.color = 'var(--text-primary)';
     title.style.marginBottom = '8px';
-    title.textContent = '图片链接（请手动复制到浏览器访问）';
+    title.textContent = '图片链接（未能保存，链接可能已失效）';
     linkSection.appendChild(title);
     imgUrls.forEach(function(u) {
       if (!u) return;
@@ -1968,7 +1983,9 @@ function renderMessageDetail(fullText, imgUrls) {
       item.style.fontSize = '12px';
       item.style.color = 'var(--text-secondary)';
       item.style.wordBreak = 'break-all';
-      item.textContent = url;
+      var a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = url;
+      item.appendChild(a);
       linkSection.appendChild(item);
     });
     body.appendChild(linkSection);
@@ -1981,6 +1998,19 @@ function renderMessageDetail(fullText, imgUrls) {
   text.style.color = 'var(--text-primary)';
   text.textContent = fullText || '';
   body.appendChild(text);
+}
+
+function logShowImage(hash) {
+  var win = document.createElement('div');
+  win.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  win.innerHTML = '<span style="color:#fff">加载中...</span>';
+  win.addEventListener('click', function() { win.remove(); });
+  document.body.appendChild(win);
+  safeGet('log_image', { hash: hash }).then(function(res) {
+    if (isApiError(res)) { win.innerHTML = '<span style="color:#fff">' + esc(res.message || '获取失败') + '</span>'; return; }
+    var d = res && res.image ? res : (res && res.data) || {};
+    win.innerHTML = '<img alt="图片" src="' + escAttr(d.image || '') + '" style="max-width:92vw;max-height:92vh;border-radius:4px;background:#fff" />';
+  });
 }
 
 function fmtTime(ts) {
@@ -2653,7 +2683,7 @@ function renderUsers(users) {
           if (isApiError(cr)) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">' + esc(cr.message || '获取失败') + '</p>'; return; }
           if (cr && cr.t) parts.push(cr.t);
         }
-        renderMessageDetail(parts.join(''), imgUrls);
+        renderMessageDetail(parts.join(''), imgUrls, d);
       } catch(ex) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">加载失败: ' + esc(String(ex)) + '</p>'; }
     });
   });
@@ -2723,7 +2753,7 @@ async function loadLogs() {
           if (isApiError(cr)) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">' + esc(cr.message || '获取失败') + '</p>'; return; }
           if (cr && cr.t) parts.push(cr.t);
         }
-        renderMessageDetail(parts.join(''), imgUrls);
+        renderMessageDetail(parts.join(''), imgUrls, d);
       } catch(ex) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">加载失败: ' + esc(String(ex)) + '</p>'; }
     });
   });

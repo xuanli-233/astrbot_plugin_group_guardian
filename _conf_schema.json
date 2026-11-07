@@ -404,6 +404,18 @@
         "default": true,
         "hint": "本地记录不足时（如插件刚重启）后台调用一次 get_group_msg_history（最近 100 条）补上"
     },
+    "log_image_save_enabled": {
+        "description": "违规记录：保存图片",
+        "type": "bool",
+        "default": true,
+        "hint": "写违规记录时把消息里的图片（AstrBot 临时目录里的文件或 QQ 图片链接）读出来，压缩到 500KB 以内存到插件数据目录 log_images/，WebUI 直接看缩略图和大图，不再显示本机路径"
+    },
+    "log_image_days": {
+        "description": "违规记录：图片保留天数",
+        "type": "int",
+        "default": 30,
+        "hint": "范围 1–3650；到期只删图片，违规记录保留"
+    },
     "leave_log_save_images": {
         "description": "退群记录：保存退群前消息里的图片",
         "type": "bool",

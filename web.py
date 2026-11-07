@@ -95,6 +95,7 @@ class WebMixin:
             "leave_recall_count": (0, 100),
             "leave_log_msg_count": (0, 30),
             "leave_log_image_days": (1, 3650),
+            "log_image_days": (1, 3650),
             "code_limit_window_hours": (1, 168),
             "code_limit_max": (1, 1000),
             "code_image_max_kb": (50, 5000),
@@ -630,6 +631,7 @@ class WebMixin:
                 ("/logs/export", self._web_export_logs, ["GET"], "导出审核日志"),
                 ("/log_detail", self._web_log_detail, ["GET"], "获取单条日志详情"),
                 ("/log_chunk", self._web_log_chunk, ["GET"], "获取日志文本分片"),
+                ("/log_image", self._web_log_image, ["GET"], "违规记录里保存的图片"),
                 ("/log_raw_text", self._web_log_raw_text, ["GET"], "获取日志原始文本"),
                 ("/groups", self._web_get_groups, ["GET"], "获取群列表"),
                 ("/bot_roles", self._web_get_bot_roles, ["GET"], "查询机器人在各群的角色"),
@@ -938,12 +940,18 @@ class WebMixin:
                 chunk_size = 400
                 chunk_count = (len(msg) + chunk_size - 1) // chunk_size if msg else 0
                 logger.debug(f"[GroupMgr] log_detail id={target_id} msg_len={len(msg)} chunk_count={chunk_count}")
+                described = getattr(self, "_ml_describe_images", None)
+                info = described(log.get("image_urls", [])) if callable(described) else {
+                    "images": [], "links": [], "failed": 0}
                 return jsonify({
                     "status": "success",
                     "data": {
                         "total_len": len(msg),
                         "chunk_count": chunk_count,
-                        "image_urls": log.get("image_urls", []),
+                        # 只返回浏览器能打开的：保存下来的图片（缩略图）和 http(s) 链接，不返回本机路径
+                        "image_urls": info["links"],
+                        "images": info["images"],
+                        "image_failed": info["failed"],
                         "reason": log.get("reason", ""),
                         "action": log.get("action", ""),
                     }
@@ -951,6 +959,13 @@ class WebMixin:
             return jsonify({"status": "error", "message": "未找到该日志"})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
+
+    async def _web_log_image(self):
+        reader = getattr(self, "_ms_read", None)
+        data_url = reader(str(quart_request.args.get("hash", "") or "")) if callable(reader) else ""
+        if not data_url:
+            return jsonify({"status": "error", "message": "图片不存在或已过期清理"})
+        return jsonify({"status": "success", "data": {"image": data_url}})
 
     async def _web_log_chunk(self):
         # 按分片索引（chunk 参数）返回日志正文的 400 字符片段，用于长消息的分页展示。
@@ -1756,6 +1771,7 @@ class WebMixin:
         "leave_recall_minutes": "退群撤回",
         "leave_log_enabled": "退群记录", "leave_log_msg_count": "退群记录", "leave_log_use_history": "退群记录",
         "leave_log_save_images": "退群记录", "leave_log_image_days": "退群记录",
+        "log_image_save_enabled": "审核规则", "log_image_days": "审核规则",
         "card_parse_enabled": "卡片解析", "card_scan_preview": "卡片解析",
         "code_limit_enabled": "码发送次数", "code_limit_scope": "码发送次数", "code_limit_window_hours": "码发送次数",
         "code_limit_max": "码发送次数", "code_limit_warn_enabled": "码发送次数", "code_limit_warn_template": "码发送次数",
