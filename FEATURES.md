@@ -103,11 +103,20 @@
 
 ### 操作记录与拉黑原因
 
-`operation_log.py`（表 `op_logs` / `blacklist_meta`）。每条记录：时间、来源（指令 / WebUI / 自动）、操作人（指令为发送者 QQ；WebUI 不带面板用户，留空）、操作、群、对象、原因、结果、详情。保留最近 10 万条。
+`operation_log.py`（表 `op_logs` / `blacklist_meta`）。每条记录：时间、来源（指令 / WebUI / 自动）、操作人（指令为发送者 QQ；WebUI 在开启 Cloudflare 身份识别后为登录邮箱对应的名字，见下文；自动执行的留空）、操作、群、对象、原因、结果、详情。保留最近 10 万条。
 
 记录的操作：踢人、踢出并拉黑、加入 / 移出黑名单、加入 / 移出审核白名单、关键词撤回、葵花码撤回、退群自动拉黑、退群撤回（撤回条数与失败原因）、黑名单入群踢出、黑名单发言踢出、通过 / 拒绝加群申请、发布群公告 / 待办公告、修改群名后缀（旧名 → 新名）、定时改群名的登记 / 取消 / 执行、群名倒计时的设置 / 更新 / 停止 / 结束 / 终止（群名被他人修改）、手动修改群名（旧名 → 新名）、修改关键词 / 葵花码规则、修改配置（旧值 → 新值）、刷新群成员缓存。
 
 拉黑原因：指令里写在「原因：」或「#」后面，例如 `/全群踢黑 111 222 原因：发广告`（原因里的数字不会被当成 QQ 号）；WebUI 拉黑时必填；自动拉黑由插件写明原因（如「主动退出群 xxx（退群自动拉黑）」）。早于本功能加入黑名单的人原因为空。
+
+### WebUI 操作人识别（`web_identity.py`）
+
+AstrBot 不把登录的面板用户传给插件，所以 WebUI 操作人靠 Cloudflare Access 识别：面板放在 Access 后面时，每个请求带 `Cf-Access-Jwt-Assertion`（RS256 JWT）。`web.py:_wrap_web_handler` 在每个请求开始时调 `_cf_identify`：用 `https://<团队域名>/cdn-cgi/access/certs` 的公钥验签（纯 Python 实现，不依赖 PyJWT），核对签发方、AUD、有效期，取出邮箱，按配置 `cf_access_users`（`邮箱=显示名`）换成名字，放进 contextvar `CURRENT_WEB_USER`。明文的 `Cf-Access-Authenticated-User-Email` 不信任。
+
+- 写操作记录（`_op_log`）、拉黑原因（`_bl_set_meta`）、创建批量任务（`_bq_create_job`，连同每项的 params）时，来源是 WebUI 且没给操作人的，自动填当前用户（`_op_fill_operator`）。新写的 WebUI 接口用 `**self._web_log()` 传来源和操作人即可。
+- 没开启：操作人为空，和以前一样。开启但请求没带凭证 / 凭证无效 / 没填团队域名或 AUD：操作人「未识别」。`cf_access_only_listed` 拒绝名单外的邮箱，`cf_access_block_unverified` 拒绝没有有效凭证的请求；被拒绝时除 `/whoami` 外所有接口返回 `{"status": "error", "auth": 状态}`。
+- `cf_access_*` 配置只能在 AstrBot 插件配置里改：插件页面的保存配置接口和多群配置都跳过它们。
+- 接口：`GET /whoami`（当前用户，页面左下角显示）；`GET /minimal/oplog` 新增 `operator` 筛选参数，返回 `operators`（出现过的 WebUI 操作人）。
 
 ### 新增模块
 
@@ -121,6 +130,7 @@
 | `group_name_task.py` | 群名后缀、定时改名、倒计时（任务存在 SQLite meta 表） |
 | `group_directory.py` | 群 / 群成员本地缓存、限流、通知事件实时更新 |
 | `operation_log.py` | 操作记录、黑名单原因 |
+| `web_identity.py` | WebUI 操作人识别（Cloudflare Zero Trust 登录邮箱 → 显示名） |
 | `duplicate_members.py` | 重复群成员检测（只读本地成员缓存）与处理、忽略名单 |
 | `code_pipeline.py` | 二维码 / 葵花码两阶段识别：定位服务 → 扩大框裁剪 → 解码服务 |
 | `web_minimal.py` | 以上新功能的 WebUI 接口（`/minimal/*`） |

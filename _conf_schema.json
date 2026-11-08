@@ -864,5 +864,41 @@
         "type": "bool",
         "default": true,
         "hint": "关闭后 /回复撤回 撤回成功时静默处理，不再回复「已撤回被引用的消息」（Issue #44）。撤回失败的错误提示不受影响，仍会提示"
+    },
+    "cf_access_enabled": {
+        "description": "WebUI 操作人识别：Cloudflare Zero Trust 登录邮箱",
+        "type": "bool",
+        "default": false,
+        "hint": "AstrBot 面板放在 Cloudflare Access 后面时开启。开启后，插件页面上的每个操作都会在操作记录里写上是谁做的（按下面的名单显示名字，不在名单里的显示邮箱）。只在这里修改，插件页面里不能改这几项"
+    },
+    "cf_access_team_domain": {
+        "description": "Cloudflare：团队域名",
+        "type": "string",
+        "default": "",
+        "hint": "Zero Trust 控制台 → Settings → Custom Pages 里的 Team domain，形如 xxx.cloudflareaccess.com（只填 xxx 也行）。用来下载公钥校验登录凭证"
+    },
+    "cf_access_aud": {
+        "description": "Cloudflare：应用的 AUD（Application Audience Tag）",
+        "type": "string",
+        "default": "",
+        "hint": "Access → Applications → 你的应用 → Overview 里的 Application Audience (AUD) Tag。多个用英文逗号分隔"
+    },
+    "cf_access_users": {
+        "description": "Cloudflare：邮箱 → 显示名",
+        "type": "list",
+        "default": [],
+        "hint": "每行一条，格式：邮箱=显示名，例如 a@qq.com=张三。操作记录里显示这个名字；不在名单里的人显示邮箱"
+    },
+    "cf_access_only_listed": {
+        "description": "Cloudflare：只允许名单里的邮箱操作",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后，邮箱不在上面名单里的人打开插件页面会提示没有权限，所有接口都拒绝"
+    },
+    "cf_access_block_unverified": {
+        "description": "Cloudflare：拒绝没有通过 Cloudflare 登录的访问",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后，没带有效 Cloudflare 登录凭证的请求（例如在服务器本机直接打开面板）一律拒绝。关闭时这类操作的操作人记为「未识别」。开启前先确认团队域名和 AUD 填对了，否则插件页面会打不开（可回到这里关掉）"
     }
 }

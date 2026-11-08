@@ -46,8 +46,18 @@ class OperationLogMixin:
     # ------------------------------------------------------------------
     # 操作记录
     # ------------------------------------------------------------------
+    def _op_fill_operator(self, source, operator) -> str:
+        """WebUI 操作没指定操作人时，填当前登录的 WebUI 用户（web_identity.py）。"""
+        operator = str(operator or "")
+        if not operator and str(source or "") == SOURCE_WEBUI:
+            current = getattr(self, "_web_operator", None)
+            if callable(current):
+                operator = current()
+        return operator
+
     def _op_log(self, action: str, *, source: str = SOURCE_AUTO, operator: str = "", group_id="",
                 target="", reason: str = "", result: str = "成功", detail: str = "") -> None:
+        operator = self._op_fill_operator(source, operator)
         try:
             self._op_init_db()
             with self._storage._connect() as conn:
@@ -70,12 +80,15 @@ class OperationLogMixin:
             logger.warning(f"[GroupMgr] 写操作记录失败({action}): {e}")
 
     def _op_list(self, action: str = "", keyword: str = "", source: str = "",
-                 page: int = 1, page_size: int = 50) -> Tuple[List[dict], int]:
+                 page: int = 1, page_size: int = 50, operator: str = "") -> Tuple[List[dict], int]:
         self._op_init_db()
         where, args = [], []
         if action:
             where.append("action = ?")
             args.append(action)
+        if operator:
+            where.append("operator = ?")
+            args.append(operator)
         if source:
             where.append("source = ?")
             args.append(source)
@@ -93,6 +106,14 @@ class OperationLogMixin:
             ).fetchall()
         return [dict(r) for r in rows], int(total)
 
+    def _op_operators(self, source: str = SOURCE_WEBUI, limit: int = 200) -> List[str]:
+        """出现过的操作人（默认只看 WebUI 来源，即网页登录用户），最近操作的在前。"""
+        self._op_init_db()
+        with self._storage._connect() as conn:
+            return [r[0] for r in conn.execute(
+                "SELECT operator FROM op_logs WHERE operator != '' AND source = ? "
+                "GROUP BY operator ORDER BY MAX(id) DESC LIMIT ?", (source, int(limit)))]
+
     def _op_actions(self) -> List[str]:
         self._op_init_db()
         with self._storage._connect() as conn:
@@ -103,6 +124,7 @@ class OperationLogMixin:
     # ------------------------------------------------------------------
     def _bl_set_meta(self, user_id: str, reason: str, source: str = SOURCE_AUTO,
                      operator: str = "", group_id: str = "") -> None:
+        operator = self._op_fill_operator(source, operator)
         try:
             self._op_init_db()
             with self._storage._connect() as conn:

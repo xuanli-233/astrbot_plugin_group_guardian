@@ -19,6 +19,7 @@ except ImportError:
     quart_request = None
 
 from .constants import PLUGIN_NAME, PLUGIN_VERSION
+from .web_identity import CURRENT_WEB_USER
 
 
 class WebMixin:
@@ -35,8 +36,23 @@ class WebMixin:
         # 为每个 Web API handler 添加 Quart 可用性检查的装饰器层。
         # 这样每个 handler 在被调用前都会先验证 Quart 是否正常，避免奇怪的 ImportError。
         async def _wrapped(*args, **kwargs):
+            token = None
             try:
                 self._check_quart_available()
+                # 识别操作人（web_identity.py：Cloudflare Access 登录邮箱），写操作记录时自动填入
+                identify = getattr(self, "_cf_identify", None)
+                if callable(identify):
+                    try:
+                        ident = await identify(getattr(quart_request, "headers", None) or {},
+                                               getattr(quart_request, "cookies", None))
+                    except Exception as e:
+                        logger.warning(f"[GroupMgr] 识别 WebUI 操作人失败: {e}")
+                        ident = {"state": "invalid", "operator": "未识别", "blocked": False,
+                                 "message": f"识别操作人失败：{e}"}
+                    token = CURRENT_WEB_USER.set(ident)
+                    if ident.get("blocked") and handler.__name__ != "_web_whoami":
+                        return jsonify({"status": "error", "auth": ident.get("state", ""),
+                                        "message": ident.get("message") or "没有权限操作"})
                 return await handler(*args, **kwargs)
             except asyncio.CancelledError:
                 raise
@@ -53,6 +69,9 @@ class WebMixin:
                         "message": self._format_web_error(e),
                     })
                 raise
+            finally:
+                if token is not None:
+                    CURRENT_WEB_USER.reset(token)
         _wrapped.__name__ = handler.__name__
         return _wrapped
 
@@ -624,6 +643,7 @@ class WebMixin:
         try:
             routes = [
                 ("/stats", self._web_stats, ["GET"], "获取群管统计信息"),
+                ("/whoami", self._web_whoami, ["GET"], "当前 WebUI 操作人"),
                 ("/config", self._web_get_config, ["GET"], "获取当前配置"),
                 ("/config", self._web_update_config, ["POST"], "更新配置"),
                 ("/logs", self._web_get_logs, ["GET"], "获取最近审核日志"),
@@ -768,6 +788,19 @@ class WebMixin:
         except Exception as e:
             logger.warning(f"[GroupMgr] 注册 WebUI API 失败: {e}")
 
+    async def _web_whoami(self):
+        # 当前登录的 WebUI 用户（web_identity.py）；被拒绝的用户也能调用，用于页面提示
+        ident = CURRENT_WEB_USER.get() or {}
+        return jsonify({"status": "success", "data": {
+            "enabled": ident.get("state", "off") != "off",
+            "state": ident.get("state", "off"),
+            "email": ident.get("email", ""),
+            "name": ident.get("name", ""),
+            "operator": ident.get("operator", ""),
+            "blocked": bool(ident.get("blocked")),
+            "message": ident.get("message", ""),
+        }})
+
     async def _web_stats(self):
         today_start = self._today_start()
         sc = self._stats_cache
@@ -842,6 +875,8 @@ class WebMixin:
                     continue
                 if key in db_managed_keys:
                     continue
+                if key.startswith("cf_access_"):
+                    continue  # 操作人识别只能在 AstrBot 插件配置里改，防止在页面里关掉识别或改别人的名字
                 field_type = schema[key].get("type", "")
                 if field_type == "bool":
                     default_bool = bool(schema[key].get("default", False))
@@ -1770,6 +1805,7 @@ class WebMixin:
         return [
             k for k, meta in self._config_schema.items()
             if k not in self._GROUP_CONFIG_EXCLUDE
+            and not k.startswith("cf_access_")  # 操作人识别是全局的，不按群覆盖
             and meta.get("type", "bool") in supported_types
         ]
 

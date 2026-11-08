@@ -18,6 +18,11 @@ class UtilitiesMixin:
         if callable(writer):
             writer(action, **kwargs)
 
+    def _web_log(self) -> dict:
+        """WebUI 发起的操作在操作记录里的来源和操作人（操作人来自 web_identity.py，未加载时为空）。"""
+        current = getattr(self, "_web_operator", None)
+        return {"source": "WebUI", "operator": current() if callable(current) else ""}
+
     @staticmethod
     async def _run_in_thread(func, *args, **kwargs):
         """在线程池执行阻塞函数，兼容没有 asyncio.to_thread 的 Python。"""

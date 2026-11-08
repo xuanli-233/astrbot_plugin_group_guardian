@@ -111,7 +111,7 @@ https://github.com/xuanli-233/astrbot_plugin_group_guardian
 1. **先备份**：插件数据目录 `data/plugin_data/astrbot_plugin_group_guardian/`（数据库 `group_guardian.db`）以及 AstrBot 保存的插件配置（通常在 `data/config/` 下，文件名含 `astrbot_plugin_group_guardian`）。
 2. 删除 `data/plugins/astrbot_plugin_group_guardian/` 这个目录，再按方式一克隆本仓库。数据目录和配置不受影响，黑名单、日志都会保留。
 3. **原有配置不会被改成本版的默认值**。原版群管指令（/禁言 /踢人 /发公告 等）在本版默认关闭，升级过来的需要在「设置 → 功能开关」里手动关闭不需要的。原版的 AI 审核、防刷屏、内置规则库 / 词库、名片监控、刷屏申诉等已删除，旧配置里的这些项不再生效，数据库里的旧表原样保留。
-4. 以后**不要在插件市场里「更新」**，否则会被换回原版；更新方法见第 8 节。
+4. 以后**不要在插件市场里「更新」**，否则会被换回原版；更新方法见第 9 节。
 
 ## 5. 首次配置
 
@@ -145,7 +145,36 @@ https://github.com/xuanli-233/astrbot_plugin_group_guardian
 
 解码服务比较慢（单个码可能十几到几十秒），群里发图到撤回之间会有这段延迟；一张图多个码时命中即停。
 
-## 7. 验证清单
+## 7. （可选）通过 Cloudflare Zero Trust 远程访问，并记录是谁操作的
+
+想在外网打开管理面板，又不想把 6185 端口暴露出去，可以把面板放在 Cloudflare Access 后面。开启本插件的「WebUI 操作人识别」后，每个人用自己的邮箱登录，插件页面上的每个操作都会在「操作记录」里写上是谁做的。
+
+1. **建 Tunnel**：Zero Trust 控制台 → Networks → Tunnels → Create tunnel，按提示在 AstrBot 所在机器上安装并运行 `cloudflared`。Public Hostname 填一个子域名（如 `bot.example.com`），服务类型 `HTTP`，地址 `localhost:6185`。
+2. **建 Access 应用**：Access → Applications → Add an application → Self-hosted，域名填上一步的子域名；Policy 选 Allow，Include → Emails，填允许登录的邮箱（每人一个）。
+3. **记下两样东西**：
+   - 团队域名：Settings → Custom Pages 里的 Team domain，形如 `xxx.cloudflareaccess.com`。
+   - AUD：Access → Applications → 你的应用 → Overview 里的 Application Audience (AUD) Tag。
+4. **填插件配置**（AstrBot「插件管理」→ 本插件 → 配置。插件自己的页面里不能改这几项，防止有人把识别关掉或改别人的名字）：
+
+   | 配置项 | 填什么 |
+   | --- | --- |
+   | WebUI 操作人识别 | 开启 |
+   | 团队域名 | `xxx.cloudflareaccess.com` |
+   | AUD | 上面的 AUD Tag |
+   | 邮箱 → 显示名 | 每行一条，如 `a@qq.com=张三`；不在名单里的人显示邮箱 |
+   | 只允许名单里的邮箱操作 | 可选。开启后名单外的邮箱打开插件页面会提示没有权限 |
+   | 拒绝没有通过 Cloudflare 登录的访问 | 可选。开启后在服务器本机直接打开面板也会被拒绝；不开时这类操作的操作人记为「未识别」 |
+
+5. **关掉公网直连**：防火墙 / 安全组里不要开放 6185。插件只认 Cloudflare 签名过的登录凭证（`Cf-Access-Jwt-Assertion`，用团队域名下的公钥验签并核对 AUD），不认明文的邮箱请求头，所以别人伪造不了身份；但端口对外开着，别人仍然能绕过 Cloudflare 直接打开 AstrBot 的登录页。
+6. **确认**：用名单里的邮箱登录，插件页面左下角显示「当前：张三」；随便改一项设置，「操作记录」里那条的来源下面写着「张三」，顶部「全部操作人」下拉框可以只看某个人的操作。
+
+说明：
+
+- AstrBot 自己的面板账号密码还在，Cloudflare 登录之后还要再登录一次 AstrBot。插件分辨操作人只看 Cloudflare 的邮箱，跟 AstrBot 用的是哪个面板账号无关，所以大家可以共用一个 AstrBot 账号。
+- 群里发指令的操作，操作人仍然是发送者的 QQ 号；插件自动执行的操作没有操作人。
+- 公钥每小时更新一次；Cloudflare 换了密钥时会自动重新下载。服务器访问不了 `xxx.cloudflareaccess.com` 时无法校验，操作人记为「未识别」，AstrBot 日志里会有「拉取 Cloudflare Access 公钥失败」。
+
+## 8. 验证清单
 
 在一个测试群（机器人是管理员）里逐项确认：
 
@@ -155,7 +184,7 @@ https://github.com/xuanli-233/astrbot_plugin_group_guardian
 - [ ] 插件管理员发 `/全群公告 测试` → 机器人回预览 → `/确认发布` → 回复「已创建批量任务」→ 各群按间隔陆续出现公告，完成后本群收到汇总；WebUI「批量任务」能看到每个群的结果。
 - [ ] 「踢人与黑名单」用一个测试小号执行「踢出并拉黑」，确认 LuckyLilliaBot 确实把它加进了 QQ 群黑名单（再次申请加群会被拒绝）。
 
-## 8. 更新
+## 9. 更新
 
 ```bash
 cd AstrBot/data/plugins/astrbot_plugin_group_guardian
@@ -165,7 +194,7 @@ uv pip install -r requirements.txt   # 依赖有变化时
 
 然后在「插件管理」里重载本插件或重启 AstrBot。不要用插件市场的「更新」。
 
-## 9. 备份
+## 10. 备份
 
 需要备份的只有两处：
 
@@ -176,7 +205,7 @@ uv pip install -r requirements.txt   # 依赖有变化时
 
 配置文件里有 API Key，备份时注意保管。
 
-## 10. 常见问题
+## 11. 常见问题
 
 | 现象 | 处理 |
 | --- | --- |

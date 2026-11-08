@@ -41,7 +41,7 @@ except ImportError:
 # 规则配置项 → 是否每条都按正则处理
 RULE_KEYS = {"keyword_rules": False, "wxcode_regex_rules": True}
 RULES_MAX = 500
-# WebUI 发起的操作在操作记录里的来源（AstrBot 不把登录的面板用户传给插件，操作人留空）
+# WebUI 发起的操作在操作记录里的来源；操作人用 self._web_log()（web_identity.py，Cloudflare Access 登录邮箱）
 WEB_LOG = {"source": "WebUI", "operator": ""}
 
 # 新功能页面用到的配置项（总览接口一并返回当前值）
@@ -183,7 +183,7 @@ class MinimalWebMixin:
         removed = [r for r in before if r not in rules]
         if added or removed:
             label = "关键词规则" if key == "keyword_rules" else "葵花码规则"
-            self._record_op(f"修改{label}", **WEB_LOG, detail="；".join(
+            self._record_op(f"修改{label}", **self._web_log(), detail="；".join(
                 ([f"新增 {', '.join(added)}"] if added else []) + ([f"删除 {', '.join(removed)}"] if removed else [])))
         return jsonify({"status": "success", "data": {"key": key, "rules": rules}})
 
@@ -232,7 +232,7 @@ class MinimalWebMixin:
         if not targets:
             return self._minimal_error(f"没有可发布的群{f'：{err}' if err else ''}")
         task = {"todo": todo, "groups": targets, "content": content, "options": options,
-                "image": image, "source": "WebUI", "operator": ""}
+                "image": image, **self._web_log()}
         job = self._notice_job(task)
         return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
 
@@ -288,7 +288,7 @@ class MinimalWebMixin:
             return self._minimal_error(err)
         if gid not in targets:
             return self._minimal_error("这个群不在可管理的范围内")
-        ok, info = await self._name_manual_rename(client, gid, data.get("name"), log=WEB_LOG)
+        ok, info = await self._name_manual_rename(client, gid, data.get("name"), log=self._web_log())
         if not ok:
             return self._minimal_error(info)
         return jsonify({"status": "success", "data": {"group_id": gid, "name": info}})
@@ -305,12 +305,12 @@ class MinimalWebMixin:
                 at = datetime.strptime(at_raw[:16], "%Y-%m-%d %H:%M")
             except ValueError:
                 return self._minimal_error("定时格式应为 YYYY-MM-DD HH:MM")
-            err = await self._name_schedule_suffix(targets, suffix, at, log=WEB_LOG)
+            err = await self._name_schedule_suffix(targets, suffix, at, log=self._web_log())
             if err:
                 return self._minimal_error(err)
             return jsonify({"status": "success", "data": {"scheduled": at.strftime("%Y-%m-%d %H:%M"),
                                                           "groups": targets}})
-        job = self._name_suffix_job(targets, suffix, log=WEB_LOG)
+        job = self._name_suffix_job(targets, suffix, log=self._web_log())
         return jsonify({"status": "success", "data": {"job": job}})
 
     async def _web_minimal_names_countdown(self):
@@ -327,19 +327,19 @@ class MinimalWebMixin:
         client, targets, err = await self._minimal_name_targets(data)
         if err:
             return self._minimal_error(err)
-        job = self._name_countdown_job(targets, target, template, log=WEB_LOG)
+        job = self._name_countdown_job(targets, target, template, log=self._web_log())
         return jsonify({"status": "success", "data": {"job": job}})
 
     async def _web_minimal_names_stop(self):
         data = await self._minimal_body()
         groups = self._minimal_groups_arg(data.get("groups"))
-        stopped = await self._name_stop_countdown(groups, log=WEB_LOG)
-        cancelled = await self._name_cancel_scheduled(groups, log=WEB_LOG) if data.get("scheduled") else 0
+        stopped = await self._name_stop_countdown(groups, log=self._web_log())
+        cancelled = await self._name_cancel_scheduled(groups, log=self._web_log()) if data.get("scheduled") else 0
         return jsonify({"status": "success", "data": {"stopped": stopped, "cancelled": cancelled}})
 
     async def _web_minimal_names_refresh(self):
         data = await self._minimal_body()
-        job = self._name_refresh_job(self._minimal_groups_arg(data.get("groups")), log=WEB_LOG)
+        job = self._name_refresh_job(self._minimal_groups_arg(data.get("groups")), log=self._web_log())
         if not job:
             return self._minimal_error("选中的群没有倒计时任务")
         return jsonify({"status": "success", "data": {"job": job}})
@@ -364,7 +364,7 @@ class MinimalWebMixin:
             return jsonify({"status": "success", "data": {"started": False, "groups_only": True}})
         if not self._dir_start_refresh(client, groups):
             return self._minimal_error("已有刷新任务在进行中，请稍后再试")
-        self._record_op("刷新群成员缓存", **WEB_LOG,
+        self._record_op("刷新群成员缓存", **self._web_log(),
                         detail="全部群" if groups is None else f"{len(groups)} 个群：{', '.join(groups[:20])}")
         return jsonify({"status": "success", "data": {"started": True}})
 
@@ -469,7 +469,7 @@ class MinimalWebMixin:
             return self._minimal_error("请填写处理原因（会写进操作记录）")
         keep = data.get("keep") if isinstance(data.get("keep"), dict) else {}
         result = self._dup_job(user_ids, mode, reason, keep={str(k): str(v) for k, v in keep.items()},
-                               block=bool(data.get("block")), **WEB_LOG)
+                               block=bool(data.get("block")), **self._web_log())
         results = result.get("results") or {}
         skipped = sum(1 for r in results.values() if r.get("skipped"))
         result["summary"] = {"people": len(results), "skipped": skipped,
@@ -482,7 +482,7 @@ class MinimalWebMixin:
     async def _web_minimal_duplicates_scope(self):
         data = await self._minimal_body()
         groups = self._minimal_ids(data.get("groups"))
-        selected = self._dup_set_scope(groups, **WEB_LOG)
+        selected = self._dup_set_scope(groups, **self._web_log())
         return jsonify({"status": "success", "data": {"groups": selected}})
 
     async def _web_minimal_duplicates_ignore(self):
@@ -493,7 +493,7 @@ class MinimalWebMixin:
         ignore = bool(data.get("ignore", True))
         reason = str(data.get("reason") or "").strip()
         for uid in user_ids:
-            self._dup_set_ignored(uid, ignore, reason, **WEB_LOG)
+            self._dup_set_ignored(uid, ignore, reason, **self._web_log())
         return jsonify({"status": "success", "data": {"count": len(user_ids), "ignore": ignore}})
 
     # ------------------------------------------------------------------
@@ -503,11 +503,11 @@ class MinimalWebMixin:
         args = quart_request.args
         items, total = self._op_list(
             action=str(args.get("action", "") or ""), keyword=str(args.get("keyword", "") or "").strip(),
-            source=str(args.get("source", "") or ""),
+            source=str(args.get("source", "") or ""), operator=str(args.get("operator", "") or "").strip(),
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
         )
         return jsonify({"status": "success", "data": {
-            "items": items, "total": total, "actions": self._op_actions(),
+            "items": items, "total": total, "actions": self._op_actions(), "operators": self._op_operators(),
         }})
 
     # ------------------------------------------------------------------
@@ -542,7 +542,7 @@ class MinimalWebMixin:
         groups = self._minimal_ids(data.get("groups"))
         if not groups:
             return self._minimal_error("请选择群")
-        job = self._mm_job(groups, mask, **WEB_LOG)
+        job = self._mm_job(groups, mask, **self._web_log())
         return jsonify({"status": "success", "data": {"job": job}})
 
     async def _web_minimal_codes(self):
@@ -618,7 +618,7 @@ class MinimalWebMixin:
     async def _web_minimal_rulegroups_save(self):
         data = await self._minimal_body()
         group = data.get("group") if isinstance(data.get("group"), dict) else data
-        saved, err, errors = self._rg_save(group, **WEB_LOG)
+        saved, err, errors = self._rg_save(group, **self._web_log())
         if err:
             return self._minimal_error(err, errors=errors)
         return jsonify({"status": "success", "data": {"group": saved,
@@ -626,7 +626,7 @@ class MinimalWebMixin:
 
     async def _web_minimal_rulegroups_delete(self):
         data = await self._minimal_body()
-        err = self._rg_delete(self._safe_int(data.get("id"), 0), **WEB_LOG)
+        err = self._rg_delete(self._safe_int(data.get("id"), 0), **self._web_log())
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"groups": [self._rg_public(g) for g in self._rg_list()]}})
@@ -695,10 +695,10 @@ class MinimalWebMixin:
         kind = str(data.get("kind") or "")
         on = bool(data.get("on", True))
         if kind == "allow":
-            err = self._mp_set_allowed(str(data.get("app_key") or ""), on, **WEB_LOG)
+            err = self._mp_set_allowed(str(data.get("app_key") or ""), on, **self._web_log())
         elif kind == "block":
             entry = str(data.get("entry") or data.get("app_key") or "")
-            err = self._rg_add_app(entry, **WEB_LOG) if on else self._rg_remove_app(entry, **WEB_LOG)
+            err = self._rg_add_app(entry, **self._web_log()) if on else self._rg_remove_app(entry, **self._web_log())
         else:
             return self._minimal_error("kind 只能是 allow 或 block")
         if err:
@@ -718,13 +718,13 @@ class MinimalWebMixin:
         level = data.get("level")
         for name in [str(n or "") for n in names]:
             err = self._cmd_set(name, enabled=None if enabled is None else bool(enabled),
-                                level=None if level in (None, "") else str(level), **WEB_LOG)
+                                level=None if level in (None, "") else str(level), **self._web_log())
             if err:
                 return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"commands": self._cmd_list()}})
 
     async def _web_minimal_commands_reset(self):
-        self._cmd_reset(**WEB_LOG)
+        self._cmd_reset(**self._web_log())
         return jsonify({"status": "success", "data": {"commands": self._cmd_list()}})
 
     # ------------------------------------------------------------------
@@ -753,7 +753,7 @@ class MinimalWebMixin:
         reason = str(data.get("reason") or "").strip()[:200]
         if not items:
             return self._minimal_error("请先勾选要删除的文件")
-        job = self._gf_delete_job([i for i in items if isinstance(i, dict)], reason=reason, **WEB_LOG)
+        job = self._gf_delete_job([i for i in items if isinstance(i, dict)], reason=reason, **self._web_log())
         if not job:
             return self._minimal_error("选中的文件不在最近一次扫描结果里，请重新扫描")
         return jsonify({"status": "success", "data": {"job": job}})
@@ -778,7 +778,7 @@ class MinimalWebMixin:
             image, err = self._outbox_local(str(data["image"]["path"]))  # 再检查一次，不直接用前端传来的路径
             if err:
                 return self._minimal_error(f"图片：{err}")
-        job, err = self._bulk_send_job(groups, str(data.get("text") or ""), image, **WEB_LOG)
+        job, err = self._bulk_send_job(groups, str(data.get("text") or ""), image, **self._web_log())
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
@@ -792,7 +792,7 @@ class MinimalWebMixin:
         info, err = self._outbox_local(str(file.get("path") or ""))
         if err:
             return self._minimal_error(err)
-        job, err = self._bulk_upload_job(groups, info, name=str(data.get("name") or file.get("name") or ""), **WEB_LOG)
+        job, err = self._bulk_upload_job(groups, info, name=str(data.get("name") or file.get("name") or ""), **self._web_log())
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
@@ -822,7 +822,7 @@ class MinimalWebMixin:
         kind = str(data.get("kind") or "")
         if kind not in ("allow", "block"):
             return self._minimal_error("kind 只能是 allow 或 block")
-        err = self._code_set_in_list(kind, str(data.get("text") or ""), bool(data.get("on", True)), **WEB_LOG)
+        err = self._code_set_in_list(kind, str(data.get("text") or ""), bool(data.get("on", True)), **self._web_log())
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})
@@ -904,7 +904,7 @@ class MinimalWebMixin:
                 return self._minimal_error(err)
             return jsonify({"status": "success", "data": {}})
         else:
-            err = self._bq_control(job_id, action, **WEB_LOG)
+            err = self._bq_control(job_id, action, **self._web_log())
             if err:
                 return self._minimal_error(err)
             return jsonify({"status": "success", "data": {}})
@@ -935,7 +935,7 @@ class MinimalWebMixin:
         data = await self._minimal_body()
         text = str(data.get("text") or "")
         block = bool(data.get("block", True))
-        err = self._code_set_blocked(text, block, **WEB_LOG)
+        err = self._code_set_blocked(text, block, **self._web_log())
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"blocked": self._code_block_list(), "block": block}})
@@ -974,7 +974,7 @@ class MinimalWebMixin:
         for uid in ids:
             if self._is_blacklist_exempt(uid):
                 skipped.append(uid)
-            elif self._bl_add(uid, reason, **WEB_LOG):
+            elif self._bl_add(uid, reason, **self._web_log()):
                 added.append(uid)
             else:
                 skipped.append(uid)  # 已在黑名单（原因已更新）
@@ -985,7 +985,7 @@ class MinimalWebMixin:
         uid = str(data.get("user_id") or "").strip()
         if not uid:
             return self._minimal_error("请填写 QQ 号")
-        removed = self._bl_remove(uid, reason=str(data.get("reason") or "").strip(), **WEB_LOG)
+        removed = self._bl_remove(uid, reason=str(data.get("reason") or "").strip(), **self._web_log())
         return jsonify({"status": "success", "data": {"removed": removed}})
 
     # ------------------------------------------------------------------
@@ -1015,7 +1015,7 @@ class MinimalWebMixin:
                 await self._dir_members(client, gid, force=True)
         job, err, info = await self._bq_kick_job(
             client, targets, block, groups=self._minimal_groups_arg(data.get("groups")),
-            reason=reason or "WebUI 踢人", **WEB_LOG,
+            reason=reason or "WebUI 踢人", **self._web_log(),
         )
         if err:
             protected = f"（已跳过：{', '.join(info['protected'])}）" if info["protected"] else ""

@@ -109,6 +109,15 @@ class BatchQueueMixin:
         """items: [{group_id, action, label, target, params}]。返回任务摘要（含 id、项数、mode）。"""
         self._bq_init_db()
         items = list(items or [])[: self.BQ_MAX_ITEMS]
+        fill = getattr(self, "_op_fill_operator", None)
+        if callable(fill):  # WebUI 创建的任务记下是谁建的；每项执行时的操作记录也带上
+            operator = fill(source, operator)
+            for it in items:
+                params = it.get("params")
+                if isinstance(params, dict) and not params.get("operator"):
+                    filled = fill(params.get("source", ""), "")
+                    if filled:
+                        params["operator"] = filled
         mode = mode if mode in (MODE_AUTO, MODE_MANUAL) else self._bq_default_mode()
         now = int(time.time())
         with self._storage._connect() as conn:

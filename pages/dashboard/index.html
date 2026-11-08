@@ -50,6 +50,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .nav-icon{width:18px;height:18px;fill:currentColor;flex-shrink:0}
 .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
 .sidebar-footer-row{display:flex;align-items:center;gap:8px}
+.web-user{font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.web-user b{color:var(--text-primary);font-weight:600}
+.web-user.warn{color:var(--danger);white-space:normal}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;animation:pulse 2s infinite}
 .status-text{color:var(--sidebar-text);font-size:11px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -275,7 +278,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .mobile-nav-item.active{color:var(--primary)}
 @media(max-width:900px){
   .sidebar{width:60px}
-  .sidebar-header .logo-text,.nav-item span,.sidebar-footer .status-text,.sidebar-footer .theme-label,.sidebar-footer .theme-toggle span:not(.theme-icon-light):not(.theme-icon-dark){display:none}
+  .sidebar-header .logo-text,.nav-item span,.sidebar-footer .status-text,.sidebar-footer .web-user,.sidebar-footer .theme-label,.sidebar-footer .theme-toggle span:not(.theme-icon-light):not(.theme-icon-dark){display:none}
   .sidebar-header{justify-content:center;padding:16px 8px}
   .nav-item{justify-content:center;padding:10px}
   .stats-row{grid-template-columns:repeat(2,1fr)}
@@ -807,6 +810,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <div class="status-dot" id="statusDot"></div>
           <span class="status-text" id="statusText">连接中...</span>
         </div>
+        <div class="web-user" id="webUser" style="display:none"></div>
         <button class="theme-toggle" id="themeToggle">
           <svg class="theme-icon-light" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
           <svg class="theme-icon-dark" viewBox="0 0 24 24" style="display:none"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
@@ -1698,11 +1702,12 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <div class="tab-panel" id="tab-oplog">
         <div class="page-header"><h1>操作记录</h1><button class="btn btn-ghost btn-sm" id="btnOpRefresh">刷新</button></div>
-        <p class="mn-intro">插件执行的每一个操作都在这里：踢人、拉黑、移出黑名单、关键词 / 葵花码撤回、自动拉黑、入群即踢、加群申请处理、发布公告、改群名、倒计时、修改规则和配置。来源分为「指令」（群里发的指令，操作人为发送者 QQ）、「WebUI」（管理页面）和「自动」（插件根据规则自动执行）。</p>
+        <p class="mn-intro">插件执行的每一个操作都在这里：踢人、拉黑、移出黑名单、关键词 / 葵花码撤回、自动拉黑、入群即踢、加群申请处理、发布公告、改群名、倒计时、修改规则和配置。来源分为「指令」（群里发的指令，操作人为发送者 QQ）、「WebUI」（管理页面；开启 Cloudflare 身份识别后，操作人为登录的名字或邮箱）和「自动」（插件根据规则自动执行）。</p>
         <div class="card">
           <div class="card-header"><h2>记录</h2>
             <div class="header-actions">
               <select class="input-sm" id="opAction" style="width:150px"><option value="">全部操作</option></select>
+              <select class="input-sm" id="opOperator" style="width:150px" title="网页操作的登录用户（Cloudflare Zero Trust）"><option value="">全部操作人</option></select>
               <select class="input-sm" id="opSource" style="width:110px"><option value="">全部来源</option><option value="指令">指令</option><option value="WebUI">WebUI</option><option value="自动">自动</option></select>
               <input class="input-sm" id="opKeyword" placeholder="QQ号 / 群号 / 原因" style="width:160px" />
             </div></div>
@@ -6168,13 +6173,17 @@ async function loadOplog(page) {
   var loadEp = beginLoad('oplog');
   if (page) OP_STATE.page = page;
   var res = await safeGet('minimal/oplog', { action: $('#opAction').value, source: $('#opSource').value,
-    keyword: $('#opKeyword').value.trim(), page: OP_STATE.page, page_size: OP_STATE.pageSize });
+    operator: $('#opOperator').value, keyword: $('#opKeyword').value.trim(), page: OP_STATE.page, page_size: OP_STATE.pageSize });
   if (!isCurrentLoad('oplog', loadEp)) return;
   if (isApiError(res)) { $('#opTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   var sel = $('#opAction'), cur = sel.value;
   sel.innerHTML = '<option value="">全部操作</option>' + (d.actions || []).map(function(a) { return '<option value="' + escAttr(a) + '">' + esc(a) + '</option>'; }).join('');
   sel.value = cur;
+  var opSel = $('#opOperator'), opCur = opSel.value, ops = (d.operators || []).slice();
+  if (opCur && ops.indexOf(opCur) < 0) ops.unshift(opCur);
+  opSel.innerHTML = '<option value="">全部操作人</option>' + ops.map(function(o) { return '<option value="' + escAttr(o) + '">' + esc(o) + '</option>'; }).join('');
+  opSel.value = opCur;
   var items = d.items || [];
   $('#opTable').innerHTML = items.length ? '<table class="mn-table"><thead><tr><th>时间</th><th>来源</th><th>操作</th><th>群</th><th>对象</th><th>原因</th><th>结果</th><th>详情</th></tr></thead><tbody>' +
     items.map(function(r) {
@@ -7440,7 +7449,7 @@ function initMinimalPages() {
   bindAutoFilter(['mpBy', 'mpSort', 'mpDaysSel', 'mpGroup', 'mpKeyword'], function() { MP.page = 1; mpLoadStats(); });
   bindAutoFilter(['dupKeyword'], function() { loadDup(1); });
   bindAutoFilter(['llKeyword', 'llKind'], function() { loadLeaveLog(1); });
-  bindAutoFilter(['opKeyword'], function() { loadOplog(1); });
+  bindAutoFilter(['opKeyword', 'opOperator'], function() { loadOplog(1); });
   GSEL_IDS.forEach(function(id) { gselEnhance(document.getElementById(id)); });
   bindAutoFilter(['mbrQuery'], mbrSearch);
   var mbrTab = document.getElementById('tab-member');
@@ -7576,9 +7585,31 @@ function initMinimalPages() {
   });
 }
 
+/* ---- 当前 WebUI 操作人（Cloudflare Zero Trust 登录邮箱，web_identity.py） ---- */
+async function loadWebUser() {
+  var el = document.getElementById('webUser');
+  if (!el) return;
+  var res = await safeGet('whoami');
+  if (isApiError(res)) return;
+  var d = mnData(res) || {};
+  if (!d.enabled) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.classList.toggle('warn', !!d.blocked || d.state !== 'ok');
+  if (d.state === 'ok' || d.state === 'forbidden') {
+    el.innerHTML = '当前：<b>' + esc(d.name || d.email) + '</b>';
+    el.title = d.email + (d.message ? '
+' + d.message : '');
+  } else {
+    el.textContent = '操作人：' + (d.operator || '未识别');
+    el.title = d.message || '';
+  }
+  if (d.blocked) toast(d.message || '没有权限操作', 'error');
+}
+
 async function init() {
   initTabs();
   initMinimalPages();
+  loadWebUser();
   // 尽早拉取配置，以便按 AI 总闸隐藏导航和页面中的 AI 区块
   loadConfigCached(false);
 
