@@ -4502,6 +4502,7 @@ function mnCodeTestFile() {
     var d = mnData(res), scan = d.scan || {};
     var lines = [];
     if (scan.error) lines.push('识别失败：' + scan.error);
+    else if (scan.skipped) lines.push(scan.skipped + '（群消息里遇到这种图片会直接放行）');
     else if (!(scan.codes || []).length) lines.push(scan.has_code ? '定位到码，但不是要解码的类别（当前解码：' + (d.classes || []).map(function(c) { return c === 2 ? '葵花码' : '二维码'; }).join('、') + '）' : '没有定位到码');
     (scan.codes || []).forEach(function(c, i) {
       lines.push('#' + (i + 1) + ' ' + c.label + ' 置信 ' + Number(c.score || 0).toFixed(2) + ' 框 [' + c.bbox.join(', ') + ']' + (c.crop_box ? ' → 裁剪 [' + c.crop_box.join(', ') + ']' : '（未裁剪，整图解码）'));

@@ -137,6 +137,16 @@ class PureFunctionTests(unittest.TestCase):
         self.assertEqual(self.M._code_guess_mime(b"\xff\xd8\xff\xe0"), "image/jpeg")
         self.assertEqual(self.M._code_guess_mime(b"RIFF\x00\x00\x00\x00WEBPVP8 "), "image/webp")
 
+    def test_unsupported_formats(self):
+        f = self.M._code_unsupported_format
+        for data in (b"\x89PNG\r\n\x1a\nxxxx", b"\xff\xd8\xff\xe0", b"RIFF\x00\x00\x00\x00WEBPVP8 ", b"BM\x00\x00", b""):
+            self.assertEqual("", f(data))
+        self.assertEqual("GIF", f(b"GIF89a\x01\x00"))
+        self.assertEqual("TIFF", f(b"II*\x00\x08\x00"))
+        self.assertEqual("HEIC", f(b"\x00\x00\x00\x18ftypheic"))
+        self.assertEqual("AVIF", f(b"\x00\x00\x00\x1cftypavif"))
+        self.assertEqual("未知", f(b"hello world"))
+
 
 @unittest.skipIf(Image is None, "需要 Pillow")
 class PipelineTests(unittest.IsolatedAsyncioTestCase):
@@ -205,6 +215,33 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.s.count("/v1/detect"), 1)
         self.assertTrue(second[0].get("cached"))
         self.assertEqual(first[0]["codes"][0]["decoded"]["text"], "x")
+
+    async def test_unsupported_format_is_skipped_without_calling_service(self):
+        gif = io.BytesIO()
+        Image.new("RGB", (200, 200), "white").save(gif, format="GIF")
+        self.h.images = {"g": gif.getvalue(), "p": _png()}
+        self.s.detect_responses = [_detections((2, 0.9, (10, 10, 100, 100)))]
+        self.s.decode_responses = [_decoded("WX_CODE", "pages/invite")]
+        scans = await self.h._code_scan_images(["g", "p"])
+        self.assertEqual("", scans[0]["error"])
+        self.assertIn("GIF", scans[0]["skipped"])
+        self.assertEqual([], scans[0]["codes"])
+        self.assertEqual(1, self.s.count("/v1/detect"))  # 只有 PNG 送去定位
+        self.assertEqual("pages/invite", scans[1]["codes"][0]["decoded"]["text"])
+        self.assertIn("GIF 格式不支持识别", self.h._code_live_lines(scans)[0])
+        # 再发一次同一张 GIF：走缓存，仍不调用服务
+        again = await self.h._code_scan_images(["g"])
+        self.assertTrue(again[0].get("cached"))
+        self.assertEqual(1, self.s.count("/v1/detect"))
+
+    async def test_gif_only_message_passes(self):
+        gif = io.BytesIO()
+        Image.new("RGB", (50, 50), "white").save(gif, format="GIF")
+        self.h.images = {"g": gif.getvalue()}
+        self.h.cfg_values["code_undecoded_action"] = "recall"
+        handled, _ = await self.h._run_hit_guards(None, "1", "456", "", "", ["g"])
+        self.assertFalse(handled)
+        self.assertEqual(0, len(self.s.calls))
 
     async def test_service_down_passes_message(self):
         async def boom(*a, **k):

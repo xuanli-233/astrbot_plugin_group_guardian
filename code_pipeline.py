@@ -48,6 +48,8 @@ CODE_CLASS_LABELS ={0: "ArUco", 1: "条形码", 2: "葵花码", 3: "二维码", 
 DETECT_MAX_BYTES = 10 * 1024 * 1024
 DETECT_MAX_PIXELS = 12_000_000
 DETECT_MAX_SIDE = 12_000
+# 定位服务只收这几种格式（其它格式返回 HTTP 415），GIF 表情等直接跳过、放行
+DETECT_FORMATS = ("image/png", "image/jpeg", "image/webp", "image/bmp")
 
 
 class CodeServiceError(Exception):
@@ -125,6 +127,34 @@ class CodePipelineMixin:
         if data[:2] == b"BM":
             return "image/bmp"
         return "application/octet-stream"
+
+    @staticmethod
+    def _code_format_name(data: bytes) -> str:
+        """不支持的图片格式的名字（日志里显示）。"""
+        head = bytes(data[:16] or b"")
+        if head[:6] in (b"GIF87a", b"GIF89a"):
+            return "GIF"
+        if head[:4] in (b"II*\x00", b"MM\x00*"):
+            return "TIFF"
+        if head[4:8] == b"ftyp":
+            brand = head[8:12]
+            if brand in (b"avif", b"avis"):
+                return "AVIF"
+            if brand[:3] in (b"hei", b"hev", b"mif") or brand == b"msf1":
+                return "HEIC"
+            return "视频 / 未知"
+        if head[:4] == b"\x00\x00\x01\x00":
+            return "ICO"
+        if head[:5] in (b"<?xml", b"<svg ") or head[:4] == b"<svg":
+            return "SVG"
+        return "未知"
+
+    @classmethod
+    def _code_unsupported_format(cls, data: bytes) -> str:
+        """定位服务不支持的格式返回格式名，支持的返回空串。"""
+        if not data or cls._code_guess_mime(data) in DETECT_FORMATS:
+            return ""
+        return cls._code_format_name(data)
 
     # ------------------------------------------------------------------
     # 两个服务
@@ -251,8 +281,14 @@ class CodePipelineMixin:
                     error}
         stop_when(text) -> bool：每解出一个码就调用；返回 True（命中规则）时不再解码剩下的码，
         剩下的码 error 记为 STOPPED_EARLY。解码服务慢，命中即停可以尽快撤回。
+        定位服务不支持的格式（GIF 等）不调用服务，skipped 写明原因，按没有码放行。
         """
         out = {"has_code": False, "codes": [], "error": "", "stopped_early": False}
+        unsupported = self._code_unsupported_format(data)
+        if unsupported:
+            out["skipped"] = f"{unsupported} 格式不支持识别，已跳过"
+            live_stage(f"{label}跳过（{unsupported} 格式）")
+            return out
         try:
             image = self._code_open_image(data)
         except Exception as e:
@@ -425,6 +461,9 @@ class CodePipelineMixin:
             cached = "（缓存）" if scan.get("cached") else ""
             if scan.get("error"):
                 lines.append(f"{prefix}{scan['error']}")
+                continue
+            if scan.get("skipped"):
+                lines.append(f"{prefix}{scan['skipped']}{cached}")
                 continue
             codes = scan.get("codes") or []
             if not codes:
