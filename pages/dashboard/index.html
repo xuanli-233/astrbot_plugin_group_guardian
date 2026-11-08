@@ -35,20 +35,24 @@
 }
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text-primary);line-height:1.5;font-size:14px}
 .app{display:flex;height:100vh;overflow:hidden}
-.sidebar{width:220px;background:var(--sidebar-bg);border-right:1px solid var(--sidebar-border);display:flex;flex-direction:column;flex-shrink:0;transition:width .3s}
-.sidebar-header{padding:20px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+.sidebar{width:220px;background:var(--sidebar-bg);border-right:1px solid var(--sidebar-border);display:flex;flex-direction:column;flex-shrink:0;min-height:0;transition:width .3s}
+.sidebar-header{padding:20px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);flex-shrink:0}
 .logo-icon{width:32px;height:32px;border-radius:var(--radius);background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0}
 .logo-text{display:flex;flex-direction:column;min-width:0}
 .logo-title{color:var(--text-primary);font-weight:600;font-size:13px;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .logo-ver{color:var(--text-muted);font-size:11px}
-.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px}
-.nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--radius);color:var(--sidebar-text);text-decoration:none;cursor:pointer;transition:all .15s;font-size:13px;font-weight:400}
+/* 窗口不够高时只滚动导航，顶部标志和底部状态 / 主题切换固定 */
+.sidebar-nav{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px 8px;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.sidebar-nav::-webkit-scrollbar{width:6px}
+.sidebar-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sidebar-nav::-webkit-scrollbar-track{background:transparent}
+.nav-item{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--radius);color:var(--sidebar-text);text-decoration:none;cursor:pointer;transition:all .15s;font-size:13px;font-weight:400}
 .nav-item:hover{background:rgba(0,0,0,.04);color:var(--sidebar-active)}
 [data-theme="dark"] .nav-item:hover{background:rgba(255,255,255,.06)}
 .nav-item.active{background:rgba(0,0,0,.06);color:var(--sidebar-active);font-weight:500}
 [data-theme="dark"] .nav-item.active{background:rgba(255,255,255,.08)}
 .nav-icon{width:18px;height:18px;fill:currentColor;flex-shrink:0}
-.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;flex-shrink:0}
 .sidebar-footer-row{display:flex;align-items:center;gap:8px}
 .web-user{font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .web-user b{color:var(--text-primary);font-weight:600}
@@ -2542,8 +2546,18 @@ function promptModal(opts) {
   });
 }
 
+// 侧边栏放不下时，让当前页面的菜单项露出来（只滚动导航区，不用 scrollIntoView，以免带动外层容器）
+function navRevealActive() {
+  var nav = document.querySelector('.sidebar-nav'), item = nav && nav.querySelector('.nav-item.active');
+  if (!item || nav.scrollHeight <= nav.clientHeight) return;
+  var top = item.offsetTop - nav.offsetTop, bottom = top + item.offsetHeight, pad = 8;
+  if (top - pad < nav.scrollTop) nav.scrollTop = Math.max(0, top - pad);
+  else if (bottom + pad > nav.scrollTop + nav.clientHeight) nav.scrollTop = bottom + pad - nav.clientHeight;
+}
+
 function switchTab(tabName) {
   $$('.nav-item').forEach(function(i) { i.classList.toggle('active', i.dataset.tab === tabName); });
+  navRevealActive();
   $$('.mobile-nav-item').forEach(function(i) { i.classList.toggle('active', i.dataset.tab === tabName); });
   $$('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
   $('#tab-' + tabName).classList.add('active');
