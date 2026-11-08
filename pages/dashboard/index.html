@@ -74,11 +74,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .stat-value{font-size:20px;font-weight:600;line-height:1.2;letter-spacing:-.2px}
 .stat-label{font-size:12px;color:var(--text-muted);margin-top:2px;font-weight:400}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:16px;overflow:hidden}
-.card-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)}
-.card-header h2{font-size:14px;font-weight:600;letter-spacing:-.2px}
+.card-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.card-header h2{font-size:14px;font-weight:600;letter-spacing:-.2px;white-space:nowrap}
 .card-full{grid-column:1/-1}
-.header-actions{display:flex;gap:8px;align-items:center}
-.btn{border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0}
 .btn-sm{padding:5px 12px}
 .btn-ghost{background:transparent;color:var(--text-secondary);padding:5px 10px}
 .btn-ghost:hover{background:var(--info-light);color:var(--text-primary)}
@@ -101,7 +101,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .input-sm:focus{border-color:var(--primary)}
 .input-md{border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:13px;outline:none;transition:border-color .15s;width:100%;background:var(--surface);color:var(--text-primary)}
 .input-md:focus{border-color:var(--primary)}
-.group-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:16px}
+.group-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;padding:4px 0}
 .group-card{border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;transition:border-color .15s}
 .group-card:hover{border-color:var(--primary)}
 .group-card.is-white{border-left:3px solid var(--success)}
@@ -136,8 +136,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .member-title{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--warning-light);color:var(--warning);flex-shrink:0;max-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .member-uid{font-size:11px;color:var(--text-muted);font-family:monospace;flex-shrink:0}
 .member-actions{flex-shrink:0}
-.admin-manage{padding:16px}
-.admin-add-row{display:flex;gap:8px;margin-bottom:12px}
+.admin-manage{padding:14px 18px}
+.admin-add-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
 .admin-list{display:flex;flex-wrap:wrap;gap:8px}
 .admin-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:16px;background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:500}
 .admin-tag .btn-remove{cursor:pointer;font-size:14px;opacity:.6;transition:opacity .15s;background:none;border:none;color:inherit;padding:0;line-height:1}
@@ -170,15 +170,17 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .expand-icon{font-size:9px;color:var(--text-muted);transition:transform .2s;flex-shrink:0}
 .expand-icon.expanded{transform:rotate(90deg)}
 .user-records{border-top:1px solid var(--border);background:var(--surface);display:none}
-.record-table{width:100%;border-collapse:collapse;font-size:12px}
-.record-table th{background:var(--info-light);padding:6px 10px;text-align:left;font-weight:500;color:var(--text-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
-.record-table td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:top}
-.record-table tr:hover td{background:var(--info-light)}
+/* 统一表格：所有列表共用（mn-table / log-table / record-table 外观一致） */
+.mn-table,.log-table,.record-table{width:100%;border-collapse:collapse;font-size:13px}
+.mn-table th,.log-table th,.record-table th{background:var(--info-light);padding:8px 10px;text-align:left;font-size:12px;font-weight:500;color:var(--text-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
+.mn-table td,.log-table td,.record-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.mn-table tbody tr:hover td,.log-table tbody tr:hover td,.record-table tbody tr:hover td{background:var(--info-light)}
+.mn-table tbody tr:last-child td,.log-table tbody tr:last-child td{border-bottom:none}
+/* 长文字列不被挤成一字一行；操作按钮保持一行（真放不下时表格在容器里横向滚动） */
+.mn-table td[style*="break-all"]{min-width:220px}
+.mn-table td:last-child>div{flex-wrap:nowrap!important}
 .log-container{overflow-x:auto;padding:12px}
-.log-table{width:100%;border-collapse:collapse;font-size:12px}
-.log-table th{background:var(--info-light);padding:8px 10px;text-align:left;font-weight:500;color:var(--text-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
-.log-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top}
-.log-table tr:hover td{background:var(--info-light)}
+
 .reason-cell{max-width:150px;font-size:11px;color:var(--text-muted)}
 .badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:500;white-space:nowrap}
 .badge-danger{background:var(--danger-light);color:var(--danger)}
@@ -186,7 +188,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .badge-warning{background:var(--warning-light);color:var(--warning)}
 .badge-default{background:var(--info-light);color:var(--text-muted)}
 .settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-.settings-list{padding:8px 16px}
+.settings-list{padding:8px 18px}
 .setting-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
 .setting-item:last-child{border-bottom:none}
 .setting-info{flex:1;min-width:0}
@@ -198,11 +200,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .toggle .slider::before{content:"";position:absolute;width:14px;height:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.1)}
 .toggle input:checked+.slider{background:var(--primary)}
 .toggle input:checked+.slider::before{transform:translateX(16px)}
-.list-manage{padding:16px}
+.list-manage{padding:14px 18px}
 .list-section{margin-bottom:20px}
 .list-section:last-child{margin-bottom:0}
 .list-section h3{font-size:13px;font-weight:500;margin-bottom:8px;letter-spacing:-.2px}
-.list-add-row{display:flex;gap:8px;margin-bottom:8px}
+.list-add-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
 .list-items{display:flex;flex-wrap:wrap;gap:6px}
 .list-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;font-weight:500}
 .list-tag .btn-remove{cursor:pointer;font-size:13px;opacity:.6;transition:opacity .15s;background:none;border:none;color:inherit;padding:0;line-height:1}
@@ -438,9 +440,17 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .gp-ava{width:30px;height:30px;border-radius:6px;flex:none;background:var(--info-light);object-fit:cover}
     .gp-cell{display:flex;align-items:center;gap:8px;min-width:0}
     .gp-empty{grid-column:1/-1}
-    .mn-table{width:100%;border-collapse:collapse;font-size:13px}
-    .mn-table th,.mn-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
-    .mn-table th{font-size:12px;color:var(--text-muted);font-weight:500}
+    .bq-items .mn-table thead th{position:sticky;top:0;z-index:1}
+    /* 可搜索的选群下拉（gselEnhance） */
+    .gsel{position:relative;display:inline-block}
+    .gsel-btn{text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:22px;position:relative}
+    .gsel-btn::after{content:'';position:absolute;right:9px;top:50%;margin-top:-2px;border:4px solid transparent;border-top-color:var(--text-muted)}
+    .gsel-pop{position:absolute;z-index:50;top:calc(100% + 4px);left:0;min-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:6px}
+    .gsel-pop input{width:100%;box-sizing:border-box;margin-bottom:6px}
+    .gsel-list{max-height:300px;overflow:auto}
+    .gsel-opt{padding:6px 8px;border-radius:4px;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .gsel-opt:hover,.gsel-opt.hl{background:var(--info-light)}
+    .gsel-opt.on{color:var(--primary);font-weight:600}
     .mn-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--primary-light);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)}
     .mn-steps{margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.9}
     /* 实时日志：视图切换 + 二维码看板 */
@@ -854,6 +864,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-records">
         <div class="page-header"><h1>违规记录</h1></div>
+        <p class="mn-intro">被撤回的消息都记在这里：上面按人汇总（被撤回几次、在哪些群），下面是逐条的审核日志，点「查看」看完整内容和保存下来的图片。可以导出 CSV。</p>
         <div class="card">
           <div class="card-header"><h2>被撤回用户</h2><div class="header-actions">
             <button class="btn btn-ghost btn-sm" id="btnRefreshUsers">刷新</button>
@@ -874,6 +885,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-join">
         <div class="page-header"><h1>入群审核</h1><button class="btn btn-ghost btn-sm" id="btnRefreshJoin">刷新</button></div>
+        <p class="mn-intro">加群申请的自动处理：按群设置通过 / 拒绝关键词和默认动作，群号填 default 表示所有没单独设置的群。</p>
         <div class="card">
           <div class="card-header"><h2>新增 / 编辑规则</h2></div>
           <div class="settings-list" style="padding:14px 16px">
@@ -898,6 +910,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-perms">
         <div class="page-header"><h1>权限管理</h1><button class="btn btn-ghost btn-sm" id="btnRefreshPerms">刷新</button></div>
+        <p class="mn-intro">谁能管理插件：插件管理员（所有群、所有功能）、群超管（只管某几个群）、群管理员授权（按群决定群主 / 群管理员能不能用机器人），以及被移除权限的群管。每条指令谁能用在「指令管理」里设置。</p>
         <div class="card">
           <div class="card-header"><h2>插件管理员</h2></div>
           <div class="admin-manage">
@@ -941,7 +954,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnCmdRefresh">刷新</button><button class="btn btn-outline btn-sm" id="btnCmdReset">全部恢复默认</button></div></div>
         <p class="mn-intro">群里能用的每一条 / 指令都在这里：可以单独关闭，也可以设置谁能用。默认<strong>开启、仅群主和插件管理员</strong>可用（群超管与群主同级）。关闭后谁发都不执行，普通成员发了不回复，插件管理员会收到「已关闭」提示。成员可以发 <code>/指令列表</code> 查看自己能用哪些指令。</p>
         <div class="card">
-          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">全部指令</h2>
+          <div class="card-header"><h2>全部指令</h2>
             <div class="header-actions">
               <select class="input-sm" id="cmdCat" style="width:140px"><option value="">所有分类</option></select>
               <input class="input-sm" id="cmdKeyword" placeholder="指令名 / 说明" style="width:160px" />
@@ -954,6 +967,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-groupcfg">
         <div class="page-header"><h1>多群配置</h1><button class="btn btn-ghost btn-sm" id="btnRefreshGroupCfg">刷新群列表</button></div>
+        <p class="mn-intro">给某个群单独设置功能开关和数值，没设置的项沿用「设置」页的全局值。先在下面选群，再改这个群的配置。</p>
         <div class="card">
           <div class="card-header"><h2>选择群</h2><div class="header-actions"><input type="text" class="input-sm" id="gcGroupSearch" placeholder="搜索群号/群名..." /></div></div>
           <div class="settings-list" style="padding:10px 16px">
@@ -979,6 +993,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-tasks">
         <div class="page-header"><h1>定时解禁</h1><button class="btn btn-ghost btn-sm" id="btnRefreshTasks">刷新</button></div>
+        <p class="mn-intro">禁言到期后由插件自动解除的计划（例如命中规则组被禁言的人）。可以提前取消某条计划。</p>
         <div class="card">
           <div class="card-header"><h2>定时解禁计划</h2></div>
           <div class="log-container" id="unbanList"><p class="empty">加载中...</p></div>
@@ -1102,17 +1117,16 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           </div>
         </div>
         <div class="card">
-          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">码统计</h2>
+          <div class="card-header"><h2>码统计</h2>
             <div class="header-actions">
               <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
               <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
               <select class="input-sm" id="csHours" style="width:150px"></select>
               <select class="input-sm" id="csGroup" style="width:180px"><option value="">所有群</option></select>
               <input class="input-sm" id="csKeyword" placeholder="码内容 / QQ号 / 昵称" style="width:170px" />
-              <button class="btn btn-outline btn-sm" id="btnCsFilter">筛选</button>
             </div></div>
           <div class="log-container" id="csTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="csPager"></div></div>
+          <div class="mn-body" style="padding-top:0" id="csPager"></div>
         </div>
         <div class="card">
           <div class="card-header"><h2>按人统计</h2><span class="rules-subtle">长期累计，不随码记录的保留时长清理</span>
@@ -1120,10 +1134,9 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               <select class="input-sm" id="cuSort" style="width:170px" title="排列顺序"><option value="codes">按发过的码数（多→少）</option><option value="total">按发码总次数（多→少）</option><option value="bad">按被撤回次数（多→少）</option><option value="recent">按最近发码</option></select>
               <select class="input-sm" id="cuGroup" style="width:180px"><option value="">所有群</option></select>
               <input class="input-sm" id="cuKeyword" placeholder="QQ号 / 昵称 / 码内容" style="width:170px" />
-              <button class="btn btn-outline btn-sm" id="btnCuFilter">筛选</button>
             </div></div>
           <div class="log-container" id="cuTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="cuPager"></div></div>
+          <div class="mn-body" style="padding-top:0" id="cuPager"></div>
         </div>
         <div class="mn-grid">
           <div class="card">
@@ -1195,17 +1208,16 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           </div>
         </div>
         <div class="card">
-          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">小程序统计</h2>
+          <div class="card-header"><h2>小程序统计</h2>
             <div class="header-actions">
               <select class="input-sm" id="mpBy" style="width:120px"><option value="app">按小程序</option><option value="user">按小程序 + 人</option></select>
               <select class="input-sm" id="mpSort" style="width:150px"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
               <select class="input-sm" id="mpDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
               <select class="input-sm" id="mpGroup" style="width:180px"><option value="">所有群</option></select>
               <input class="input-sm" id="mpKeyword" placeholder="小程序名 / appid / QQ号 / 内容" style="width:190px" />
-              <button class="btn btn-outline btn-sm" id="btnMpFilter">筛选</button>
             </div></div>
           <div class="log-container" id="mpTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="mpPager"></div></div>
+          <div class="mn-body" style="padding-top:0" id="mpPager"></div>
         </div>
         <div class="card">
           <div class="card-header"><h2>小程序看板</h2><span class="rules-subtle" id="mpFeedNote">最近出现的小程序，新的在前，每 3 秒更新；红框 = 这条消息被撤回</span></div>
@@ -1281,7 +1293,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           <div class="mn-body"><div class="gp-grid" id="gfGroups"></div><p class="mn-hint" id="gfProgress" style="margin-top:8px">扫描根目录和一级文件夹，群之间按「群成员缓存」里的接口间隔。结果只保存在内存里。</p></div>
         </div>
         <div class="card">
-          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">文件</h2>
+          <div class="card-header"><h2>文件</h2>
             <div class="header-actions">
               <select class="input-sm" id="gfView" style="width:140px"><option value="files">全部文件</option><option value="uploaders">按上传者汇总</option><option value="dups">重复文件</option></select>
               <select class="input-sm" id="gfGroupSel" style="width:170px"><option value="">所有群</option></select>
@@ -1453,8 +1465,8 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               </select>
               <label class="mn-hint"><input type="checkbox" id="dupExempt" /> 显示管理员 / 白名单</label>
               <label class="mn-hint"><input type="checkbox" id="dupIgnored" /> 显示已忽略</label>
-              <input class="input-sm" id="dupKeyword" placeholder="QQ号 / 名片" style="width:130px" />
-              <button class="btn btn-outline btn-sm" id="btnDupFilter">筛选</button>
+              <select class="input-sm" id="dupSort" style="width:150px"><option value="count">按所在群数（多→少）</option><option value="recent_join">按最近入群</option><option value="uid">按 QQ 号</option></select>
+              <input class="input-sm" id="dupKeyword" placeholder="QQ号 / 名片（回车搜索）" style="width:170px" />
             </div></div>
           <div class="mn-body" style="padding-bottom:0">
             <div class="mn-row">
@@ -1474,7 +1486,12 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               <button class="btn btn-primary btn-sm" id="btnDupKeep">选中的人：只保留一个群</button>
               <button class="btn btn-danger btn-sm" id="btnDupKickAll">选中的人：全部踢出</button>
               <button class="btn btn-outline btn-sm" id="btnDupIgnore">选中的人：忽略</button>
-              <span class="mn-hint">要保留的群在每行里单选，默认是最早加入的群</span>
+              <span class="mn-hint">要保留的群在每行里单选，默认是最早加入的群；勾选只在当前页</span>
+            </div>
+            <div class="mn-row">
+              <button class="btn btn-outline btn-sm" id="btnDupAllKeep">符合条件的全部人：只保留一个群</button>
+              <button class="btn btn-outline btn-sm" id="btnDupAllKick" style="color:var(--danger)">符合条件的全部人：全部踢出</button>
+              <span class="mn-hint" id="dupAllHint">按当前筛选条件处理所有页的人（不含管理员 / 白名单），各自保留最早加入的群</span>
             </div>
             </div>
             <div id="dupResult"></div>
@@ -1595,10 +1612,9 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
             <div class="header-actions">
               <select class="input-sm" id="llKind" style="width:110px"><option value="">全部方式</option><option value="leave">主动退群</option><option value="kick">被踢出</option></select>
               <input class="input-sm" id="llKeyword" placeholder="QQ号 / 群号 / 昵称 / 群名" style="width:180px" />
-              <button class="btn btn-outline btn-sm" id="btnLlFilter">筛选</button>
             </div></div>
           <div class="log-container" id="llTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="llPager"></div></div>
+          <div class="mn-body" style="padding-top:0" id="llPager"></div>
         </div>
       </div>
 
@@ -1611,10 +1627,9 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               <select class="input-sm" id="opAction" style="width:150px"><option value="">全部操作</option></select>
               <select class="input-sm" id="opSource" style="width:110px"><option value="">全部来源</option><option value="指令">指令</option><option value="WebUI">WebUI</option><option value="自动">自动</option></select>
               <input class="input-sm" id="opKeyword" placeholder="QQ号 / 群号 / 原因" style="width:160px" />
-              <button class="btn btn-outline btn-sm" id="btnOpFilter">筛选</button>
             </div></div>
           <div class="log-container" id="opTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="opPager"></div></div>
+          <div class="mn-body" style="padding-top:0" id="opPager"></div>
         </div>
       </div>
 
@@ -1654,6 +1669,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-settings">
         <div class="page-header"><h1>设置</h1><button class="btn btn-primary btn-sm" id="btnSaveSettings">保存更改</button></div>
+        <p class="mn-intro">插件的全部全局配置。功能页面里已经有的开关在那些页面里改更方便；这里按分类列出全部项，改完点右上角「保存更改」。</p>
         <div class="card" style="margin-bottom:12px">
           <div class="settings-list" style="padding:12px 16px">
             <div id="settingsSectionTabs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
@@ -2930,6 +2946,7 @@ var FEATURE_TOGGLES = [
   { key: 'strict_permission_enabled', label: '严格权限', desc: '默认开：只有手动设置的插件管理员 / 群超管和群主能用指令，群管理员需单独设置' },
 ];
 var LOGS_STATE = { page: 1, pageSize: 50 };
+setTimeout(function() { registerPager('logs', LOGS_STATE, function() { loadLogs(); }); }, 0);
 
 function renderSegmented(name, value, items) {
   return '<div data-seg-name="' + escAttr(name) + '" style="display:inline-flex;gap:6px;flex-wrap:wrap">'
@@ -3183,37 +3200,33 @@ function applySettingsSection() {
 
 
 
+// 通用分页：renderPager(page, pageSize, total, prefix) 生成分页条，PAGERS[prefix] 告诉它状态对象和加载函数。
+// 新列表用 registerPager('xxx', 状态对象, 加载函数) 登记即可，不用再各写一套上一页 / 下一页。
+var PAGERS = {};
+function registerPager(prefix, state, load) { PAGERS[prefix] = { state: state, load: load }; }
+function pagerGo(prefix, page, size) {
+  var p = PAGERS[prefix];
+  if (!p) return;
+  if (size) { p.state.pageSize = size; p.state.page = 1; } else { p.state.page = Math.max(1, page); }
+  p.load();
+}
 function bindPager(root) {
   $$('[data-page-act]', root).forEach(function(btn) {
     btn.addEventListener('click', function() {
       var prefix = btn.getAttribute('data-page-prefix');
-      var act = btn.getAttribute('data-page-act');
-      if (prefix === 'logs') {
-        LOGS_STATE.page = act === 'prev' ? Math.max(1, LOGS_STATE.page - 1) : LOGS_STATE.page + 1;
-        loadLogs();
-      }
+      var st = (PAGERS[prefix] || {}).state;
+      if (st) pagerGo(prefix, btn.getAttribute('data-page-act') === 'prev' ? st.page - 1 : st.page + 1);
     });
   });
   $$('[data-page-size]', root).forEach(function(sel) {
     sel.addEventListener('change', function() {
-      var prefix = sel.getAttribute('data-page-size');
-      var size = parseInt(sel.value, 10) || 20;
-      if (prefix === 'logs') {
-        LOGS_STATE.pageSize = size;
-        LOGS_STATE.page = 1;
-        loadLogs();
-      }
+      pagerGo(sel.getAttribute('data-page-size'), 1, parseInt(sel.value, 10) || 20);
     });
   });
   $$('[data-page-jump]', root).forEach(function(inp) {
     inp.addEventListener('keydown', function(ev) {
       if (ev.key !== 'Enter') return;
-      var prefix = inp.getAttribute('data-page-jump');
-      var page = parseInt(inp.value, 10) || 1;
-      if (prefix === 'logs') {
-        LOGS_STATE.page = Math.max(1, page);
-        loadLogs();
-      }
+      pagerGo(inp.getAttribute('data-page-jump'), parseInt(inp.value, 10) || 1);
     });
   });
 }
@@ -4257,12 +4270,8 @@ async function mpLoadStats() {
         '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
         '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-mp-act="detail" data-i="' + i + '">详情</button>' + mpActs(it, 'mp', i) + '</div></td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '这段时间没有出现小程序' : '小程序记录已关闭') + '</p>';
-  var pages = Math.max(1, Math.ceil((d.total || 0) / MP.pageSize));
-  $('#mpPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 项，第 ' + MP.page + ' / ' + pages + ' 页；记录保留 ' + d.store_days + ' 天</span>' +
-    '<button class="btn btn-ghost btn-sm" id="mpPrev"' + (MP.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
-    '<button class="btn btn-ghost btn-sm" id="mpNext"' + (MP.page >= pages ? ' disabled' : '') + '>下一页</button>';
-  bindIfExists('mpPrev', function() { MP.page -= 1; mpLoadStats(); });
-  bindIfExists('mpNext', function() { MP.page += 1; mpLoadStats(); });
+  $('#mpPager').innerHTML = renderPager(MP.page, MP.pageSize, d.total || 0, 'mp') + '<span class="mn-hint">记录保留 ' + d.store_days + ' 天</span>';
+  bindPager($('#mpPager'));
 }
 function mpRenderAllow() {
   $('#mpAllowCount').textContent = MP.allow.length + ' 个';
@@ -4657,6 +4666,72 @@ async function bulkSendFile() {
   bulkJobMsg('#bfResult', res, '上传到');
 }
 
+/* ---- 公共：筛选条件改了自动生效（下拉 / 勾选立即，输入框停顿 0.4 秒或回车） ---- */
+function bindAutoFilter(ids, reload) {
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el || el._autoFilter) return;
+    el._autoFilter = true;
+    if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'radio') { el.addEventListener('change', reload); return; }
+    var t = null;
+    el.addEventListener('input', function() { clearTimeout(t); t = setTimeout(reload, 400); });
+    el.addEventListener('keydown', function(e) { if (e.key === 'Enter') { clearTimeout(t); reload(); } });
+  });
+}
+
+/* ---- 公共：可搜索的选群下拉。保留原来的 <select>（隐藏），选中后同步 value 并触发 change，调用方不用改 ---- */
+function gselCloseAll(except) { $$('.gsel-pop').forEach(function(p) { if (p !== except) p.style.display = 'none'; }); }
+function gselEnhance(sel) {
+  if (!sel || sel._gsel) return;
+  sel._gsel = true;
+  var wrap = document.createElement('span'); wrap.className = 'gsel';
+  sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(sel);
+  var width = sel.style.width || '200px';
+  if (sel.style.flex) { wrap.style.flex = sel.style.flex; width = '100%'; }
+  sel.style.display = 'none';
+  var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'input-sm gsel-btn'; btn.style.width = width;
+  var pop = document.createElement('div'); pop.className = 'gsel-pop'; pop.style.display = 'none';
+  pop.innerHTML = '<input class="input-sm" placeholder="搜索群名或群号" /><div class="gsel-list"></div>';
+  wrap.appendChild(btn); wrap.appendChild(pop);
+  var input = pop.querySelector('input'), list = pop.querySelector('.gsel-list');
+  var label = function() { var o = sel.options[sel.selectedIndex]; btn.textContent = o ? o.text : ''; btn.title = btn.textContent; };
+  var render = function() {
+    var q = input.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    var opts = Array.prototype.slice.call(sel.options).filter(function(o) {
+      var key = (o.text + ' ' + o.value).toLowerCase();
+      return q.every(function(w) { return key.indexOf(w) >= 0; });
+    });
+    list.innerHTML = opts.length ? opts.slice(0, 300).map(function(o, i) {
+      return '<div class="gsel-opt' + (o.value === sel.value ? ' on' : '') + (i === 0 && q.length ? ' hl' : '') + '" data-v="' + escAttr(o.value) + '">' + esc(o.text) + '</div>';
+    }).join('') : '<div class="mn-hint" style="padding:6px">没有匹配的群</div>';
+  };
+  var choose = function(v) {
+    pop.style.display = 'none';
+    if (sel.value === v) return;
+    sel.value = v; label(); sel.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var open = pop.style.display === 'none';
+    gselCloseAll(pop);
+    if (!open) { pop.style.display = 'none'; return; }
+    pop.style.display = ''; input.value = ''; render(); input.focus();
+    var on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  });
+  pop.addEventListener('click', function(e) { e.stopPropagation(); });
+  list.addEventListener('click', function(e) { var o = e.target.closest('[data-v]'); if (o) choose(o.getAttribute('data-v')); });
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { pop.style.display = 'none'; btn.focus(); }
+    if (e.key === 'Enter') { var o = list.querySelector('[data-v]'); if (o) choose(o.getAttribute('data-v')); }
+  });
+  sel.addEventListener('change', label);
+  new MutationObserver(label).observe(sel, { childList: true });
+  label();
+}
+document.addEventListener('click', function() { gselCloseAll(null); });
+var GSEL_IDS = ['csGroup', 'cuGroup', 'mpGroup', 'gfGroupSel', 'rgTestGroup', 'guardBackupGroup', 'wxForward', 'kickScope'];
+
 /* ---- 码管理 ---- */
 var CS = { page: 1, pageSize: 50, items: [], window: 5, ttl: 10 };
 var CS_OUTCOME = { pass: '放行', limit: '超限撤回', rule: '规则撤回', allow: '白名单放行' };
@@ -4682,7 +4757,7 @@ async function loadCodes(page) {
   await Promise.all([csLoadStats(), csLoadLists(), cuLoad()]);
 }
 /* 按人统计（长期累计，code_user_stats） */
-var CU = { page: 1, pageSize: 30, items: [] };
+var CU = { page: 1, pageSize: 50, items: [] };
 function cuGroupName(gid) {
   var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
   return g && g.group_name ? g.group_name : '';
@@ -4705,12 +4780,8 @@ async function cuLoad() {
         '<td style="white-space:nowrap"><span class="mn-hint">' + esc(mnTime(it.first_ts)) + '</span><br>' + esc(mnTime(it.last_ts)) + '</td>' +
         '<td><button class="btn btn-ghost btn-sm" data-cu-user="' + i + '">查看发过的码</button></td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '还没有记录' : '码记录已关闭，不累计') + '</p>';
-  var pages = Math.max(1, Math.ceil((d.total || 0) / CU.pageSize));
-  $('#cuPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 人，第 ' + CU.page + ' / ' + pages + ' 页</span>' +
-    '<button class="btn btn-ghost btn-sm" id="cuPrev"' + (CU.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
-    '<button class="btn btn-ghost btn-sm" id="cuNext"' + (CU.page >= pages ? ' disabled' : '') + '>下一页</button>';
-  bindIfExists('cuPrev', function() { CU.page -= 1; cuLoad(); });
-  bindIfExists('cuNext', function() { CU.page += 1; cuLoad(); });
+  $('#cuPager').innerHTML = renderPager(CU.page, CU.pageSize, d.total || 0, 'cu');
+  bindPager($('#cuPager'));
 }
 async function cuShowUser(userId) {
   var res = await safeGet('minimal/codes/user', { user_id: userId });
@@ -4792,12 +4863,8 @@ async function csLoadStats() {
         '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
         '<td><div style="display:flex;gap:4px;flex-wrap:wrap">' + acts + '</div></td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '这段时间没有识别到码' : '码记录已关闭') + '</p>';
-  var pages = Math.max(1, Math.ceil((d.total || 0) / CS.pageSize));
-  $('#csPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 项，第 ' + CS.page + ' / ' + pages + ' 页</span>' +
-    '<button class="btn btn-ghost btn-sm" id="csPrev"' + (CS.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
-    '<button class="btn btn-ghost btn-sm" id="csNext"' + (CS.page >= pages ? ' disabled' : '') + '>下一页</button>';
-  bindIfExists('csPrev', function() { CS.page -= 1; csLoadStats(); });
-  bindIfExists('csNext', function() { CS.page += 1; csLoadStats(); });
+  $('#csPager').innerHTML = renderPager(CS.page, CS.pageSize, d.total || 0, 'cs');
+  bindPager($('#csPager'));
 }
 async function csLoadLists() {
   var res = await safeGet('minimal/codes/lists');
@@ -5286,7 +5353,7 @@ async function mnKick() {
 }
 
 /* ---- 重复成员 ---- */
-var DUP = { items: [] };
+var DUP = { items: [], page: 1, pageSize: 50, total: 0, byCount: [] };
 var DUP_ROLES = { owner: '群主', admin: '管理员', member: '成员' };
 function mnDate(ts) {
   if (!ts) return '';
@@ -5321,16 +5388,20 @@ async function dupSaveScope() {
   toast('已保存检测范围', 'success');
   loadDup();
 }
-async function loadDup() {
+function dupFilter() {
+  return { min_groups: $('#dupMin').value, include_exempt: $('#dupExempt').checked ? 1 : 0,
+    include_ignored: $('#dupIgnored').checked ? 1 : 0, keyword: $('#dupKeyword').value.trim() };
+}
+async function loadDup(page) {
+  if (typeof page === 'number') DUP.page = page;
   var loadEp = beginLoad('dup');
-  var res = await safeGet('minimal/duplicates', {
-    min_groups: $('#dupMin').value, include_exempt: $('#dupExempt').checked ? 1 : 0,
-    include_ignored: $('#dupIgnored').checked ? 1 : 0, keyword: $('#dupKeyword').value.trim()
-  });
+  var res = await safeGet('minimal/duplicates', Object.assign(dupFilter(), {
+    sort: $('#dupSort').value, page: DUP.page, page_size: DUP.pageSize }));
   if (!isCurrentLoad('dup', loadEp)) return;
   if (isApiError(res)) { $('#dupTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   DUP.items = d.items || [];
+  DUP.total = d.total || 0; DUP.page = d.page || 1; DUP.byCount = d.by_count || [];
   var c = d.coverage || {};
   var names = {}; (MN.overview && MN.overview.groups || []).forEach(function(g) { names[g.group_id] = g.group_name; });
   var cov = '检测范围内已缓存成员的群：<strong>' + c.groups_cached + ' / ' + c.groups_total + '</strong>';
@@ -5349,8 +5420,10 @@ function dupRenderTable() {
   var bulk = dupBulk();
   $('#dupBulkBar').style.display = bulk ? '' : 'none';
   $('#dupAll').checked = false;
+  $('#dupAllHint').textContent = '按当前筛选条件处理所有页的人（共 ' + DUP.total + ' 人，管理员 / 白名单不处理），各自保留最早加入的群';
   if (!DUP.items.length) { $('#dupTable').innerHTML = '<p class="empty">没有发现重复成员</p>'; return; }
-  $('#dupTable').innerHTML = '<p class="mn-hint" style="margin-bottom:8px">共 ' + DUP.items.length + ' 人</p><table class="mn-table"><thead><tr>' + (bulk ? '<th></th>' : '') +
+  var dist = DUP.byCount.map(function(b) { return '在 ' + b.count + ' 个群 ' + b.people + ' 人'; }).join(' · ');
+  $('#dupTable').innerHTML = '<p class="mn-hint" style="margin-bottom:8px">共 <strong>' + DUP.total + '</strong> 人' + (dist ? '（' + esc(dist) + '）' : '') + '</p><table class="mn-table"><thead><tr>' + (bulk ? '<th></th>' : '') +
     '<th>成员</th><th>群数</th><th>所在的群' + (bulk ? '（单选 = 要保留的群）' : '') + '</th><th>操作</th></tr></thead><tbody>' +
     DUP.items.map(function(it, idx) {
       var tags = [];
@@ -5374,7 +5447,8 @@ function dupRenderTable() {
         '<td><div style="display:flex;gap:8px;align-items:flex-start">' + dupAvatar(it) + '<div>' + esc(it.user_id) + '<br><span class="mn-hint">' + esc(it.name) + '</span>' +
         (tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">' + tags.join('') + '</div>' : '') + '</div></div></td>' +
         '<td><strong>' + it.count + '</strong></td><td>' + groups + '</td><td style="white-space:nowrap">' + ops + '</td></tr>';
-    }).join('') + '</tbody></table>';
+    }).join('') + '</tbody></table>' + renderPager(DUP.page, DUP.pageSize, DUP.total, 'dup');
+  bindPager($('#dupTable'));
   $$('[data-dup-unignore]').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       var res = await safePost('minimal/duplicates/ignore', { user_ids: [btn.getAttribute('data-dup-unignore')], ignore: false });
@@ -5408,6 +5482,10 @@ async function dupSubmit(ids, mode, reason, keep, block) {
   if (isApiError(res)) { $('#dupResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
   var data = mnData(res), results = data.results || {};
   var lines = [];
+  if (data.summary && data.summary.people > 1) {
+    lines.push('共 ' + data.summary.people + ' 人，踢出 ' + data.summary.kicks + ' 人次' + (data.summary.skipped ? '，跳过 ' + data.summary.skipped + ' 人' : '') +
+      (data.truncated ? '（下面只列出前 200 人）' : ''));
+  }
   Object.keys(results).forEach(function(uid) {
     var r = results[uid];
     if (r.skipped) { lines.push(uid + '：跳过（' + r.skipped + '）'); return; }
@@ -5469,6 +5547,32 @@ async function mnDupHandle(mode) {
   if (!(await mnConfirm('请再确认一次，将执行：\n' + shown + '\n原因：' + reason, { title: '确认踢出 ' + ids.length + ' 人', okText: '确认踢出', danger: true }))) return;
   await dupSubmit(ids, mode, reason, keep, block);
 }
+// 按条件处理所有页：名单由插件按筛选条件计算；提交时带上确认时的人数，人数变了会拒绝
+async function mnDupHandleAll(mode) {
+  if (!DUP.total) { toast('没有符合条件的人', 'warning'); return; }
+  var reason = $('#dupReason').value.trim();
+  if (!reason) { toast('请填写处理原因', 'warning'); $('#dupReason').focus(); return; }
+  var block = $('#dupBlock').checked;
+  var f = dupFilter();
+  var count = await safeGet('minimal/duplicates', Object.assign({}, f, { include_exempt: 0, page: 1, page_size: 10 }));
+  if (isApiError(count)) { toast(mnErr(count), 'error'); return; }
+  var n = (mnData(count) || {}).total || 0;
+  var desc = mode === 'keep_one'
+    ? '各自只保留最早加入的群，从其余群踢出' + (block ? '，并在被踢的群里 QQ 拉黑' : '')
+    : '从所有群踢出' + (block ? '，并加入插件黑名单' : '');
+  var cond = '在 ≥' + f.min_groups + ' 个群' + (f.keyword ? '、包含「' + f.keyword + '」' : '') + (f.include_ignored ? '、含已忽略的人' : '');
+  if (!(await mnConfirm('按条件处理：' + cond + '，共 ' + n + ' 人（管理员 / 白名单不处理）。\n' + desc + '\n原因：' + reason +
+      '\n\n会创建批量任务逐个执行，可在「批量任务」里暂停或取消。', { title: '处理符合条件的全部 ' + n + ' 人', okText: '下一步', danger: true }))) return;
+  var typed = await promptModal({ title: '再确认一次', label: '将处理 ' + n + ' 人。请输入人数 ' + n + ' 确认：', placeholder: String(n), okText: '确认处理' });
+  if (typed === null) return;
+  if (String(typed).trim() !== String(n)) { toast('输入的人数不对，已取消', 'warning'); return; }
+  $('#dupResult').innerHTML = '<div class="mn-result no">处理中……</div>';
+  var res = await safePost('minimal/duplicates/handle', { all_matching: true, filter: f, expect_count: n, mode: mode, reason: reason, block: block }, 300000);
+  if (isApiError(res)) { $('#dupResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var data = mnData(res), s = data.summary || {};
+  $('#dupResult').innerHTML = mnJobCreatedHtml(data.job, ['共 ' + (s.people || 0) + ' 人，踢出 ' + (s.kicks || 0) + ' 人次' + (s.skipped ? '，跳过 ' + s.skipped + ' 人' : '')]);
+  loadDup();
+}
 async function mnDupIgnore(only) {
   var ids = only || mnDupSelected();
   if (!ids.length) { toast('请先勾选成员', 'warning'); return; }
@@ -5501,12 +5605,8 @@ async function loadOplog(page) {
         '<td>' + esc(r.action) + '</td><td>' + esc(r.group_id) + '</td><td>' + esc(r.target) + '</td><td>' + esc(r.reason) + '</td>' +
         '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.result) + '</td><td style="max-width:320px;word-break:break-all">' + esc(r.detail) + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
-  var pages = Math.max(1, Math.ceil((d.total || 0) / OP_STATE.pageSize));
-  $('#opPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 条，第 ' + OP_STATE.page + ' / ' + pages + ' 页</span>' +
-    '<button class="btn btn-ghost btn-sm" id="opPrev"' + (OP_STATE.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
-    '<button class="btn btn-ghost btn-sm" id="opNext"' + (OP_STATE.page >= pages ? ' disabled' : '') + '>下一页</button>';
-  bindIfExists('opPrev', function() { loadOplog(OP_STATE.page - 1); });
-  bindIfExists('opNext', function() { loadOplog(OP_STATE.page + 1); });
+  $('#opPager').innerHTML = renderPager(OP_STATE.page, OP_STATE.pageSize, d.total || 0, 'op');
+  bindPager($('#opPager'));
 }
 
 /* ---- 退群记录 ---- */
@@ -5543,12 +5643,8 @@ async function loadLeaveLog(page) {
         '<td style="max-width:360px">' + (msgs.length ? '<a href="javascript:void(0)" data-ll-msgs="' + i + '">' + msgs.length + ' 条</a>' + (r.msg_source ? ' <span class="mn-hint">（' + esc(r.msg_source) + '）</span>' : '') + (imgCount ? ' <span class="mn-chip">' + imgCount + ' 张图</span>' : '') +
           '<div class="mn-hint" style="word-break:break-all">最后一条：' + esc(last) + '</div>' : '<span class="mn-hint">没有记录到</span>') + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
-  var pages = Math.max(1, Math.ceil((d.total || 0) / LL_STATE.pageSize));
-  $('#llPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 条，第 ' + LL_STATE.page + ' / ' + pages + ' 页</span>' +
-    '<button class="btn btn-ghost btn-sm" id="llPrev"' + (LL_STATE.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
-    '<button class="btn btn-ghost btn-sm" id="llNext"' + (LL_STATE.page >= pages ? ' disabled' : '') + '>下一页</button>';
-  bindIfExists('llPrev', function() { loadLeaveLog(LL_STATE.page - 1); });
-  bindIfExists('llNext', function() { loadLeaveLog(LL_STATE.page + 1); });
+  $('#llPager').innerHTML = renderPager(LL_STATE.page, LL_STATE.pageSize, d.total || 0, 'll');
+  bindPager($('#llPager'));
   $$('[data-ll-user]', $('#llTable')).forEach(function(a) { a.addEventListener('click', function() { llShowUser(a.getAttribute('data-ll-user')); }); });
   $$('[data-ll-msgs]', $('#llTable')).forEach(function(a) { a.addEventListener('click', function() { llShowMessages(LL_STATE.items[Number(a.getAttribute('data-ll-msgs'))]); }); });
 }
@@ -5598,7 +5694,15 @@ async function llShowUser(uid) {
 }
 
 /* ---- 批量任务 ---- */
-var BQ = { open: {}, details: {}, noteOpen: {}, jobs: [], runner: {}, timer: null, inflight: false, follow: false };
+var BQ = { open: {}, details: {}, view: {}, noteOpen: {}, jobs: [], runner: {}, timer: null, inflight: false, follow: false };
+// 每个展开的任务明细的视图：auto = 跟随当前项所在的页；手动翻页 / 筛选状态后不再跟随
+function bqView(id) {
+  if (!BQ.view[id]) {
+    var v = BQ.view[id] = { page: 0, pageSize: 100, status: '', auto: true };
+    registerPager('bq' + id, v, function() { v.auto = false; bqPoll(); });
+  }
+  return BQ.view[id];
+}
 var BQ_FOLLOW_KEY = 'gg_bq_follow';
 try { BQ.follow = localStorage.getItem(BQ_FOLLOW_KEY) === '1'; } catch (e) { BQ.follow = false; }
 var BQ_STATE = { active: '执行中', paused: '已暂停', done: '已完成', cancelled: '已取消' };
@@ -5627,8 +5731,9 @@ async function bqPoll(fillSettings) {
     }
     var openIds = Object.keys(BQ.open).filter(function(k) { return BQ.open[k]; });
     for (var i = 0; i < openIds.length; i++) {
-      var r = await safeGet('minimal/batch/job', { id: openIds[i] });
-      if (!isApiError(r)) BQ.details[openIds[i]] = (mnData(r) || {}).job;
+      var v = bqView(openIds[i]);
+      var r = await safeGet('minimal/batch/job', { id: openIds[i], page: v.auto ? 0 : v.page, page_size: v.pageSize, status: v.status });
+      if (!isApiError(r)) { var jd = (mnData(r) || {}).job; BQ.details[openIds[i]] = jd; if (jd && !v.auto) v.page = jd.page; }
     }
     bqRender();
   } finally {
@@ -5657,6 +5762,15 @@ function bqRender() {
   var saved = bqSaveScroll(box);
   box.innerHTML = BQ.jobs.map(bqJobHtml).join('');
   $$('[data-bq]', box).forEach(function(btn) { btn.addEventListener('click', bqOnAction); });
+  bindPager(box);
+  $$('[data-bq-filter]', box).forEach(function(btn) { btn.addEventListener('click', function() {
+    var v = bqView(Number(btn.getAttribute('data-job')));
+    v.status = btn.getAttribute('data-bq-filter'); v.page = 1; v.auto = !v.status; bqPoll();
+  }); });
+  $$('[data-bq-follow]', box).forEach(function(btn) { btn.addEventListener('click', function() {
+    var v = bqView(Number(btn.getAttribute('data-bq-follow')));
+    v.status = ''; v.auto = true; bqPoll();
+  }); });
   $$('[data-bq-note]', box).forEach(function(d) {
     d.addEventListener('toggle', function() { BQ.noteOpen[Number(d.getAttribute('data-bq-note'))] = d.open; });
   });
@@ -5778,13 +5892,16 @@ function bqSummaryHtml(j) {
 function bqItemsHtml(job) {
   if (!job) return '<div class="bq-items"><p class="empty">加载中...</p></div>';
   var running = BQ.runner && BQ.runner.state === 'waiting' && BQ.runner.job_id === job.id ? BQ.runner.item_id : null;
-  // 「处理中」的一行：正在执行的 → 执行器排好的下一项 → 第一个待执行的（自动定位滚到这里）
-  var allItems = job.items || [];
-  var cur = allItems.filter(function(it) { return it.status === 'running'; })[0] ||
-    (running ? allItems.filter(function(it) { return it.id === running; })[0] : null) ||
-    allItems.filter(function(it) { return it.status === 'pending'; })[0];
-  var curId = cur ? cur.id : null;
-  return '<div class="bq-items" data-bq-items="' + job.id + '"><table class="mn-table"><thead><tr><th>#</th><th>群</th><th>行为</th><th>对象</th><th>状态</th><th>结果</th><th>时间</th><th></th></tr></thead><tbody>' +
+  // 「处理中」的一行：正在执行的 → 执行器排好的下一项 → 第一个待执行的（插件算好，自动定位滚到这里）
+  var curId = job.current_id || running || null;
+  var v = bqView(job.id), counts = job.counts || {};
+  var tabs = [['', '全部', job.total]].concat(['failed', 'pending', 'ok', 'skipped', 'cancelled'].filter(function(k) { return counts[k]; })
+    .map(function(k) { return [k, BQ_ITEM[k], counts[k]]; }));
+  var bar = '<div class="mn-row" style="margin:8px 0 0;gap:6px">' + tabs.map(function(t) {
+    return '<button class="btn btn-sm ' + (v.status === t[0] ? 'btn-primary' : 'btn-ghost') + '" data-bq-filter="' + escAttr(t[0]) + '" data-job="' + job.id + '">' + esc(t[1]) + ' ' + t[2] + '</button>';
+  }).join('') + (v.auto ? '<span class="mn-hint">正在跟随当前项</span>' : '<button class="btn btn-ghost btn-sm" data-bq-follow="' + job.id + '">回到当前项</button>') + '</div>';
+  var pager = (job.filtered_total || 0) > (job.page_size || 100) ? renderPager(job.page, job.page_size, job.filtered_total, 'bq' + job.id) : '';
+  return bar + '<div class="bq-items" data-bq-items="' + job.id + '"><table class="mn-table"><thead><tr><th>#</th><th>群</th><th>行为</th><th>对象</th><th>状态</th><th>结果</th><th>时间</th><th></th></tr></thead><tbody>' +
     (job.items || []).map(function(it) {
       var ops = '';
       if (it.status === 'pending') ops = '<button class="btn btn-ghost btn-sm" data-bq="run_item" data-item="' + it.id + '" data-job="' + job.id + '">执行</button>' +
@@ -5798,12 +5915,12 @@ function bqItemsHtml(job) {
         '<td><span class="bq-st ' + escAttr(it.status) + '">' + esc(st) + '</span></td>' +
         '<td style="max-width:320px;word-break:break-all">' + esc(it.result || '') + '</td>' +
         '<td style="white-space:nowrap">' + (t ? esc(liveTime(t)) : '') + '</td><td style="white-space:nowrap">' + ops + '</td></tr>';
-    }).join('') + '</tbody></table></div>';
+    }).join('') + ((job.items || []).length ? '' : '<tr><td colspan="8" class="mn-hint">没有这种状态的项</td></tr>') + '</tbody></table></div>' + pager;
 }
 async function bqOnAction(e) {
   var btn = e.currentTarget, action = btn.getAttribute('data-bq');
   var jobId = Number(btn.getAttribute('data-job')), itemId = Number(btn.getAttribute('data-item') || 0);
-  if (action === 'toggle') { BQ.open[jobId] = !BQ.open[jobId]; if (!BQ.open[jobId]) delete BQ.details[jobId]; bqPoll(); return; }
+  if (action === 'toggle') { BQ.open[jobId] = !BQ.open[jobId]; if (!BQ.open[jobId]) { delete BQ.details[jobId]; delete BQ.view[jobId]; } bqPoll(); return; }
   if (action === 'settings') { bqEditSettings(jobId); return; }
   if (action === 'cancel' && !(await mnConfirm('取消任务 #' + jobId + ' 中所有还没执行的项？已执行的不受影响。', { okText: '取消剩余', danger: true }))) return;
   if (action === 'auto' && !(await mnConfirm('任务 #' + jobId + ' 改为按间隔自动执行剩余的项？', { okText: '全部执行' }))) return;
@@ -6604,11 +6721,13 @@ function initMinimalPages() {
   });
 
   bindIfExists('btnDupReload', loadDup);
-  bindIfExists('btnDupFilter', loadDup);
+  registerPager('dup', DUP, function() { loadDup(); });
+  ['dupMin', 'dupSort', 'dupExempt', 'dupIgnored'].forEach(function(id) { bindIfExists(id, function() { loadDup(1); }, 'change'); });
+  bindIfExists('btnDupAllKeep', function() { mnDupHandleAll('keep_one'); });
+  bindIfExists('btnDupAllKick', function() { mnDupHandleAll('kick_all'); });
   bindIfExists('dupMin', loadDup, 'change');
   bindIfExists('dupExempt', loadDup, 'change');
   bindIfExists('dupIgnored', loadDup, 'change');
-  bindIfExists('dupKeyword', function(e) { if (e.key === 'Enter') loadDup(); }, 'keydown');
   bindIfExists('dupAll', function() { var on = $('#dupAll').checked; $$('#dupTable .dup-check').forEach(function(cb) { cb.checked = on; }); }, 'change');
   bindIfExists('btnDupKeep', function() { mnDupHandle('keep_one'); });
   bindIfExists('btnDupKickAll', function() { mnDupHandle('kick_all'); });
@@ -6669,14 +6788,12 @@ function initMinimalPages() {
   bindIfExists('btnCodesRefresh', function() { loadCodes(); });
   bindIfExists('btnBqLocate', bqLocate);
   bindIfExists('bqFollow', function(e) { bqSetFollow(e.target.checked); }, 'change');
-  bindIfExists('btnCsFilter', function() { CS.page = 1; csLoadStats(); });
   bindIfExists('csBy', function() { CS.page = 1; csLoadStats(); }, 'change');
   // 排列顺序记在本地，下次打开保持
   (function() { var sel = $('#csSort'); if (!sel) return; try { var v = localStorage.getItem('gg_cs_sort'); if (v && sel.querySelector('option[value=' + v + ']')) sel.value = v; } catch (e) { /* 存储不可用时用默认 */ } })();
   bindIfExists('csSort', function(e) { try { localStorage.setItem('gg_cs_sort', e.target.value); } catch (err) { /* 忽略 */ } CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csHours', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csGroup', function() { CS.page = 1; csLoadStats(); }, 'change');
-  bindIfExists('csKeyword', function(e) { if (e.key === 'Enter') { CS.page = 1; csLoadStats(); } }, 'keydown');
   bindIfExists('btnCsSave', function() {
     var kb = Number($('#csMaxKb').value);
     var ttl = Number($('#csTtlHours').value || 0);
@@ -6688,7 +6805,18 @@ function initMinimalPages() {
   bindIfExists('btnCsBlockAdd', function() { var t = $('#csBlockAdd').value.trim(); if (!t) return; codeListSet('block', t, true, true).then(function(ok) { if (ok) { $('#csBlockAdd').value = ''; csAfterListChange(); } }); });
   var tabCodes = document.getElementById('tab-codes');
   if (tabCodes) tabCodes.addEventListener('click', csOnClick);
-  bindIfExists('btnCuFilter', function() { CU.page = 1; cuLoad(); });
+  registerPager('cs', CS, function() { csLoadStats(); });
+  registerPager('cu', CU, function() { cuLoad(); });
+  registerPager('mp', MP, function() { mpLoadStats(); });
+  registerPager('op', OP_STATE, function() { loadOplog(OP_STATE.page); });
+  registerPager('ll', LL_STATE, function() { loadLeaveLog(LL_STATE.page); });
+  bindAutoFilter(['csKeyword'], function() { CS.page = 1; csLoadStats(); });  // 下拉框原来就绑了 change
+  bindAutoFilter(['cuSort', 'cuGroup', 'cuKeyword'], function() { CU.page = 1; cuLoad(); });
+  bindAutoFilter(['mpBy', 'mpSort', 'mpDaysSel', 'mpGroup', 'mpKeyword'], function() { MP.page = 1; mpLoadStats(); });
+  bindAutoFilter(['dupKeyword'], function() { loadDup(1); });
+  bindAutoFilter(['llKeyword', 'llKind'], function() { loadLeaveLog(1); });
+  bindAutoFilter(['opKeyword'], function() { loadOplog(1); });
+  GSEL_IDS.forEach(function(id) { gselEnhance(document.getElementById(id)); });
   bindIfExists('btnGfAll', function() { mnSetGroupChecks('#gfGroups', true); });
   bindIfExists('btnGfNone', function() { mnSetGroupChecks('#gfGroups', false); });
   bindIfExists('btnGfScan', gfScan);
@@ -6720,10 +6848,6 @@ function initMinimalPages() {
   bindIfExists('cmdCat', cmdRender, 'change');
   bindIfExists('cmdKeyword', cmdRender, 'input');
   bindIfExists('btnMpRefresh', function() { loadMiniapps(); });
-  bindIfExists('btnMpFilter', function() { MP.page = 1; mpLoadStats(); });
-  ['mpBy', 'mpSort', 'mpDaysSel', 'mpGroup'].forEach(function(id) { var el = document.getElementById(id); if (el) el.addEventListener('change', function() { MP.page = 1; mpLoadStats(); }); });
-  var mpKw = document.getElementById('mpKeyword');
-  if (mpKw) mpKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { MP.page = 1; mpLoadStats(); } });
   var mpTab = document.getElementById('tab-miniapps');
   if (mpTab) mpTab.addEventListener('click', mpOnClick);
   bindIfExists('btnMpSave', function() {
@@ -6739,19 +6863,13 @@ function initMinimalPages() {
   if (bsChart) { bsChart.addEventListener('mousemove', bsTipMove); bsChart.addEventListener('mouseleave', function() { $('#bsTip').style.display = 'none'; }); }
   document.addEventListener('keydown', function(ev) { if (ev.key === 'Escape' && document.body.classList.contains('bs-full')) bsSetFull(false); });
   document.addEventListener('visibilitychange', function() { if (bsActive()) { bsLoadStats(); bsPollFeed(); } });
-  ['cuSort', 'cuGroup'].forEach(function(id) { var el = document.getElementById(id); if (el) el.addEventListener('change', function() { CU.page = 1; cuLoad(); }); });
-  var cuKw = document.getElementById('cuKeyword');
-  if (cuKw) cuKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { CU.page = 1; cuLoad(); } });
   var cuTable = document.getElementById('cuTable');
   if (cuTable) cuTable.addEventListener('click', function(e) {
     var b = e.target.closest('[data-cu-user]');
     if (b) { var it = CU.items[Number(b.getAttribute('data-cu-user'))]; if (it) cuShowUser(it.user_id); }
   });
   bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
-  bindIfExists('btnLlFilter', function() { loadLeaveLog(1); });
   bindIfExists('btnLlUserClose', function() { $('#llUserCard').style.display = 'none'; });
-  var llKw = document.getElementById('llKeyword');
-  if (llKw) llKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') loadLeaveLog(1); });
   bindIfExists('btnLlSave', function() {
     var n = Number($('#llMsgCount').value);
     var days = Number($('#llImgDays').value);
@@ -6766,8 +6884,6 @@ function initMinimalPages() {
     }
     mnSaveConfig({ leave_auto_blacklist_times: t, leave_auto_blacklist_days: dd }, '已保存');
   });
-  bindIfExists('btnOpFilter', function() { loadOplog(1); });
-  bindIfExists('opKeyword', function(e) { if (e.key === 'Enter') loadOplog(1); }, 'keydown');
   bindIfExists('opAction', function() { loadOplog(1); }, 'change');
   bindIfExists('opSource', function() { loadOplog(1); }, 'change');
 

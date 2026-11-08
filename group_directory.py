@@ -54,6 +54,20 @@ class GroupDirectoryMixin:
             conn.commit()
         self._dir_db_ready = True
 
+    def _dir_bump(self) -> None:
+        """成员 / 群名缓存变了：版本号 +1（重复成员检测按版本号缓存结果）。"""
+        self._dir_version = int(getattr(self, "_dir_version", 0) or 0) + 1
+
+    @staticmethod
+    async def _dir_offload(fn, *args):
+        """把 SQLite 写入放到线程池，避免几千行写入卡住事件循环；没有线程池（Pyodide）时直接执行。"""
+        loop = asyncio.get_running_loop()
+        try:
+            fut = loop.run_in_executor(None, fn, *args)
+        except Exception:
+            return fn(*args)
+        return await fut
+
     def _dir(self) -> dict:
         """内存中的缓存，首次访问时从 SQLite 载入。"""
         state = getattr(self, "_dir_state", None)
@@ -106,18 +120,35 @@ class GroupDirectoryMixin:
         except Exception as e:
             logger.warning(f"[GroupMgr] 保存群列表缓存失败: {e}")
 
-    def _dir_save_members(self, gid: str, members: Dict[str, dict], now: int) -> None:
+    @staticmethod
+    def _dir_member_tuple(m: dict) -> tuple:
+        return (m.get("nickname", ""), m.get("card", ""), m.get("role", "member"), m.get("title", ""),
+                int(m.get("join_time") or 0), int(m.get("last_sent_time") or 0), int(m.get("level") or 0))
+
+    def _dir_save_members(self, gid: str, members: Dict[str, dict], now: int,
+                          old: Optional[Dict[str, dict]] = None) -> None:
+        """写一个群的成员。old 是刷新前的缓存时只写变化的行（2000 人的群通常只有几十行变化），
+        否则整群重写。"""
         try:
             self._dir_init_db()
             with self._storage._connect() as conn:
-                conn.execute("DELETE FROM dir_members WHERE group_id=?", (gid,))
+                if old is None:
+                    conn.execute("DELETE FROM dir_members WHERE group_id=?", (gid,))
+                    changed = list(members.items())
+                else:
+                    gone = [uid for uid in old if uid not in members]
+                    if gone:
+                        conn.executemany("DELETE FROM dir_members WHERE group_id=? AND user_id=?",
+                                         [(gid, uid) for uid in gone])
+                    changed = [(uid, m) for uid, m in members.items()
+                               if uid not in old or self._dir_member_tuple(old[uid]) != self._dir_member_tuple(m)]
                 conn.executemany(
-                    "INSERT INTO dir_members(group_id, user_id, nickname, card, role, title, join_time, "
+                    "INSERT OR REPLACE INTO dir_members(group_id, user_id, nickname, card, role, title, join_time, "
                     "last_sent_time, updated_at, level) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     [(gid, uid, m.get("nickname", ""), m.get("card", ""), m.get("role", "member"),
                       m.get("title", ""), int(m.get("join_time") or 0), int(m.get("last_sent_time") or 0), now,
                       int(m.get("level") or 0))
-                     for uid, m in members.items()],
+                     for uid, m in changed],
                 )
                 g = self._dir()["groups"].get(gid) or {"group_id": gid, "group_name": ""}
                 conn.execute(
@@ -228,6 +259,7 @@ class GroupDirectoryMixin:
                 state["members_ts"].pop(gone, None)
             state["groups"] = groups
             state["groups_ts"] = now
+            self._dir_bump()
             self._dir_save_groups(groups, now)
             return list(groups.values()), ""
 
@@ -266,14 +298,16 @@ class GroupDirectoryMixin:
                     "last_sent_time": int(item.get("last_sent_time") or 0),
                     "level": self._dir_level(item.get("level")),
                 }
+            old = state["members"].get(gid)
             state["members"][gid] = members
             state["members_ts"][gid] = now
+            self._dir_bump()
             group = state["groups"].setdefault(gid, {"group_id": gid, "group_name": ""})
             group["member_count"] = len(members)
             bot_uin = str(await self._get_bot_uin(client) or "")
             if bot_uin and bot_uin in members:
                 group["bot_role"] = members[bot_uin]["role"]
-            self._dir_save_members(gid, members, now)
+            await self._dir_offload(self._dir_save_members, gid, members, now, old)
             return members
 
     def _dir_cached_member(self, gid, uid) -> Optional[dict]:
@@ -334,6 +368,7 @@ class GroupDirectoryMixin:
         }
         member.update({k: v for k, v in fields.items() if v is not None})
         state["members"][gid][uid] = member
+        self._dir_bump()
         if gid in state["groups"]:
             state["groups"][gid]["member_count"] = len(state["members"][gid])
         self._dir_save_member_row(gid, uid, member)
@@ -350,6 +385,7 @@ class GroupDirectoryMixin:
         gid, uid = str(gid), str(uid)
         state = self._dir()
         if state["members"].get(gid, {}).pop(uid, None) is not None:
+            self._dir_bump()
             if gid in state["groups"]:
                 state["groups"][gid]["member_count"] = len(state["members"][gid])
             self._dir_save_member_row(gid, uid, None)
@@ -359,6 +395,7 @@ class GroupDirectoryMixin:
         group = self._dir()["groups"].get(gid)
         if group is not None and group.get("group_name") != name:
             group["group_name"] = name
+            self._dir_bump()
             self._dir_save_groups(self._dir()["groups"], int(self._dir()["groups_ts"] or time.time()))
 
     def _dir_forget_group(self, gid) -> None:
@@ -367,6 +404,7 @@ class GroupDirectoryMixin:
         state["groups"].pop(gid, None)
         state["members"].pop(gid, None)
         state["members_ts"].pop(gid, None)
+        self._dir_bump()
         self._dir_save_groups(state["groups"], int(state["groups_ts"] or time.time()))
 
     async def _dir_handle_notice(self, event) -> None:

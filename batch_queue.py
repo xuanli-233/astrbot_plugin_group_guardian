@@ -284,6 +284,48 @@ class BatchQueueMixin:
         job["interval_effective"], job["jitter_effective"] = self._bq_interval_settings(job)
         return job
 
+    BQ_PAGE_STATUSES = ("pending", "running", "ok", "failed", "skipped", "cancelled")
+
+    def _bq_job_page(self, job_id: int, status: str = "", page: int = 0, page_size: int = 100) -> Optional[dict]:
+        """WebUI 明细：只取一页（几千项的任务每 2 秒轮询一次，不能每次全量）。
+        status 过滤某种状态；page=0 且不过滤时取「当前项」（执行中的，否则第一个待执行的）所在的页。"""
+        self._bq_init_db()
+        page_size = min(max(int(page_size or 100), 20), 500)
+        with self._storage._connect() as conn:
+            row = conn.execute("SELECT * FROM batch_jobs WHERE id=?", (int(job_id),)).fetchone()
+            if not row:
+                return None
+            job = self._bq_row_job(row)
+            counts = self._bq_counts(conn, [job["id"]]).get(job["id"], {})
+            where, args = "job_id=?", [job["id"]]
+            if status in self.BQ_PAGE_STATUSES:
+                where += " AND status=?"
+                args.append(status)
+            total = int(conn.execute(f"SELECT COUNT(*) AS c FROM batch_items WHERE {where}", args).fetchone()["c"])
+            cur = conn.execute("SELECT id, seq FROM batch_items WHERE job_id=? AND status='running' ORDER BY seq LIMIT 1",
+                               (job["id"],)).fetchone() or \
+                conn.execute("SELECT id, seq FROM batch_items WHERE job_id=? AND status='pending' ORDER BY seq LIMIT 1",
+                             (job["id"],)).fetchone()
+            pages = max(1, (total + page_size - 1) // page_size)
+            if int(page or 0) <= 0:
+                page = 1
+                if cur is not None and not status:
+                    before = conn.execute("SELECT COUNT(*) AS c FROM batch_items WHERE job_id=? AND seq<?",
+                                          (job["id"], cur["seq"])).fetchone()["c"]
+                    page = before // page_size + 1
+            page = min(max(int(page), 1), pages)
+            items = []
+            for r in conn.execute(f"SELECT * FROM batch_items WHERE {where} ORDER BY seq LIMIT ? OFFSET ?",
+                                  args + [page_size, (page - 1) * page_size]):
+                it = dict(r)
+                it.pop("params", None)  # 公告全文等不必每次轮询都传
+                items.append(it)
+        job.update(items=items, counts=counts, total=sum(counts.values()), filtered_total=total, page=page,
+                   page_size=page_size, pages=pages, status_filter=status if status in self.BQ_PAGE_STATUSES else "",
+                   current_id=cur["id"] if cur is not None else None)
+        job["interval_effective"], job["jitter_effective"] = self._bq_interval_settings(job)
+        return job
+
     def _bq_status(self) -> dict:
         st = dict(getattr(self, "_bq_state", None) or {"state": "idle"})
         if st.get("next_at"):

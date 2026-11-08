@@ -434,10 +434,12 @@ class MinimalWebMixin:
         client = await self._get_client()
         if client:
             await self._dir_groups(client)  # 群列表过期时刷新（成员不在这里批量拉取）
-        data = self._dup_find(
+        # 6 万成员时重复的人可能上万：只返回当前页（结果在插件里缓存，翻页不重算）
+        data = self._dup_page(
             min_groups=self._safe_int(args.get("min_groups", 2), 2),
             include_exempt=flag("include_exempt"), include_ignored=flag("include_ignored"),
-            keyword=str(args.get("keyword", "") or ""),
+            keyword=str(args.get("keyword", "") or ""), sort=str(args.get("sort", "") or "count"),
+            page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
         )
         return jsonify({"status": "success", "data": data})
 
@@ -446,7 +448,17 @@ class MinimalWebMixin:
         if not ok:
             return self._minimal_error(msg)
         data = await self._minimal_body()
-        user_ids = self._minimal_ids(data.get("user_ids"))
+        if data.get("all_matching"):
+            # 处理「符合当前筛选条件的全部人」：名单在插件里按条件算，不靠页面上列出来的
+            f = data.get("filter") if isinstance(data.get("filter"), dict) else {}
+            user_ids = self._dup_matching_ids(min_groups=self._safe_int(f.get("min_groups", 2), 2),
+                                              include_ignored=bool(f.get("include_ignored")),
+                                              keyword=str(f.get("keyword") or ""))
+            expect = self._safe_int(data.get("expect_count"), -1)
+            if expect >= 0 and expect != len(user_ids):
+                return self._minimal_error(f"符合条件的人数已变化（确认时 {expect} 人，现在 {len(user_ids)} 人），请刷新后重新确认")
+        else:
+            user_ids = self._minimal_ids(data.get("user_ids"))
         mode = str(data.get("mode") or "")
         reason = str(data.get("reason") or "").strip()
         if not user_ids:
@@ -458,6 +470,13 @@ class MinimalWebMixin:
         keep = data.get("keep") if isinstance(data.get("keep"), dict) else {}
         result = self._dup_job(user_ids, mode, reason, keep={str(k): str(v) for k, v in keep.items()},
                                block=bool(data.get("block")), **WEB_LOG)
+        results = result.get("results") or {}
+        skipped = sum(1 for r in results.values() if r.get("skipped"))
+        result["summary"] = {"people": len(results), "skipped": skipped,
+                             "kicks": sum(len(r.get("groups") or []) for r in results.values())}
+        if len(results) > 200:  # 人多时只回传前 200 人的明细，完整计划在批量任务里
+            result["results"] = dict(list(results.items())[:200])
+            result["truncated"] = True
         return jsonify({"status": "success", "data": result})
 
     async def _web_minimal_duplicates_scope(self):
@@ -823,7 +842,11 @@ class MinimalWebMixin:
         }})
 
     async def _web_minimal_batch_job(self):
-        job = self._bq_job(self._safe_int(quart_request.args.get("id", 0), 0))
+        args = quart_request.args
+        # 明细分页：page=0（默认）取当前项所在的页；status 只看某种状态
+        job = self._bq_job_page(self._safe_int(args.get("id", 0), 0), status=str(args.get("status", "") or ""),
+                                page=self._safe_int(args.get("page", 0), 0),
+                                page_size=self._safe_int(args.get("page_size", 100), 100))
         if not job:
             return self._minimal_error("任务不存在")
         names = {}
