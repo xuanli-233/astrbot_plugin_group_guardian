@@ -1059,5 +1059,5 @@ def sim_state() -> str:
         "commands": sorted(COMMANDS),
         "keyword_rules": PLUGIN.config.get("keyword_rules", []),
         "wxcode_rules": PLUGIN.config.get("wxcode_regex_rules", []),
-        "backup_group_id": PLUGIN.config.get("backup_group_id", ""),
+        "backup_groups": [r["group_id"] for r in PLUGIN._br_routes()],
     }, ensure_ascii=False, default=str)

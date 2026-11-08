@@ -24,7 +24,7 @@
 
 | 页面 | 内容 |
 | --- | --- |
-| 关键词与识别 | **撤回 / 禁言规则组**（每组：关键词、码内容正则、小程序（整个小程序，或 `小程序 | 标题条件` / `* | 标题条件` 按标题），命中后撤回 + 可选禁言 N 分钟 + 可选群内提示，可只对部分群生效；从上往下检查，默认组最后）、规则组测试、备份群、葵花码识别接入、OCR 接入 |
+| 关键词与识别 | **撤回 / 禁言规则组**（每组：关键词、码内容正则、小程序（整个小程序，或 `小程序 | 标题条件` / `* | 标题条件` 按标题），命中后撤回 + 可选禁言 N 分钟 + 可选群内提示，可只对部分群生效；从上往下检查，默认组最后）、规则组测试、转发群（多个群，每个群勾选收哪些内容）、葵花码识别接入、OCR 接入 |
 | 批量发布 | 勾选群：发布群公告 / 待办公告（可上传配图或填图片地址，查看待办确认情况）；**群消息**（文字 + 可选一张图片）；**群文件**（从电脑选择 30 MB 以内，或填服务器上的文件路径——AstrBot 与 LuckyLilliaBot 同机时可用，适合大文件）。都走批量任务，群之间按间隔执行 |
 | 群文件 | 勾选群扫描群文件（根目录 + 一级文件夹，后台进行、群之间按接口间隔）；按上传者 / 文件名 / 群筛选；「按上传者汇总」看谁在几个群传了文件，一键选中某人在所有群的文件；「重复文件」= 同一个群里文件名 + 大小相同的，保留最早的一份；勾选后批量删除（走批量任务，可暂停 / 重试，每个文件写操作记录「删除群文件」）；「去踢人 / 拉黑」跳到踢人页并填好 QQ。见 `group_files.py` |
 | 群名任务 | 各群群名一览，勾选群改后缀（立即 / 定时）、设置 / 停止 / 刷新倒计时；「刷新群列表」从 QQ 重新拉取所有群的最新群名；每行「改名」直接修改当前群名 |
@@ -44,16 +44,18 @@
 ### 快速配置
 
 1. 同意免责声明（`disclaimer_agreed`）。
-2. 填写备份群 `backup_group_id`，机器人需在该群内。
+2. 在「转发群」里添加一个或多个群并勾选内容类别（配置 `backup_routes`），机器人需在这些群内。
 3. 在「关键词与识别 → 撤回 / 禁言规则组」里写规则（第一次启动时原 `keyword_rules`、`wxcode_regex_rules` 已迁移成「默认组」）。关键词每行一条：`加微信`（包含即命中）、`=1`（整条消息就是“1”才命中）、`re:vx\s*\d{5,}`（正则）。
-4. 葵花码：`wxcode_enabled` 打开，按 [examples/wxcode_recognizer_example.py](examples/wxcode_recognizer_example.py) 接入识别模块，在 `wxcode_regex_rules` 写正则，可选填写 `wxcode_forward_group_id`。
+4. 葵花码：`wxcode_enabled` 打开，按 [examples/wxcode_recognizer_example.py](examples/wxcode_recognizer_example.py) 接入识别模块，在 `wxcode_regex_rules` 写正则，转发到哪些群在「转发群」里勾选「二维码 / 葵花码命中」。
 5. OCR（以后再开）：`local_ocr_driver` 选 `llbot`（LLBot 自带的 `ocr_image`），或选 `http` / `python` 接自己的服务。识别出的文字按 `keyword_rules` 过滤。
 
 ### 命中后的处理顺序
 
-先把原消息以合并转发的形式备份到指定群（引用原消息 ID，图片完整保留；失败时依次回退为自定义节点、普通消息），再撤回。可选：`hit_mute_enabled` 同时禁言（默认关）、`hit_notice_enabled` 群内提示（默认关）。备份群 / 转发群本身不参与审核。
+先把原消息以合并转发的形式备份到勾选了对应类别的所有转发群（引用原消息 ID，图片完整保留；失败时依次回退为自定义节点、普通消息），再撤回。可选：`hit_mute_enabled` 同时禁言（默认关）、`hit_notice_enabled` 群内提示（默认关）。转发群本身不参与审核。
 
-**其他撤回也先备份**（`backup_enabled`，发到 `backup_group_id`）：`/撤回最新消息`、`/批量撤回`、`/回复撤回`，以及退群撤回（主动退群、被踢，含机器人自己踢人 / 黑名单踢出触发的）。一次撤回多条时合并成一条转发（每 50 条一条），说明里写来源群、发送者、操作人、原因和条数；按消息 ID 引用失败时用已知的消息内容回退为自定义节点。退群撤回的操作记录里会注明「已备份 / 备份失败」。
+**转发群**（`backup_routes.py`，配置 `backup_routes`，每项 `群号:类别,类别`）：可以设多个群，每个群单独勾选收哪几类内容，同一类内容发到所有勾选它的群，各发一份（一个群失败不影响其它群）。类别：`keyword` 关键词命中、`wxcode` 二维码 / 葵花码命中、`code_limit` 码发送超限、`miniapp` 小程序命中、`manual_recall` 指令撤回、`leave_recall` 退群撤回、`bot_join` 机器人进群、`bot_friend` 机器人加好友。从没保存过 `backup_routes` 时按旧配置推算：`backup_group_id` 收全部类别（填了 `wxcode_forward_group_id` 时葵花码除外），`wxcode_forward_group_id` 只收葵花码；在页面保存一次后清空这两个旧配置。接口：`GET/POST /minimal/backup_routes`。
+
+**其他撤回也先备份**（`backup_enabled`，发到勾选了「指令撤回」/「退群撤回」的转发群）：`/撤回最新消息`、`/批量撤回`、`/回复撤回`，以及退群撤回（主动退群、被踢，含机器人自己踢人 / 黑名单踢出触发的）。一次撤回多条时合并成一条转发（每 50 条一条），说明里写来源群、发送者、操作人、原因和条数；按消息 ID 引用失败时用已知的消息内容回退为自定义节点。退群撤回的操作记录里会注明「已备份 / 备份失败」。
 
 ### 新增指令（均仅插件管理员）
 
@@ -123,7 +125,8 @@ AstrBot 不把登录的面板用户传给插件，所以 WebUI 操作人靠 Clou
 | 文件 | 内容 |
 | --- | --- |
 | `keyword_guard.py` | 关键词规则解析与匹配、命中处理（备份 → 撤回 → 可选禁言 / 提示 → 日志），审核流水线入口 `_run_hit_guards` |
-| `message_backup.py` | 备份 / 转发到指定群 |
+| `message_backup.py` | 备份 / 转发到转发群 |
+| `backup_routes.py` | 转发群：多个群、每个群收哪些内容类别 |
 | `image_recognizer.py` | 葵花码 / OCR 识别器接口（http / python / llbot 驱动） |
 | `group_broadcast.py` | 批量公告、待办公告、确认情况 |
 | `group_files.py` | 群文件扫描 / 去重 / 批量删除、批量发言、批量传群文件、outbox/（待发送文件，7 天后清理） |
@@ -178,7 +181,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | # | 步骤 | 开关 | 默认 | 命中后 |
 | --- | --- | --- | --- | --- |
 | 1 | 预检：插件总开关、免责声明、用户白名单、群黑白名单 | `enabled`、`user_white_list` 等 | — | 白名单用户 / 非管理群直接跳过 |
-| 2 | 备份群 / 转发群本身不审核 | `backup_group_id`、`wxcode_forward_group_id` | — | 跳过 |
+| 2 | 转发群本身不审核 | `backup_routes` | — | 跳过 |
 | 3 | QQ 开放平台机器人豁免 | `official_bot_exempt_enabled` | 默认关 | 跳过 |
 | 4 | 机器人不是管理员时跳过 | `moderation_require_bot_admin` | 启用 | 跳过（无法撤回 / 禁言） |
 | 5 | 管理员内容豁免 | `moderation_admin_exempt` | 默认关 | 跳过 |
@@ -242,7 +245,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 自动同意好友申请 / 自动接受进群邀请 | `auto_accept.py`（main `_on_friend_request`、`_on_group_request` 先于入群审核处理 invite） | `auto_accept_friend_enabled` / `_friend_scope`（all / admin / whitelist）、`auto_accept_invite_enabled` / `_invite_scope`（admin / all / whitelist）、白名单 `auto_accept_{friend,invite}_wl_users` / `_wl_groups`、`auto_accept_delay_seconds` | 都默认关；邀请默认仅接受插件管理员的；黑名单用户好友申请拒绝、邀请不接受；不在范围内的留给人工。白名单 = 插件管理员 + 白名单 QQ + 成员来源群（`_wl_groups`，从这些群提取群成员）的群成员，好友申请和邀请各一套，不在白名单的不处理；只决定是否自动通过，与管理范围的群白名单 / 群黑名单无关；群成员先查本地缓存，没找到时把超过 60 秒没拉取的成员来源群重新拉一次成员列表再比对（每群 60 秒最多一次）。WebUI「踢人与黑名单」可测试某个 QQ 能否通过（接口 `/minimal/accept/check`） |
 | 二维码看板：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |
 | 实时日志：WebUI 查看近期消息处理进度与耗时 | `live_log.py`、`web_minimal.py:_web_minimal_livelog` | `live_log_enabled`、`live_log_show_text`、`live_log_size` | 默认开（只存内存，300 条） |
-| 机器人进群 / 加好友推送到备份群：进群（group_increase 里 user_id 是机器人）发群名、群号、人数、邀请人；加好友（friend_add）发昵称、QQ、验证消息、是否自动同意 | `bot_notify.py` | `bot_notify_join_enabled`、`bot_notify_friend_enabled` | 都默认开；没填备份群不发 |
+| 机器人进群 / 加好友推送到勾选了「机器人进群」/「机器人加好友」的转发群：进群（group_increase 里 user_id 是机器人）发群名、群号、人数、邀请人；加好友（friend_add）发昵称、QQ、验证消息、是否自动同意 | `bot_notify.py` | `bot_notify_join_enabled`、`bot_notify_friend_enabled` | 都默认开；没有这样的转发群不发 |
 | 进群后自动设置机器人的群消息接收方式（LLBot `set_group_msg_mask`，默认 4 = 接收消息但不提醒）：进群通知触发，群成员缓存后台刷新时补漏；第一次开启时已在的群记为基线不改动；已有的群在「踢人与黑名单」批量设置（批量任务） | `group_msg_mask.py`（meta 表 `msg_mask_state`） | `auto_msg_mask_enabled`、`auto_msg_mask_value` | 默认关 |
 | 退群撤回：主动退群 / 被踢后撤回其最近 N 条、最近 M 分钟的消息 | `leave_recall.py` | `leave_recall_enabled`（`_on_leave` / `_on_kick` / `_count` / `_minutes` / `_use_history`） | 默认关 |
 

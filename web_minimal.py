@@ -34,6 +34,10 @@ except ImportError:  # 单元测试环境
     jsonify = None
     quart_request = None
 try:
+    from .backup_routes import BACKUP_KINDS, BACKUP_KIND_SHORT
+except ImportError:  # 测试里按文件直接加载
+    from backup_routes import BACKUP_KINDS, BACKUP_KIND_SHORT
+try:
     from .miniapp import extract_links
 except ImportError:
     from miniapp import extract_links
@@ -495,6 +499,26 @@ class MinimalWebMixin:
         for uid in user_ids:
             self._dup_set_ignored(uid, ignore, reason, **self._web_log())
         return jsonify({"status": "success", "data": {"count": len(user_ids), "ignore": ignore}})
+
+    # ------------------------------------------------------------------
+    # 转发群（backup_routes.py）
+    # ------------------------------------------------------------------
+    def _backup_routes_payload(self) -> dict:
+        return {
+            "routes": self._br_routes(),
+            "kinds": [{"id": k, "name": n, "short": BACKUP_KIND_SHORT.get(k, n), "desc": d} for k, n, d in BACKUP_KINDS],
+            "backup_enabled": self._cfg("backup_enabled", True),
+        }
+
+    async def _web_minimal_backup_routes(self):
+        return jsonify({"status": "success", "data": self._backup_routes_payload()})
+
+    async def _web_minimal_backup_routes_save(self):
+        data = await quart_request.get_json(force=True, silent=True) or {}
+        _routes, err = self._br_save(data.get("routes"), **self._web_log())
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": self._backup_routes_payload()})
 
     # ------------------------------------------------------------------
     # 操作记录

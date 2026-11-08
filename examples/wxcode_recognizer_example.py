@@ -17,7 +17,7 @@ wxcode_service_url = http://127.0.0.1:8090/recognize。插件会 POST：
     {"texts": ["识别内容1"]}  或  {"texts": [{"text": "识别内容1"}]}
 
 返回的每条内容会用 wxcode_regex_rules 中的正则逐条匹配（不区分大小写），命中则撤回原消息，
-并把原消息和识别内容转发到 wxcode_forward_group_id（留空则用 backup_group_id）。
+并把原消息和识别内容转发到勾选了「二维码 / 葵花码命中」的转发群（backup_routes）。
 没有识别到葵花码时返回空列表即可。
 """
 

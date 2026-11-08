@@ -220,7 +220,7 @@ class LeaveRecallMixin:
                 # 撤回前先备份到备份群（backup_enabled），一个人的消息合并成一条转发
                 result["backup"] = await backup(
                     client, gid, [{"message_id": m, "user_id": uid} for m in targets],
-                    f"退群撤回：{trigger}", operator=operator if operator != uid else "")
+                    f"退群撤回：{trigger}", operator=operator if operator != uid else "", kind="leave_recall")
             await self._lr_delete_all(client, targets, result)
         self._lr_store().pop((gid, uid), None)
         return self._lr_finish(gid, uid, trigger, operator, opts, result)

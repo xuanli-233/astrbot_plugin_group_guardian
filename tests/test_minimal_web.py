@@ -79,6 +79,7 @@ group_blacklist = _load(f"{PKG}.group_blacklist", "group_blacklist.py")
 group_broadcast = _load(f"{PKG}.group_broadcast", "group_broadcast.py")
 group_name_task = _load(f"{PKG}.group_name_task", "group_name_task.py")
 keyword_guard = _load(f"{PKG}.keyword_guard", "keyword_guard.py")
+backup_routes = _load(f"{PKG}.backup_routes", "backup_routes.py")
 message_backup = _load(f"{PKG}.message_backup", "message_backup.py")
 group_directory = _load(f"{PKG}.group_directory", "group_directory.py")
 operation_log = _load(f"{PKG}.operation_log", "operation_log.py")
@@ -175,6 +176,7 @@ class _Harness(
     group_name_task.GroupNameTaskMixin,
     keyword_guard.KeywordGuardMixin,
     message_backup.MessageBackupMixin,
+    backup_routes.BackupRoutesMixin,
     group_directory.GroupDirectoryMixin,
     duplicate_members.DuplicateMemberMixin,
     batch_queue.BatchQueueMixin,

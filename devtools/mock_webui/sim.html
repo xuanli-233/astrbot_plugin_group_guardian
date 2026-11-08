@@ -184,7 +184,7 @@ function render() {
   if (!CUR || !STATE.groups.some(function (g) { return g.group_id === CUR; })) CUR = STATE.groups[0].group_id;
   $('groups').innerHTML = STATE.groups.map(function (g) {
     var role = g.bot_role === 'member' ? '<span class="badge warn">机器人非管理</span>' : '';
-    var backup = String(g.group_id) === String(STATE.backup_group_id) ? '<span class="badge">备份群</span>' : '';
+    var backup = (STATE.backup_groups || []).indexOf(String(g.group_id)) >= 0 ? '<span class="badge">转发群</span>' : '';
     return '<div class="group' + (g.group_id === CUR ? ' active' : '') + '" data-gid="' + g.group_id + '"><div class="name">' + esc(g.name) + '</div><div class="meta">' + g.group_id + ' · ' + g.members.length + ' 人' + role + backup + '</div></div>';
   }).join('');
   document.querySelectorAll('.group').forEach(function (el) {
@@ -211,7 +211,7 @@ function render() {
   $('blacklist').innerHTML = STATE.user_blacklist.length ? STATE.user_blacklist.map(function (u) { return '<div>' + esc(u) + '</div>'; }).join('') : '<div class="hint">空</div>';
   $('rules').innerHTML = '<p>关键词：' + STATE.keyword_rules.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join(' ') + '</p>' +
     '<p>葵花码正则：' + STATE.wxcode_rules.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join(' ') + '</p>' +
-    '<p>备份群：<code>' + esc(STATE.backup_group_id) + '</code>（可在管理页面 → 设置 → 全量配置里修改）</p>';
+    '<p>转发群：<code>' + esc((STATE.backup_groups || []).join('、') || '无') + '</code>（在管理页面 → 关键词与识别 → 转发群里修改）</p>';
   $('actions').innerHTML = STATE.actions.slice().reverse().filter(function (a) { return !/^get_|ocr_image/.test(a.action); })
     .map(function (a) { return '<div>' + esc(a.time) + ' <b>' + esc(a.action) + '</b> ' + esc(JSON.stringify(a.params)) + '</div>'; }).join('') || '<div class="hint">暂无</div>';
   $('logs').innerHTML = STATE.logs.slice().reverse().map(function (l) { return '<div class="lv-' + l.level + '">' + esc(l.time) + ' ' + esc(l.text) + '</div>'; }).join('') || '<div class="hint">暂无</div>';

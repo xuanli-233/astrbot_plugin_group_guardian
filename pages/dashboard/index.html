@@ -1081,12 +1081,18 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         </div>
         <div class="mn-grid">
           <div class="card">
-            <div class="card-header"><h2>开关与备份</h2></div>
+            <div class="card-header"><h2>开关</h2></div>
             <div class="settings-list" id="guardSwitches"></div>
-            <div class="mn-body">
-              <div class="mn-row"><label style="width:84px">备份群</label><select class="input-sm" id="guardBackupGroup" style="flex:1"></select></div>
-              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnGuardSave">保存</button><span class="mn-hint">禁言时长、群内提示在各规则组里设置</span></div>
-            </div>
+            <div class="mn-body"><p class="mn-hint">禁言时长、群内提示在各规则组里设置；备份发到哪些群在下面的「转发群」里设置。</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>转发群</h2><span class="rules-subtle">违规消息备份、撤回备份和机器人通知发到哪些群；每个群单独勾选收哪些内容</span></div>
+          <div class="log-container" id="brTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body">
+            <div class="mn-row"><select class="input-sm" id="brAddGroup" style="flex:1"></select><button class="btn btn-outline btn-sm" id="btnBrAdd">添加转发群</button>
+              <button class="btn btn-primary btn-sm" id="btnBrSave">保存</button><span class="mn-hint" id="brDirty"></span></div>
+            <p class="mn-hint" id="brHint"></p>
           </div>
         </div>
         <div class="mn-grid">
@@ -1118,7 +1124,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               </div>
               <div class="mn-row" id="wxUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="wxUrl" style="flex:1" placeholder="http://127.0.0.1:8090/recognize" /></div>
               <div class="mn-row" id="wxModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="wxModule" style="flex:1" placeholder="wxcode.py（放在插件数据目录 extensions/ 下）" /></div>
-              <div class="mn-row"><label style="width:84px">转发到</label><select class="input-sm" id="wxForward" style="flex:1"></select></div>
+              <p class="mn-hint">命中后转发到哪些群：在「关键词与识别」页的「转发群」里勾选「二维码 / 葵花码命中」。</p>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnWxSave">保存</button><span class="mn-hint">接入方法见插件目录 examples/wxcode_recognizer_example.py</span></div>
               <p class="mn-hint">码的白名单 / 黑名单、发送次数限制、码记录和保存的图片在「码管理」页。</p>
               <p class="mn-hint">码内容正则写在上面的规则组里（「码内容规则」）。</p>
@@ -4495,11 +4501,111 @@ function mnCodeTestFile() {
   reader.readAsDataURL(file);
 }
 
+/* ---- 转发群（backup_routes.py）：多个群，每个群勾选收哪些内容 ---- */
+var BR = { routes: [], kinds: [], dirty: false, enabled: true };
+function brFrom(list) {
+  return (list || []).map(function(r) { return { group_id: String(r.group_id), kinds: (r.kinds || []).slice() }; });
+}
+async function brLoad() {
+  var res = await safeGet('minimal/backup_routes');
+  if (isApiError(res)) { $('#brTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res) || {};
+  BR.routes = brFrom(d.routes);
+  BR.kinds = d.kinds || [];
+  BR.enabled = d.backup_enabled !== false;
+  brSetDirty(false);
+  brRender();
+}
+function brGroupName(gid) {
+  var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
+  return g ? (g.group_name || '未命名群') : '机器人不在该群？';
+}
+function brRender() {
+  var box = $('#brTable');
+  var used = {};
+  BR.routes.forEach(function(r) { used[r.group_id] = 1; });
+  var add = $('#brAddGroup');
+  add.innerHTML = '<option value="">选择要添加的群</option>' + mnGroups().filter(function(g) { return !used[String(g.group_id)]; })
+    .map(function(g) { return '<option value="' + escAttr(g.group_id) + '">' + esc(mnGroupLabel(g)) + '</option>'; }).join('');
+  $('#brHint').innerHTML = (BR.enabled ? '' : '<span style="color:var(--danger)">「撤回前备份」开关已关闭：违规消息和撤回都不会备份，只会推送机器人进群 / 加好友。</span><br>') +
+    '同一类内容会发到所有勾选它的群，各发一份。转发群本身不参与审核。点表头可以整列全选 / 全不选。';
+  if (!BR.routes.length) { box.innerHTML = '<p class="empty">还没有转发群：违规消息不会备份，机器人通知也不会推送。在下面选一个群添加。</p>'; return; }
+  box.innerHTML = '<table class="mn-table"><thead><tr><th>群</th>' +
+    BR.kinds.map(function(k) {
+      return '<th style="text-align:center;cursor:pointer;white-space:normal;min-width:64px" data-br-col="' + escAttr(k.id) + '" title="' + escAttr(k.desc + '（点击整列全选 / 全不选）') + '">' + esc(k.short || k.name) + '</th>';
+    }).join('') + '<th></th></tr></thead><tbody>' +
+    BR.routes.map(function(r, i) {
+      return '<tr><td style="white-space:nowrap">' + esc(brGroupName(r.group_id)) + '<br><span class="mn-hint">' + esc(r.group_id) + '</span></td>' +
+        BR.kinds.map(function(k) {
+          return '<td style="text-align:center"><input type="checkbox" data-br-row="' + i + '" data-br-kind="' + escAttr(k.id) + '"' +
+            (r.kinds.indexOf(k.id) >= 0 ? ' checked' : '') + ' title="' + escAttr(k.name) + '" /></td>';
+        }).join('') +
+        '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-br-all="' + i + '">全选</button>' +
+        '<button class="btn btn-ghost btn-sm" data-br-del="' + i + '" style="color:var(--danger)">移除</button></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function brSetDirty(on) {
+  BR.dirty = on;
+  var el = $('#brDirty');
+  if (el) el.textContent = on ? '有修改未保存' : '';
+}
+function brSortKinds(kinds) {
+  var order = BR.kinds.map(function(k) { return k.id; });
+  return kinds.sort(function(a, b) { return order.indexOf(a) - order.indexOf(b); });
+}
+function brOnChange(e) {
+  var cb = e.target.closest('[data-br-kind]');
+  if (!cb) return;
+  var r = BR.routes[Number(cb.getAttribute('data-br-row'))], k = cb.getAttribute('data-br-kind');
+  if (!r) return;
+  r.kinds = r.kinds.filter(function(x) { return x !== k; });
+  if (cb.checked) r.kinds.push(k);
+  brSortKinds(r.kinds);
+  brSetDirty(true);
+}
+function brOnClick(e) {
+  var col = e.target.closest('[data-br-col]'), del = e.target.closest('[data-br-del]'), all = e.target.closest('[data-br-all]');
+  if (col) {
+    var k = col.getAttribute('data-br-col');
+    var on = !BR.routes.every(function(r) { return r.kinds.indexOf(k) >= 0; });
+    BR.routes.forEach(function(r) {
+      r.kinds = r.kinds.filter(function(x) { return x !== k; });
+      if (on) r.kinds.push(k);
+      brSortKinds(r.kinds);
+    });
+  } else if (all) {
+    var row = BR.routes[Number(all.getAttribute('data-br-all'))];
+    row.kinds = row.kinds.length === BR.kinds.length ? [] : BR.kinds.map(function(x) { return x.id; });
+  } else if (del) {
+    BR.routes.splice(Number(del.getAttribute('data-br-del')), 1);
+  } else return;
+  brSetDirty(true);
+  brRender();
+}
+function brAdd() {
+  var gid = $('#brAddGroup').value;
+  if (!gid) { toast('先选一个群', 'error'); return; }
+  // 新加的群默认收所有违规 / 撤回备份；机器人进群、加好友通知需要的话再勾
+  BR.routes.push({ group_id: String(gid), kinds: BR.kinds.map(function(k) { return k.id; }).filter(function(k) { return k.indexOf('bot_') !== 0; }) });
+  brSetDirty(true);
+  brRender();
+}
+async function brSave() {
+  var empty = BR.routes.filter(function(r) { return !r.kinds.length; });
+  if (empty.length && !await mnConfirm('有 ' + empty.length + ' 个群一项都没勾，保存后它们什么都不会收到（但仍然不参与审核）。继续保存？')) return;
+  var res = await safePost('minimal/backup_routes', { routes: BR.routes });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  toast('已保存', 'success');
+  BR.routes = brFrom((mnData(res) || {}).routes);
+  brSetDirty(false);
+  brRender();
+}
+
 async function loadGuard() {
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('guardSwitches');
   mnRenderSwitches('wxSwitches');
-  $('#guardBackupGroup').innerHTML = mnGroupOptions(mnCfg('backup_group_id') || '', '不备份');
+  brLoad();
   var tg = $('#rgTestGroup'), tcur = tg.value;
   tg.innerHTML = '<option value="">不限群（所有组都参与）</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   tg.value = tcur;
@@ -4516,7 +4622,6 @@ async function loadGuard() {
   $('#codeUndecoded').value = mnCfg('code_undecoded_action') || 'pass';
   $('#wxUrl').value = mnCfg('wxcode_service_url') || '';
   $('#wxModule').value = mnCfg('wxcode_python_module') || '';
-  $('#wxForward').innerHTML = mnGroupOptions(mnCfg('wxcode_forward_group_id') || '', '与备份群相同');
   $('#ocrDriver').value = mnCfg('local_ocr_driver') || 'off';
   $('#ocrUrl').value = mnCfg('local_ocr_service_url') || '';
   $('#ocrModule').value = mnCfg('local_ocr_python_module') || '';
@@ -5074,7 +5179,7 @@ function gselEnhance(sel) {
   label();
 }
 document.addEventListener('click', function() { gselCloseAll(null); });
-var GSEL_IDS = ['csGroup', 'cuGroup', 'mpGroup', 'gfGroupSel', 'rgTestGroup', 'guardBackupGroup', 'wxForward', 'kickScope'];
+var GSEL_IDS = ['csGroup', 'cuGroup', 'mpGroup', 'gfGroupSel', 'rgTestGroup', 'brAddGroup', 'kickScope'];
 
 /* ---- 群成员查找（member_lookup.py） ---- */
 var MBR = { items: [], uid: '', profile: null, sub: 'groups' };
@@ -7285,12 +7390,14 @@ function initMinimalPages() {
   var rgSplit = document.getElementById('rgSplit');
   if (rgSplit) { rgSplit.addEventListener('click', rgOnClick); rgSplit.addEventListener('input', rgOnInput); rgSplit.addEventListener('change', rgOnInput); }
   window.addEventListener('beforeunload', function(e) { if (RG.dirty) { e.preventDefault(); e.returnValue = ''; } });
-  bindIfExists('btnGuardSave', function() {
-    mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value }, '已保存').then(function(ok) { if (ok) loadGuard(); });
-  });
+  bindIfExists('btnBrAdd', brAdd);
+  bindIfExists('btnBrSave', brSave);
+  var brTable = document.getElementById('brTable');
+  if (brTable) { brTable.addEventListener('change', brOnChange); brTable.addEventListener('click', brOnClick); }
+  window.addEventListener('beforeunload', function(e) { if (BR.dirty) { e.preventDefault(); e.returnValue = ''; } });
   bindIfExists('btnWxSave', function() {
     var values = { wxcode_driver: $('#wxDriver').value, wxcode_service_url: $('#wxUrl').value.trim(),
-      wxcode_python_module: $('#wxModule').value.trim(), wxcode_forward_group_id: $('#wxForward').value,
+      wxcode_python_module: $('#wxModule').value.trim(),
       code_detect_url: $('#codeDetectUrl').value.trim(), code_decode_url: $('#codeDecodeUrl').value.trim(),
       code_decode_kuihua: $('#codeKuihua').checked, code_decode_qrcode: $('#codeQrcode').checked,
       code_box_expand_ratio: Number($('#codeExpand').value), code_max_per_image: Number($('#codeMax').value),
@@ -7597,8 +7704,7 @@ async function loadWebUser() {
   el.classList.toggle('warn', !!d.blocked || d.state !== 'ok');
   if (d.state === 'ok' || d.state === 'forbidden') {
     el.innerHTML = '当前：<b>' + esc(d.name || d.email) + '</b>';
-    el.title = d.email + (d.message ? '
-' + d.message : '');
+    el.title = d.email + (d.message ? '\n' + d.message : '');
   } else {
     el.textContent = '操作人：' + (d.operator || '未识别');
     el.title = d.message || '';

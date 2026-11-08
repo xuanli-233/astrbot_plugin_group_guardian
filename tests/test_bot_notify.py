@@ -8,11 +8,12 @@ import _astrbot_stubs  # noqa: E402
 
 _astrbot_stubs.install()
 import bot_notify  # noqa: E402
+import backup_routes  # noqa: E402
 
 BOT, BACKUP = "999", "900"
 
 
-class _Harness(bot_notify.BotNotifyMixin):
+class _Harness(bot_notify.BotNotifyMixin, backup_routes.BackupRoutesMixin):
     def __init__(self, cfg=None, backup=BACKUP):
         self.config = {"disclaimer_agreed": True, "backup_group_id": backup}
         self.cfg = {"enabled": True, **(cfg or {})}

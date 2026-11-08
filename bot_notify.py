@@ -3,7 +3,7 @@
 
   bot_notify_join_enabled    机器人进群（group_increase 通知里 user_id 是机器人自己）：群名、群号、人数、邀请人
   bot_notify_friend_enabled  新加好友（friend_add 通知）：昵称、QQ 号、验证消息、是否自动同意
-两个都默认开；没填备份群（backup_group_id）时什么也不发。备份群本身进群不推送。
+两个都默认开；发到勾选了「机器人进群」/「机器人加好友」的转发群（backup_routes.py），没有就不发。机器人被拉进转发群本身时不推送。
 好友申请里的验证消息在收到申请时先记在内存（最多 500 个），加好友通知到了再取出来。
 每次推送最多额外调用一次 get_group_info / get_stranger_info，进群、加好友本来就很少，不影响接口频率。
 """
@@ -18,10 +18,12 @@ from astrbot.api import logger
 class BotNotifyMixin:
     BN_PENDING_MAX = 500
 
-    def _bn_target(self) -> str:
+    def _bn_targets(self, kind: str) -> list:
+        """kind：bot_join / bot_friend。返回收这类推送的群号列表。"""
         if not self.config.get("disclaimer_agreed", False) or not self._cfg("enabled"):
-            return ""
-        return str(self.config.get("backup_group_id", "") or "").strip()
+            return []
+        getter = getattr(self, "_br_targets", None)
+        return list(getter(kind)) if callable(getter) else []
 
     def _bn_pending(self) -> "OrderedDict[str, dict]":
         store = getattr(self, "_bn_friend_requests", None)
@@ -45,14 +47,19 @@ class BotNotifyMixin:
         if item is not None:
             item["how"] = how
 
-    async def _bn_send(self, client, target: str, text: str) -> bool:
-        ok, err = await self._call_group_api(
-            client, "send_group_msg", "推送到备份群", group_id=self._safe_int(target, 0),
-            message=[{"type": "text", "data": {"text": text}}],
-        )
-        if not ok:
-            logger.warning(f"[GroupMgr] 推送到备份群 {target} 失败: {err}")
-        return bool(ok)
+    async def _bn_send(self, client, targets: list, text: str) -> bool:
+        """发到每个群，至少一个成功返回 True。"""
+        sent = False
+        for target in targets:
+            ok, err = await self._call_group_api(
+                client, "send_group_msg", "推送到转发群", group_id=self._safe_int(target, 0),
+                message=[{"type": "text", "data": {"text": text}}],
+            )
+            if ok:
+                sent = True
+            else:
+                logger.warning(f"[GroupMgr] 推送到转发群 {target} 失败: {err}")
+        return sent
 
     @staticmethod
     def _bn_time(ts) -> str:
@@ -62,7 +69,7 @@ class BotNotifyMixin:
             return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     async def _handle_bot_event_notify(self, event) -> Optional[str]:
-        """机器人进群 / 新好友 → 推送到备份群。返回推送的文字（测试用），没推送返回 None。"""
+        """机器人进群 / 新好友 → 推送到转发群。返回推送的文字（测试用），没推送返回 None。"""
         raw = self._get_raw_event(event)
         if not isinstance(raw, dict):
             return None
@@ -81,9 +88,10 @@ class BotNotifyMixin:
         return None
 
     async def _bn_bot_join(self, event, raw: dict) -> Optional[str]:
-        target = self._bn_target()
         gid = str(raw.get("group_id", "") or "")
-        if not target or not gid or gid == target or not self._cfg("bot_notify_join_enabled", True):
+        is_backup = getattr(self, "_is_backup_group", lambda _g: False)
+        targets = [t for t in self._bn_targets("bot_join") if t != gid]
+        if not targets or not gid or is_backup(gid) or not self._cfg("bot_notify_join_enabled", True):
             return None
         client = await self._get_client(event)
         if not client:
@@ -106,15 +114,15 @@ class BotNotifyMixin:
             lines.append(f"方式：{how}")
         lines.append(f"时间：{self._bn_time(raw.get('time'))}")
         text = "\n".join(lines)
-        if await self._bn_send(client, target, text):
+        if await self._bn_send(client, targets, text):
             self._record_op("推送机器人进群", source="自动", group_id=gid, target=operator, detail=text[:300])
             return text
         return None
 
     async def _bn_friend_add(self, event, raw: dict) -> Optional[str]:
-        target = self._bn_target()
+        targets = self._bn_targets("bot_friend")
         uid = str(raw.get("user_id", "") or "")
-        if not target or not uid or not self._cfg("bot_notify_friend_enabled", True):
+        if not targets or not uid or not self._cfg("bot_notify_friend_enabled", True):
             return None
         client = await self._get_client(event)
         if not client:
@@ -131,7 +139,7 @@ class BotNotifyMixin:
         lines.append(f"处理：{pending.get('how') or ('手动同意' if pending else '对方添加 / 手动同意')}")
         lines.append(f"时间：{self._bn_time(raw.get('time'))}")
         text = "\n".join(lines)
-        if await self._bn_send(client, target, text):
+        if await self._bn_send(client, targets, text):
             self._record_op("推送新好友", source="自动", target=uid, detail=text[:300])
             return text
         return None

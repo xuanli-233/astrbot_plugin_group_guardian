@@ -63,6 +63,7 @@ group_broadcast = _load(f"{PKG}.group_broadcast", "group_broadcast.py")
 group_name_task = _load(f"{PKG}.group_name_task", "group_name_task.py")
 keyword_guard = _load(f"{PKG}.keyword_guard", "keyword_guard.py")
 image_recognizer = _load(f"{PKG}.image_recognizer", "image_recognizer.py")
+backup_routes = _load(f"{PKG}.backup_routes", "backup_routes.py")
 message_backup = _load(f"{PKG}.message_backup", "message_backup.py")
 batch_queue = _load(f"{PKG}.batch_queue", "batch_queue.py")
 sys.path.insert(0, str(ROOT / "tests"))
@@ -126,6 +127,7 @@ class _Harness(
     keyword_guard.KeywordGuardMixin,
     image_recognizer.ImageRecognizerMixin,
     message_backup.MessageBackupMixin,
+    backup_routes.BackupRoutesMixin,
     onebot.OneBotMixin,
     utilities.UtilitiesMixin,
 ):
@@ -269,11 +271,12 @@ class BackupTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(h._is_backup_group("2"))
 
     async def test_wxcode_kind_uses_its_own_forward_group(self):
+        # 旧配置兼容：转发群从没保存过时按 backup_group_id / wxcode_forward_group_id 推算
         h = _Harness(_Client(), config={"backup_group_id": "500", "wxcode_forward_group_id": "600"})
-        self.assertEqual(h._backup_target_group("wxcode"), "600")
-        self.assertEqual(h._backup_target_group("keyword"), "500")
+        self.assertEqual(h._backup_targets("wxcode"), [600])
+        self.assertEqual(h._backup_targets("keyword"), [500])
         h.config["wxcode_forward_group_id"] = ""
-        self.assertEqual(h._backup_target_group("wxcode"), "500")
+        self.assertEqual(h._backup_targets("wxcode"), [500])
 
 
 class HitGuardTests(unittest.IsolatedAsyncioTestCase):

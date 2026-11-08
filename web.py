@@ -711,6 +711,8 @@ class WebMixin:
                 ("/minimal/directory/refresh", self._web_minimal_directory_refresh, ["POST"], "刷新群成员缓存"),
                 ("/minimal/directory/find", self._web_minimal_directory_find, ["GET"], "查找某人所在的群"),
                 ("/minimal/oplog", self._web_minimal_oplog, ["GET"], "操作记录"),
+                ("/minimal/backup_routes", self._web_minimal_backup_routes, ["GET"], "转发群与内容类别"),
+                ("/minimal/backup_routes", self._web_minimal_backup_routes_save, ["POST"], "保存转发群"),
                 ("/minimal/leavelog", self._web_minimal_leavelog, ["GET"], "退群记录"),
                 ("/minimal/msgmask", self._web_minimal_msgmask, ["GET"], "各群消息接收方式设置情况"),
                 ("/minimal/msgmask/apply", self._web_minimal_msgmask_apply, ["POST"], "批量设置群消息接收方式"),
