@@ -283,11 +283,79 @@ class FakeOneBot:
             ADMIN_UIN: member("管理员小李", "owner"), 20004: member("赵六"), 30002: member("引流号B"),
         })
         self._add_group(900000001, "违规消息备份群", "admin", {ADMIN_UIN: member("管理员小李", "owner")})
+        # 群文件：广告号A 往一群、二群各传了同一个推广文件（一群里还传了两遍），一群有个「资料」文件夹
+        now = int(time.time())
+        self.next_file = 1
+
+        def add(gid, name, size, uploader, uname, ago, folder=""):
+            self.groups[gid]["files"].append({
+                "file_id": f"/f{self.next_file}", "file_name": name, "busid": 102, "file_size": size,
+                "upload_time": now - ago, "dead_time": 0, "modify_time": now - ago, "download_times": 3,
+                "uploader": uploader, "uploader_name": uname, "folder": folder})
+            self.next_file += 1
+        add(700000001, "群规.pdf", 120_000, ADMIN_UIN, "管理员小李", 86400 * 30)
+        add(700000001, "兼职日结300.apk", 5_200_000, 30001, "广告号A", 3600)
+        add(700000001, "兼职日结300.apk", 5_200_000, 30001, "广告号A", 1800)
+        add(700000001, "期末复习.docx", 860_000, 20001, "张三", 86400 * 2, folder="资料")
+        add(700000001, "期末复习.docx", 860_000, 20002, "李四", 86400, folder="资料")
+        add(700000002, "兼职日结300.apk", 5_200_000, 30001, "广告号A", 3000)
+        add(700000002, "活动照片.zip", 32_000_000, 20003, "王五", 86400 * 5)
+        add(700000003, "引流教程.txt", 2_000, 30002, "引流号B", 600)
 
     def _add_group(self, gid, name, bot_role, members):
         members = dict(members)
         members[BOT_UIN] = {"nickname": "群管机器人", "card": "", "role": bot_role, "title": "", "shut_until": 0}
-        self.groups[gid] = {"name": name, "members": members, "chat": [], "notices": [], "blocked": set()}
+        self.groups[gid] = {"name": name, "members": members, "chat": [], "notices": [], "blocked": set(), "files": []}
+
+    # ---- 群文件 ----
+    def _file_view(self, gid, f):
+        return {k: v for k, v in dict(f, group_id=gid).items() if k != "folder"}
+
+    def act_get_group_root_files(self, group_id, **_):
+        g = self.groups.get(int(group_id))
+        if not g:
+            return _fail("群不存在")
+        folders = sorted({f["folder"] for f in g["files"] if f["folder"]})
+        return _ok({"files": [self._file_view(int(group_id), f) for f in g["files"] if not f["folder"]],
+                    "folders": [{"group_id": int(group_id), "folder_id": "/" + name, "folder_name": name,
+                                 "total_file_count": sum(1 for f in g["files"] if f["folder"] == name)}
+                                for name in folders]})
+
+    def act_get_group_files_by_folder(self, group_id, folder_id="", **_):
+        g = self.groups.get(int(group_id))
+        if not g:
+            return _fail("群不存在")
+        name = str(folder_id).lstrip("/")
+        return _ok({"files": [self._file_view(int(group_id), f) for f in g["files"] if f["folder"] == name],
+                    "folders": []})
+
+    def act_delete_group_file(self, group_id, file_id, busid=0, **_):
+        g = self.groups.get(int(group_id))
+        if not g:
+            return _fail("群不存在")
+        if g["members"][BOT_UIN]["role"] == "member":
+            return _fail("ERR_NO_PERMISSION 机器人不是管理员，不能删除别人的文件")
+        before = len(g["files"])
+        g["files"] = [f for f in g["files"] if f["file_id"] != file_id]
+        if len(g["files"]) == before:
+            return _fail("文件不存在")
+        self.system(int(group_id), f"（机器人）删除了群文件 {file_id}")
+        return _ok(None)
+
+    def act_upload_group_file(self, group_id, file, name="", folder="", **_):
+        g = self.groups.get(int(group_id))
+        if not g:
+            return _fail("群不存在")
+        import os as _os
+        if not _os.path.isfile(str(file)):
+            return _fail(f"文件不存在：{file}")
+        g["files"].append({"file_id": f"/f{self.next_file}", "file_name": name or _os.path.basename(file),
+                           "busid": 102, "file_size": _os.path.getsize(file), "upload_time": int(time.time()),
+                           "dead_time": 0, "modify_time": int(time.time()), "download_times": 0,
+                           "uploader": BOT_UIN, "uploader_name": "群管机器人", "folder": ""})
+        self.next_file += 1
+        self.system(int(group_id), f"（机器人）上传了群文件 {name}")
+        return _ok(None)
 
     def new_msg_id(self):
         self.next_msg_id += 1

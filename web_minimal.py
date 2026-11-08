@@ -24,8 +24,9 @@
 """
 import re
 import time
+from pathlib import Path
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 try:
     from quart import jsonify, request as quart_request
@@ -211,6 +212,14 @@ class MinimalWebMixin:
             return self._minimal_error("公告内容不能为空")
         if len(content) > self.BROADCAST_CONTENT_MAX:
             return self._minimal_error(f"公告内容过长（上限 {self.BROADCAST_CONTENT_MAX} 字）")
+        # 配图：上传的图片（存在 outbox/，group_files.py）优先，其次是填写的图片地址
+        image = str(data.get("image") or "").strip()
+        image_file = data.get("image_file") if isinstance(data.get("image_file"), dict) else None
+        if image_file and image_file.get("path"):
+            info, err = self._outbox_local(str(image_file["path"]))  # 再检查一次，不直接用前端传来的路径
+            if err:
+                return self._minimal_error(f"配图：{err}")
+            image = Path(info["path"]).as_uri()
         todo = bool(data.get("todo"))
         if todo:
             options = {"pinned": True, "confirm_required": True, "tip_window": True}
@@ -223,7 +232,7 @@ class MinimalWebMixin:
         if not targets:
             return self._minimal_error(f"没有可发布的群{f'：{err}' if err else ''}")
         task = {"todo": todo, "groups": targets, "content": content, "options": options,
-                "image": str(data.get("image") or "").strip(), "source": "WebUI", "operator": ""}
+                "image": image, "source": "WebUI", "operator": ""}
         job = self._notice_job(task)
         return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
 
@@ -673,6 +682,98 @@ class MinimalWebMixin:
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"allow": self._mp_list("allow")}})
+
+    # ------------------------------------------------------------------
+    # 指令管理（command_center.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_commands(self):
+        return jsonify({"status": "success", "data": {"commands": self._cmd_list()}})
+
+    async def _web_minimal_commands_set(self):
+        data = await self._minimal_body()
+        names = data.get("names") if isinstance(data.get("names"), list) else [data.get("name")]
+        enabled = data.get("enabled")
+        level = data.get("level")
+        for name in [str(n or "") for n in names]:
+            err = self._cmd_set(name, enabled=None if enabled is None else bool(enabled),
+                                level=None if level in (None, "") else str(level), **WEB_LOG)
+            if err:
+                return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"commands": self._cmd_list()}})
+
+    async def _web_minimal_commands_reset(self):
+        self._cmd_reset(**WEB_LOG)
+        return jsonify({"status": "success", "data": {"commands": self._cmd_list()}})
+
+    # ------------------------------------------------------------------
+    # 群文件 / 批量发言 / 批量传文件（group_files.py）
+    # ------------------------------------------------------------------
+    def _minimal_allowed_groups(self, value) -> Tuple[List[str], List[str]]:
+        groups = self._minimal_ids(value)
+        allowed = [g for g in groups if self._group_id_allowed(g)]
+        return allowed, [g for g in groups if g not in allowed]
+
+    async def _web_minimal_files_scan(self):
+        data = await self._minimal_body()
+        groups, denied = self._minimal_allowed_groups(data.get("groups"))
+        err = self._gf_start_scan(groups)
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": dict(self._gf_snapshot(with_files=False), denied=denied)})
+
+    async def _web_minimal_files_state(self):
+        with_files = str(quart_request.args.get("with_files", "1")) != "0"
+        return jsonify({"status": "success", "data": self._gf_snapshot(with_files=with_files)})
+
+    async def _web_minimal_files_delete(self):
+        data = await self._minimal_body()
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        reason = str(data.get("reason") or "").strip()[:200]
+        if not items:
+            return self._minimal_error("请先勾选要删除的文件")
+        job = self._gf_delete_job([i for i in items if isinstance(i, dict)], reason=reason, **WEB_LOG)
+        if not job:
+            return self._minimal_error("选中的文件不在最近一次扫描结果里，请重新扫描")
+        return jsonify({"status": "success", "data": {"job": job}})
+
+    async def _web_minimal_outbox(self):
+        data = await self._minimal_body()
+        if data.get("local_path"):
+            info, err = self._outbox_local(str(data.get("local_path")))
+        else:
+            info, err = self._outbox_save(str(data.get("name") or ""), str(data.get("data_base64") or ""))
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": info})
+
+    async def _web_minimal_bulk_send(self):
+        data = await self._minimal_body()
+        groups, denied = self._minimal_allowed_groups(data.get("groups"))
+        if not groups:
+            return self._minimal_error("请选择要发送的群")
+        image = None
+        if isinstance(data.get("image"), dict) and data["image"].get("path"):
+            image, err = self._outbox_local(str(data["image"]["path"]))  # 再检查一次，不直接用前端传来的路径
+            if err:
+                return self._minimal_error(f"图片：{err}")
+        job, err = self._bulk_send_job(groups, str(data.get("text") or ""), image, **WEB_LOG)
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
+
+    async def _web_minimal_bulk_upload(self):
+        data = await self._minimal_body()
+        groups, denied = self._minimal_allowed_groups(data.get("groups"))
+        if not groups:
+            return self._minimal_error("请选择要上传到的群")
+        file = data.get("file") if isinstance(data.get("file"), dict) else {}
+        info, err = self._outbox_local(str(file.get("path") or ""))
+        if err:
+            return self._minimal_error(err)
+        job, err = self._bulk_upload_job(groups, info, name=str(data.get("name") or file.get("name") or ""), **WEB_LOG)
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
 
     async def _web_minimal_codes_lists(self):
         return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})

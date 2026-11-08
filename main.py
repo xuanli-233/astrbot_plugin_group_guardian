@@ -35,6 +35,8 @@ from .message_backup import MessageBackupMixin
 from .media_store import MediaStoreMixin
 from .rule_groups import RuleGroupMixin
 from .miniapp import MiniAppMixin
+from .command_center import CommandCenterMixin
+from .group_files import GroupFilesMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
 from .moderation import ModerationMixin
@@ -46,7 +48,7 @@ from .web import WebMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, CommandCenterMixin, GroupFilesMixin, SchedulerMixin, MinimalWebMixin, WebMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -100,7 +102,7 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         await self._stop_scheduler()
         # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):
@@ -116,17 +118,25 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
     async def _search_keyword_in_messages(self, event: AstrMessageEvent, group_id: str, keyword: str, days: int, search_type: str = "all") -> Tuple[int, list]:
         return await CommandsMixin._search_keyword_in_messages(self, event, group_id, keyword, days, search_type)
 
-    # 命令注册区：新增普通命令时，请在 commands.py 写业务逻辑，再在这里添加显式转发入口。
+    # 命令注册区：新增普通命令时，请在 commands.py 写业务逻辑，再在这里添加显式转发入口，
+    # 并在 command_center.COMMANDS 里登记（分类、说明、最宽权限）。每个入口都先过 _cmd_guarded：
+    # WebUI「指令管理」里的开关和「谁能用」在这里生效（command_center.py）。
+    @filter.command("指令列表")
+    async def cmd_command_list(self, event: AstrMessageEvent):
+        '''查看自己能用的群管指令'''
+        async for item in self._cmd_guarded(event, "指令列表", CommandCenterMixin.cmd_command_list(self, event)):
+            yield item
+
     @filter.command("字数统计")
     async def word_count(self, event: AstrMessageEvent):
         '''统计群内关键词出现次数'''
-        async for item in CommandsMixin.word_count(self, event):
+        async for item in self._cmd_guarded(event, "字数统计", CommandsMixin.word_count(self, event)):
             yield item
 
     @filter.command("群统计")
     async def group_stats(self, event: AstrMessageEvent):
         '''显示群内今日消息统计和活跃排行'''
-        async for item in CommandsMixin.group_stats(self, event):
+        async for item in self._cmd_guarded(event, "群统计", CommandsMixin.group_stats(self, event)):
             yield item
 
     # 管理命令注册区：权限校验由插件内部 _is_admin / _is_plugin_admin 统一处理，
@@ -134,146 +144,146 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
     @filter.command("搜索成员")
     async def search_member(self, event: AstrMessageEvent):
         '''按昵称或QQ号搜索群成员'''
-        async for item in CommandsMixin.search_member(self, event):
+        async for item in self._cmd_guarded(event, "搜索成员", CommandsMixin.search_member(self, event)):
             yield item
 
     @filter.command("撤回最新消息")
     async def recall_last(self, event: AstrMessageEvent):
         '''撤回群内最新一条或多条消息'''
-        async for item in CommandsMixin.recall_last(self, event):
+        async for item in self._cmd_guarded(event, "撤回最新消息", CommandsMixin.recall_last(self, event)):
             yield item
 
     @filter.command("禁言")
     async def cmd_ban(self, event: AstrMessageEvent):
         '''禁言指定群成员。用法: /禁言 <QQ号或@某人> <分钟>'''
-        async for item in CommandsMixin.cmd_ban(self, event):
+        async for item in self._cmd_guarded(event, "禁言", CommandsMixin.cmd_ban(self, event)):
             yield item
 
     @filter.command("解禁")
     async def cmd_unban(self, event: AstrMessageEvent):
         '''解除指定群成员禁言。用法: /解禁 <QQ号或@某人>'''
-        async for item in CommandsMixin.cmd_unban(self, event):
+        async for item in self._cmd_guarded(event, "解禁", CommandsMixin.cmd_unban(self, event)):
             yield item
 
     @filter.command("踢人")
     async def cmd_kick(self, event: AstrMessageEvent):
         '''将成员移出群聊。用法: /踢人 <QQ号或@某人>'''
-        async for item in CommandsMixin.cmd_kick(self, event):
+        async for item in self._cmd_guarded(event, "踢人", CommandsMixin.cmd_kick(self, event)):
             yield item
 
     @filter.command("全体禁言")
     async def cmd_whole_ban(self, event: AstrMessageEvent):
         '''开启或关闭全员禁言。用法: /全体禁言 开启/关闭'''
-        async for item in CommandsMixin.cmd_whole_ban(self, event):
+        async for item in self._cmd_guarded(event, "全体禁言", CommandsMixin.cmd_whole_ban(self, event)):
             yield item
 
     @filter.command("设置名片")
     async def cmd_set_card(self, event: AstrMessageEvent):
         '''修改成员群名片。用法: /设置名片 <QQ号或@某人> <新名称>'''
-        async for item in CommandsMixin.cmd_set_card(self, event):
+        async for item in self._cmd_guarded(event, "设置名片", CommandsMixin.cmd_set_card(self, event)):
             yield item
 
     @filter.command("发公告")
     async def cmd_send_notice(self, event: AstrMessageEvent):
         '''发布群公告。用法: /发公告 <内容>'''
-        async for item in CommandsMixin.cmd_send_notice(self, event):
+        async for item in self._cmd_guarded(event, "发公告", CommandsMixin.cmd_send_notice(self, event)):
             yield item
 
     @filter.command("删公告")
     async def cmd_delete_notice(self, event: AstrMessageEvent):
         '''删除群公告。用法: /删公告 <公告ID>'''
-        async for item in CommandsMixin.cmd_delete_notice(self, event):
+        async for item in self._cmd_guarded(event, "删公告", CommandsMixin.cmd_delete_notice(self, event)):
             yield item
 
     @filter.command("公告列表")
     async def cmd_list_notices(self, event: AstrMessageEvent):
         '''查看群公告列表'''
-        async for item in CommandsMixin.cmd_list_notices(self, event):
+        async for item in self._cmd_guarded(event, "公告列表", CommandsMixin.cmd_list_notices(self, event)):
             yield item
 
     @filter.command("文件列表")
     async def cmd_list_files(self, event: AstrMessageEvent):
         '''查看群文件列表'''
-        async for item in CommandsMixin.cmd_list_files(self, event):
+        async for item in self._cmd_guarded(event, "文件列表", CommandsMixin.cmd_list_files(self, event)):
             yield item
 
     @filter.command("删文件")
     async def cmd_delete_file(self, event: AstrMessageEvent):
         '''删除群文件。用法: /删文件 <文件ID>'''
-        async for item in CommandsMixin.cmd_delete_file(self, event):
+        async for item in self._cmd_guarded(event, "删文件", CommandsMixin.cmd_delete_file(self, event)):
             yield item
 
     @filter.command("成员列表")
     async def cmd_member_list(self, event: AstrMessageEvent):
         '''查看群成员列表'''
-        async for item in CommandsMixin.cmd_member_list(self, event):
+        async for item in self._cmd_guarded(event, "成员列表", CommandsMixin.cmd_member_list(self, event)):
             yield item
 
     @filter.command("禁言列表")
     async def cmd_banned_list(self, event: AstrMessageEvent):
         '''查看当前被禁言的成员'''
-        async for item in CommandsMixin.cmd_banned_list(self, event):
+        async for item in self._cmd_guarded(event, "禁言列表", CommandsMixin.cmd_banned_list(self, event)):
             yield item
 
     @filter.command("群名")
     async def cmd_set_name(self, event: AstrMessageEvent):
         '''修改群聊名称。用法: /群名 <新群名>'''
-        async for item in CommandsMixin.cmd_set_name(self, event):
+        async for item in self._cmd_guarded(event, "群名", CommandsMixin.cmd_set_name(self, event)):
             yield item
 
     @filter.command("头衔")
     async def cmd_set_title(self, event: AstrMessageEvent):
         '''设置成员专属头衔。用法: /头衔 <QQ号> <头衔名>'''
-        async for item in CommandsMixin.cmd_set_title(self, event):
+        async for item in self._cmd_guarded(event, "头衔", CommandsMixin.cmd_set_title(self, event)):
             yield item
 
     @filter.command("设精华")
     async def cmd_set_essence(self, event: AstrMessageEvent):
         '''设置精华消息。用法: /设精华 <消息ID>'''
-        async for item in CommandsMixin.cmd_set_essence(self, event):
+        async for item in self._cmd_guarded(event, "设精华", CommandsMixin.cmd_set_essence(self, event)):
             yield item
 
     @filter.command("取消精华")
     async def cmd_del_essence(self, event: AstrMessageEvent):
         '''取消精华消息。用法: /取消精华 <消息ID>'''
-        async for item in CommandsMixin.cmd_del_essence(self, event):
+        async for item in self._cmd_guarded(event, "取消精华", CommandsMixin.cmd_del_essence(self, event)):
             yield item
 
     # 设置管理：权限在方法内精细校验（白名单群群主 / 插件管理员），故不加框架级 ADMIN 限制
     @filter.command("设置管理")
     async def cmd_set_admin(self, event: AstrMessageEvent):
         '''设置群管理员。用法: /设置管理 @某人 或 <QQ号> [设置/取消]'''
-        async for item in CommandsMixin.cmd_set_admin(self, event, default_enable=True):
+        async for item in self._cmd_guarded(event, "设置管理", CommandsMixin.cmd_set_admin(self, event, default_enable=True)):
             yield item
 
     @filter.command("取消管理")
     async def cmd_unset_admin(self, event: AstrMessageEvent):
         '''取消群管理员。用法: /取消管理 @某人 或 <QQ号>（Issue #40）'''
-        async for item in CommandsMixin.cmd_set_admin(self, event, default_enable=False):
+        async for item in self._cmd_guarded(event, "取消管理", CommandsMixin.cmd_set_admin(self, event, default_enable=False)):
             yield item
 
     @filter.command("加群方式")
     async def cmd_join_verify(self, event: AstrMessageEvent):
         '''修改入群验证方式。用法: /加群方式 <需要验证/允许/禁止>'''
-        async for item in CommandsMixin.cmd_join_verify(self, event):
+        async for item in self._cmd_guarded(event, "加群方式", CommandsMixin.cmd_join_verify(self, event)):
             yield item
 
     @filter.command("自动审核")
     async def cmd_auto_moderate(self, event: AstrMessageEvent):
         '''开关智能审核功能。用法: /自动审核 开启/关闭/状态'''
-        async for item in CommandsMixin.cmd_auto_moderate(self, event):
+        async for item in self._cmd_guarded(event, "自动审核", CommandsMixin.cmd_auto_moderate(self, event)):
             yield item
 
     @filter.command("设置管理插件")
     async def cmd_plugin_admin(self, event: AstrMessageEvent):
         '''管理插件管理员列表。用法: /设置管理插件 <QQ号> 添加/移除'''
-        async for item in CommandsMixin.cmd_plugin_admin(self, event):
+        async for item in self._cmd_guarded(event, "设置管理插件", CommandsMixin.cmd_plugin_admin(self, event)):
             yield item
 
     @filter.command("批量撤回")
     async def recall_all(self, event: AstrMessageEvent):
         '''批量撤回最近消息。用法: /批量撤回 [条数] 或 /批量撤回 @用户 [条数]'''
-        async for item in CommandsMixin.recall_all(self, event):
+        async for item in self._cmd_guarded(event, "批量撤回", CommandsMixin.recall_all(self, event)):
             yield item
 
     # 退群撤回 / 退群记录：记录每条群消息（撤回只记 ID 与时间；退群记录另存最近 N 条的文字摘要，只在内存）。
@@ -422,99 +432,99 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
     @filter.command("批量禁言")
     async def cmd_batch_ban(self, event: AstrMessageEvent):
         '''批量禁言多人。用法: /批量禁言 <QQ1> <QQ2> ... [时长分钟]'''
-        async for item in CommandsMixin.cmd_batch_ban(self, event):
+        async for item in self._cmd_guarded(event, "批量禁言", CommandsMixin.cmd_batch_ban(self, event)):
             yield item
 
     @filter.command("批量踢人")
     async def cmd_batch_kick(self, event: AstrMessageEvent):
         '''批量踢出多人。用法: /批量踢人 <QQ1> <QQ2> ...'''
-        async for item in CommandsMixin.cmd_batch_kick(self, event):
+        async for item in self._cmd_guarded(event, "批量踢人", CommandsMixin.cmd_batch_kick(self, event)):
             yield item
 
     @filter.command("批量踢黑")
     async def cmd_batch_kick_block(self, event: AstrMessageEvent):
         '''在当前群批量踢出并拉黑（拒绝再次加群）。用法: /批量踢黑 <QQ1> <QQ2> ...'''
-        async for item in GroupBlacklistMixin.cmd_batch_kick_block(self, event):
+        async for item in self._cmd_guarded(event, "批量踢黑", GroupBlacklistMixin.cmd_batch_kick_block(self, event)):
             yield item
 
     @filter.command("全群踢人")
     async def cmd_kick_all_groups(self, event: AstrMessageEvent):
         '''在所有管理的群踢出这些人（仅插件管理员）。用法: /全群踢人 <QQ1> <QQ2> ...'''
-        async for item in GroupBlacklistMixin.cmd_kick_all_groups(self, event, block=False):
+        async for item in self._cmd_guarded(event, "全群踢人", GroupBlacklistMixin.cmd_kick_all_groups(self, event, block=False)):
             yield item
 
     @filter.command("全群踢黑")
     async def cmd_kick_block_all_groups(self, event: AstrMessageEvent):
         '''在所有管理的群踢出并拉黑，同时加入用户黑名单（仅插件管理员）。用法: /全群踢黑 <QQ1> <QQ2> ...'''
-        async for item in GroupBlacklistMixin.cmd_kick_all_groups(self, event, block=True):
+        async for item in self._cmd_guarded(event, "全群踢黑", GroupBlacklistMixin.cmd_kick_all_groups(self, event, block=True)):
             yield item
 
     # 批量发布（group_broadcast.py）：LuckyLilliaBot 无群待办接口，待办用置顶 + 需确认的公告替代
     @filter.command("全群公告")
     async def cmd_broadcast_notice(self, event: AstrMessageEvent):
         '''批量发布群公告（仅插件管理员）。用法: /全群公告 [群号,群号] [-置顶] [-确认] [-新人] [-弹窗] 内容'''
-        async for item in GroupBroadcastMixin.cmd_broadcast_notice(self, event, todo=False):
+        async for item in self._cmd_guarded(event, "全群公告", GroupBroadcastMixin.cmd_broadcast_notice(self, event, todo=False)):
             yield item
 
     @filter.command("全群待办")
     async def cmd_broadcast_todo(self, event: AstrMessageEvent):
         '''批量发布待办公告：置顶 + 需确认 + 弹窗（仅插件管理员）。用法: /全群待办 [群号,群号] 内容'''
-        async for item in GroupBroadcastMixin.cmd_broadcast_notice(self, event, todo=True):
+        async for item in self._cmd_guarded(event, "全群待办", GroupBroadcastMixin.cmd_broadcast_notice(self, event, todo=True)):
             yield item
 
     @filter.command("确认发布")
     async def cmd_broadcast_confirm(self, event: AstrMessageEvent):
         '''确认执行 /全群公告 或 /全群待办'''
-        async for item in GroupBroadcastMixin.cmd_broadcast_confirm(self, event):
+        async for item in self._cmd_guarded(event, "确认发布", GroupBroadcastMixin.cmd_broadcast_confirm(self, event)):
             yield item
 
     @filter.command("取消发布")
     async def cmd_broadcast_cancel(self, event: AstrMessageEvent):
         '''取消待确认的 /全群公告 或 /全群待办'''
-        async for item in GroupBroadcastMixin.cmd_broadcast_cancel(self, event):
+        async for item in self._cmd_guarded(event, "取消发布", GroupBroadcastMixin.cmd_broadcast_cancel(self, event)):
             yield item
 
     @filter.command("待办确认情况")
     async def cmd_todo_ack_status(self, event: AstrMessageEvent):
         '''查看最近一次待办公告在各群的确认人数'''
-        async for item in GroupBroadcastMixin.cmd_todo_ack_status(self, event):
+        async for item in self._cmd_guarded(event, "待办确认情况", GroupBroadcastMixin.cmd_todo_ack_status(self, event)):
             yield item
 
     # 群名任务（group_name_task.py）
     @filter.command("群名后缀")
     async def cmd_group_suffix(self, event: AstrMessageEvent):
         '''批量改群名后缀（仅插件管理员）。用法: /群名后缀 <后缀|清除> [定时 YYYY-MM-DD HH:MM] [群号,群号]'''
-        async for item in GroupNameTaskMixin.cmd_group_suffix(self, event):
+        async for item in self._cmd_guarded(event, "群名后缀", GroupNameTaskMixin.cmd_group_suffix(self, event)):
             yield item
 
     @filter.command("群名倒计时")
     async def cmd_group_countdown(self, event: AstrMessageEvent):
         '''群名倒计时（仅插件管理员）。用法: /群名倒计时 <YYYY-MM-DD> <模板含{days}> [群号,群号] | 列表 | 停止 | 立即更新'''
-        async for item in GroupNameTaskMixin.cmd_group_countdown(self, event):
+        async for item in self._cmd_guarded(event, "群名倒计时", GroupNameTaskMixin.cmd_group_countdown(self, event)):
             yield item
 
     # F5 群管理员授权开关指令
     @filter.command("群管理授权")
     async def cmd_group_admin_grant(self, event: AstrMessageEvent):
         '''群管理员授权开关。用法: /群管理授权 开启/关闭/状态'''
-        async for item in CommandsMixin.cmd_group_admin_grant(self, event):
+        async for item in self._cmd_guarded(event, "群管理授权", CommandsMixin.cmd_group_admin_grant(self, event)):
             yield item
 
     # F5 群主移除/恢复本群某群管的 bot 权限（权限在方法内校验：群主或插件管理员）
     @filter.command("移除群管权限")
     async def cmd_revoke_admin_perm(self, event: AstrMessageEvent):
         '''群主移除本群某群管的bot管理权限。用法: /移除群管权限 <QQ号>'''
-        async for item in CommandsMixin.cmd_revoke_admin_perm(self, event, restore=False):
+        async for item in self._cmd_guarded(event, "移除群管权限", CommandsMixin.cmd_revoke_admin_perm(self, event, restore=False)):
             yield item
 
     @filter.command("恢复群管权限")
     async def cmd_restore_admin_perm(self, event: AstrMessageEvent):
         '''群主恢复本群某群管的bot管理权限。用法: /恢复群管权限 <QQ号>'''
-        async for item in CommandsMixin.cmd_revoke_admin_perm(self, event, restore=True):
+        async for item in self._cmd_guarded(event, "恢复群管权限", CommandsMixin.cmd_revoke_admin_perm(self, event, restore=True)):
             yield item
 
     @filter.command("回复撤回")
     async def cmd_recall_reply(self, event: AstrMessageEvent):
         '''引用一条消息并发送本指令，撤回被引用的消息（Issue #36）'''
-        async for item in CommandsMixin.cmd_recall_reply(self, event):
+        async for item in self._cmd_guarded(event, "回复撤回", CommandsMixin.cmd_recall_reply(self, event)):
             yield item

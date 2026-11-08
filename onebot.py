@@ -228,6 +228,10 @@ class OneBotMixin:
         if self._is_group_admin_blocked(group_id, user_id):
             return False
 
+        # 指令权限中心（command_center.py）已按 WebUI 设置放行这条指令：以面板设置为准
+        if getattr(event, "_gg_cmd_granted", False):
+            return True
+
         # ② 全局管理员名单
         if user_id in self._get_all_admin_ids():
             return True

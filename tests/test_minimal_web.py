@@ -84,6 +84,7 @@ group_directory = _load(f"{PKG}.group_directory", "group_directory.py")
 operation_log = _load(f"{PKG}.operation_log", "operation_log.py")
 duplicate_members = _load(f"{PKG}.duplicate_members", "duplicate_members.py")
 batch_queue = _load(f"{PKG}.batch_queue", "batch_queue.py")
+group_files = _load(f"{PKG}.group_files", "group_files.py")
 web_minimal = _load(f"{PKG}.web_minimal", "web_minimal.py", quart_stub=True)
 
 BOT = 999
@@ -177,6 +178,7 @@ class _Harness(
     group_directory.GroupDirectoryMixin,
     duplicate_members.DuplicateMemberMixin,
     batch_queue.BatchQueueMixin,
+    group_files.GroupFilesMixin,
     operation_log.OperationLogMixin,
     onebot.OneBotMixin,
     utilities.UtilitiesMixin,
@@ -270,6 +272,28 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(sent["confirm_required"])
         empty = await call(self.h._web_minimal_broadcast, {"groups": ["10001"], "content": " "})
         self.assertEqual(empty["status"], "error")
+
+    async def test_broadcast_with_uploaded_image(self):
+        import tempfile
+        from pathlib import Path
+        tmp = tempfile.TemporaryDirectory()
+        img = Path(tmp.name) / "海报.png"
+        img.write_bytes(b"fake png bytes")
+        out = await call(self.h._web_minimal_broadcast,
+                         {"groups": ["10001"], "content": "通知", "image": "http://ignored", "image_file": {"path": str(img)}})
+        self.assertEqual(out["status"], "success")
+        await self.h._bq_drain()
+        (sent,) = self.client.actions("_send_group_notice")
+        # 上传的图片优先于填写的地址；以 base64:// 交给协议端（不受中文文件名 / 路径编码影响）
+        import base64 as _b64
+        self.assertEqual(sent["image"], "base64://" + _b64.b64encode(b"fake png bytes").decode())
+        items, _total = self.h._op_list(action="发布群公告")
+        self.assertIn("（配图：上传的图片 海报.png）", items[0]["detail"])
+        bad = await call(self.h._web_minimal_broadcast,
+                         {"groups": ["10001"], "content": "通知", "image_file": {"path": str(Path(tmp.name) / "missing.png")}})
+        self.assertEqual(bad["status"], "error")
+        self.assertIn("配图", bad["message"])
+        tmp.cleanup()
 
     async def test_broadcast_all_excludes_backup_and_todo_records(self):
         out = await call(self.h._web_minimal_broadcast, {"content": "交材料", "todo": True})
@@ -736,7 +760,7 @@ class DashboardWiringTests(unittest.TestCase):
         nav = html[html.index('<nav class="sidebar-nav">'):html.index("</nav>")]
         tabs = re.findall(r'data-tab="([\w-]+)"', nav)
         self.assertEqual(tabs, ["overview", "guard", "codes", "miniapps", "livelog", "bigscreen", "records", "kick", "dup", "leavelog", "join",
-                                "tasks", "broadcast", "names", "batch", "directory", "oplog", "perms", "groupcfg",
+                                "tasks", "broadcast", "files", "names", "batch", "directory", "oplog", "perms", "commands", "groupcfg",
                                 "settings"])
         mobile = html[html.index('<nav class="mobile-nav"'):]
         self.assertEqual(re.findall(r'class="mobile-nav-item(?: active)?" data-tab="([\w-]+)"', mobile), tabs)

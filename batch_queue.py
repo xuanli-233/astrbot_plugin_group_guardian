@@ -19,6 +19,7 @@ batch_jitter_seconds，单个任务可单独设置），降低协议端风控。
   kick    群 target 踢出 QQ（params: block, reason, log_action）
   notice  发群公告（params: content, options, image, todo）
   rename  改群名（params: op = suffix / countdown_set / countdown_update，见 _bq_exec_rename）
+  delfile / sendmsg / upfile  删除群文件 / 批量发言 / 批量传群文件（group_files.py）
 """
 import asyncio
 import json
@@ -439,12 +440,14 @@ class BatchQueueMixin:
                 params = json.loads(params or "{}")
             except Exception:
                 params = {}
+        # 单项超时：执行器可以用 BQ_TIMEOUT_<动作> 单独放宽（例如上传群文件）
+        timeout = getattr(self, f"BQ_TIMEOUT_{str(item['action']).upper()}", self.BQ_ITEM_TIMEOUT)
         try:
             status, message = await asyncio.wait_for(
                 executor(client, str(item.get("group_id") or ""), str(item.get("target") or ""), params or {}),
-                timeout=self.BQ_ITEM_TIMEOUT)
+                timeout=timeout)
         except asyncio.TimeoutError:
-            status, message = ITEM_FAILED, f"执行超时（{self.BQ_ITEM_TIMEOUT} 秒）"
+            status, message = ITEM_FAILED, f"执行超时（{timeout} 秒）"
         except Exception as e:
             logger.warning(f"[GroupMgr] 批量任务项执行出错 #{item.get('id')}: {e}")
             status, message = ITEM_FAILED, f"出错：{type(e).__name__}: {e}"

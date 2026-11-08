@@ -228,6 +228,15 @@ class GroupBroadcastMixin:
             report["groups"].append(item)
         return report
 
+    @staticmethod
+    def _notice_image_label(image: str) -> str:
+        """操作记录里的配图：上传的本机图片只写文件名，图片链接原样。"""
+        image = str(image or "")
+        if image.startswith("file:"):
+            from urllib.parse import unquote
+            return "上传的图片 " + unquote(image.rsplit("/", 1)[-1])
+        return image
+
     async def _publish_notice_one(self, client, gid: str, task: dict) -> Tuple[bool, str]:
         """向一个群发布公告并写操作记录。批量任务（batch_queue）逐项调用。"""
         options = task.get("options") or {}
@@ -241,7 +250,18 @@ class GroupBroadcastMixin:
             "send_new_member": bool(options.get("send_new_member")),
         }
         if task.get("image"):
-            payload["image"] = task["image"]
+            # 上传的本机图片转成 base64:// 再交给协议端（group_files.image_payload）；图片链接原样
+            try:
+                from .group_files import image_payload
+            except ImportError:
+                from group_files import image_payload
+            image, img_err = image_payload(task["image"])
+            if img_err:
+                self._record_op("发布待办公告" if task.get("todo") else "发布群公告", source=task.get("source", ""),
+                                operator=task.get("operator", ""), group_id=gid, result=f"失败：{img_err}",
+                                detail=task["content"][:200])
+                return False, img_err
+            payload["image"] = image
         done, err = await self._call_group_api(client, "_send_group_notice", "发群公告", **payload)
         flags = "、".join(k for k, v in NOTICE_FLAGS.items() if options.get(v))
         self._record_op(
@@ -249,7 +269,7 @@ class GroupBroadcastMixin:
             source=task.get("source", ""), operator=task.get("operator", ""), group_id=gid,
             result="成功" if done else f"失败：{err or '发送失败'}",
             detail=(f"[{flags}] " if flags else "") + task["content"][:200]
-            + (f"（配图：{task['image']}）" if task.get("image") else ""),
+            + (f"（配图：{self._notice_image_label(task['image'])}）" if task.get("image") else ""),
         )
         return bool(done), ("" if done else (err or "发送失败"))
 

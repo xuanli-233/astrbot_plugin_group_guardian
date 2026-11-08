@@ -474,6 +474,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mp-item .info{min-width:0;font-size:12px;display:flex;flex-direction:column;gap:2px}
     .mp-item .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .mp-item .c{word-break:break-all;color:var(--text-secondary)}
+    .mn-table .toggle{display:inline-block;vertical-align:middle}
+    #cmdTable th{white-space:nowrap}
     .mn-chip{display:inline-block;font-size:12px;line-height:18px;padding:0 6px;margin:2px;border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);background:var(--surface)}
     .cb-code{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
     .cb-code:first-child{border-top:none}
@@ -706,8 +708,12 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
 
-          <span>批量公告</span>
+          <span>批量发布</span>
 
+        </a>
+        <a class="nav-item" data-tab="files">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm4 13h-4v-2h4v2zm3-4H7v-2h10v2z"/></svg>
+          <span>群文件</span>
         </a>
         <a class="nav-item" data-tab="names">
 
@@ -732,6 +738,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
         <a class="nav-item" data-tab="perms">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
           <span>权限管理</span>
+        </a>
+        <a class="nav-item" data-tab="commands">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 10l4 3-4 3v-6zm6 5h6v1h-6v-1z"/></svg>
+          <span>指令管理</span>
         </a>
         <a class="nav-item" data-tab="groupcfg">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm13 0h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
@@ -923,6 +933,22 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
             <div class="list-add-row"><input class="input-sm" id="abGroup" placeholder="群号(可多个,逗号分隔)" /><input class="input-sm" id="abUser" placeholder="QQ号(可多个,逗号分隔)" /><button class="btn btn-danger btn-sm" id="btnAddBlock">移除其权限</button></div>
             <div class="list-items" id="blockList"><p class="empty">暂无</p></div>
           </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-commands">
+        <div class="page-header"><h1>指令管理</h1>
+          <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnCmdRefresh">刷新</button><button class="btn btn-outline btn-sm" id="btnCmdReset">全部恢复默认</button></div></div>
+        <p class="mn-intro">群里能用的每一条 / 指令都在这里：可以单独关闭，也可以设置谁能用。默认<strong>开启、仅群主和插件管理员</strong>可用（群超管与群主同级）。关闭后谁发都不执行，普通成员发了不回复，插件管理员会收到「已关闭」提示。成员可以发 <code>/指令列表</code> 查看自己能用哪些指令。</p>
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">全部指令</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="cmdCat" style="width:140px"><option value="">所有分类</option></select>
+              <input class="input-sm" id="cmdKeyword" placeholder="指令名 / 说明" style="width:160px" />
+              <span class="mn-hint" id="cmdSummary"></span>
+            </div></div>
+          <div class="log-container" id="cmdTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body"><p class="mn-hint">「功能总开关」是原来设置里的开关（如 ban_enabled），和 WebUI 等其它入口共用；它关着时，指令开着也会提示功能未开启。一些跨群、插件级的指令固定「仅插件管理员」；禁言、踢人等最多开放到「群主、群管理员」。</p></div>
         </div>
       </div>
 
@@ -1188,11 +1214,11 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       </div>
 
       <div class="tab-panel" id="tab-broadcast">
-        <div class="page-header"><h1>批量公告</h1><button class="btn btn-ghost btn-sm" id="btnBcRefresh">刷新</button></div>
-        <p class="mn-intro">一次给多个群发布群公告。「待办公告」= 置顶 + 需要群成员确认 + 弹窗提示（LuckyLilliaBot 没有群待办接口，用它替代），发布后可以查看各群确认人数。也可以在群里用 /全群公告、/全群待办 指令。</p>
+        <div class="page-header"><h1>批量发布</h1><button class="btn btn-ghost btn-sm" id="btnBcRefresh">刷新</button></div>
+        <p class="mn-intro">一次给多个群发布群公告、群消息或群文件（都发到「发到哪些群」里勾选的群）。「待办公告」= 置顶 + 需要群成员确认 + 弹窗提示（LuckyLilliaBot 没有群待办接口，用它替代），发布后可以查看各群确认人数。也可以在群里用 /全群公告、/全群待办 指令。</p>
         <div class="mn-grid">
           <div class="card">
-            <div class="card-header"><h2>发布</h2></div>
+            <div class="card-header"><h2>群公告</h2></div>
             <div class="mn-body">
               <div class="mn-row">
                 <label><input type="radio" name="bcMode" value="notice" checked /> 群公告</label>
@@ -1205,7 +1231,9 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
                 <label><input type="checkbox" id="bcNew" /> 发给新成员</label>
               </div>
               <textarea class="input-md" id="bcContent" rows="6" placeholder="公告内容"></textarea>
-              <div class="mn-row" style="margin-top:8px"><input class="input-sm" id="bcImage" style="flex:1" placeholder="配图地址（可选，图片链接）" /></div>
+              <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">上传配图<input type="file" id="bcImageFile" accept="image/*" style="display:none" /></label>
+                <input class="input-sm" id="bcImage" style="flex:1" placeholder="或填配图地址（图片链接，可选）" /></div>
+              <div class="mn-row" id="bcImageInfoRow" style="display:none"><span class="mn-hint" id="bcImageInfo"></span></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBcSend">发布</button><span class="mn-hint" id="bcTargetsHint"></span></div>
               <div id="bcResult"></div>
             </div>
@@ -1216,9 +1244,55 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
             <div class="mn-body"><div class="gp-grid" id="bcGroups"></div><p class="mn-hint" style="margin-top:8px">备份群默认不勾选；机器人不是管理员的群会发布失败。</p></div>
           </div>
         </div>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>群消息</h2><span class="rules-subtle">发到「发到哪些群」里勾选的群</span></div>
+            <div class="mn-body">
+              <textarea class="input-md" id="bmText" rows="5" placeholder="要发到群里的消息"></textarea>
+              <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">选择图片（可选）<input type="file" id="bmImage" accept="image/*" style="display:none" /></label><span class="mn-hint" id="bmImageInfo">不带图片</span></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBmSend">发送</button><span class="mn-hint">每个群之间按「批量任务」的间隔发送，可在批量任务栏暂停 / 取消</span></div>
+              <div id="bmResult"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>群文件</h2><span class="rules-subtle">上传到「发到哪些群」里勾选的群</span></div>
+            <div class="mn-body">
+              <div class="mn-row"><label><input type="radio" name="bfSrc" value="upload" checked /> 从电脑选择（30 MB 以内）</label><label><input type="radio" name="bfSrc" value="local" /> 服务器上的文件路径</label></div>
+              <div class="mn-row" id="bfUploadRow"><label class="btn btn-outline btn-sm" style="cursor:pointer">选择文件<input type="file" id="bfFile" style="display:none" /></label><span class="mn-hint" id="bfFileInfo">未选择</span></div>
+              <div class="mn-row" id="bfLocalRow" style="display:none"><input class="input-sm" id="bfLocalPath" style="flex:1" placeholder="例如 D:\资料\期末复习.pdf（AstrBot 和 QQ 机器人所在的那台电脑上的路径）" /></div>
+              <div class="mn-row"><label style="width:70px">群文件名</label><input class="input-sm" id="bfName" style="flex:1" placeholder="留空 = 用原文件名" /></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBfSend">上传</button><span class="mn-hint">机器人把本机文件交给 QQ 上传，适合 AstrBot 与 LuckyLilliaBot 在同一台电脑的部署</span></div>
+              <div id="bfResult"></div>
+            </div>
+          </div>
+        </div>
         <div class="card">
           <div class="card-header"><h2>最近一次待办公告的确认情况</h2><button class="btn btn-ghost btn-sm" id="btnTodoStatus">查询</button></div>
           <div class="mn-body" id="todoStatus"><p class="mn-hint">点「查询」获取各群已确认 / 未确认人数</p></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-files">
+        <div class="page-header"><h1>群文件</h1></div>
+        <p class="mn-intro">跨群查看、清理群文件：先扫描勾选的群，再按上传者、文件名筛选，或看「重复文件」（同一个群里文件名和大小都相同的，保留最早的一份）。常见用法：在「按上传者汇总」里找到批量发广告文件的人，一键选中他在所有群的文件删除。删除走批量任务，可以暂停 / 重试，每个都写操作记录。机器人需要是群管理员才能删别人的文件。</p>
+        <div class="card">
+          <div class="card-header"><h2>扫描哪些群</h2>
+            <div class="header-actions"><button class="btn btn-ghost btn-sm" id="btnGfAll">全选</button><button class="btn btn-ghost btn-sm" id="btnGfNone">全不选</button><button class="btn btn-primary btn-sm" id="btnGfScan">扫描</button></div></div>
+          <div class="mn-body"><div class="gp-grid" id="gfGroups"></div><p class="mn-hint" id="gfProgress" style="margin-top:8px">扫描根目录和一级文件夹，群之间按「群成员缓存」里的接口间隔。结果只保存在内存里。</p></div>
+        </div>
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">文件</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="gfView" style="width:140px"><option value="files">全部文件</option><option value="uploaders">按上传者汇总</option><option value="dups">重复文件</option></select>
+              <select class="input-sm" id="gfGroupSel" style="width:170px"><option value="">所有群</option></select>
+              <input class="input-sm" id="gfUploader" placeholder="上传者 QQ" style="width:120px" />
+              <input class="input-sm" id="gfKeyword" placeholder="文件名" style="width:140px" />
+            </div></div>
+          <div class="mn-body" style="padding-bottom:0"><div class="mn-row">
+            <button class="btn btn-outline btn-sm" id="btnGfSelAll">选中当前列表</button><button class="btn btn-ghost btn-sm" id="btnGfSelNone">清空选择</button>
+            <input class="input-sm" id="gfReason" placeholder="删除原因（写进操作记录，可选）" style="flex:1;min-width:160px" />
+            <button class="btn btn-danger btn-sm" id="btnGfDelete" disabled>删除选中（0）</button></div></div>
+          <div class="log-container" id="gfTable"><p class="empty">还没有扫描。在上面勾选群后点「扫描」。</p></div>
         </div>
       </div>
 
@@ -1725,6 +1799,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       <span>批量公告</span>
 
     </a>
+    <a class="mobile-nav-item" data-tab="files">
+      <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm4 13h-4v-2h4v2zm3-4H7v-2h10v2z"/></svg>
+      <span>群文件</span>
+    </a>
     <a class="mobile-nav-item" data-tab="names">
 
       <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
@@ -1747,6 +1825,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
     <a class="mobile-nav-item" data-tab="perms">
       <svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.4-8 4v2h16v-2c0-2.6-5.3-4-8-4zm7-5V7h-2V5h2V3h2v2h2v2h-2v2h-2z"/></svg>
       <span>权限</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="commands">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 10l4 3-4 3v-6zm6 5h6v1h-6v-1z"/></svg>
+      <span>指令</span>
     </a>
     <a class="mobile-nav-item" data-tab="groupcfg">
       <svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4zm0 6h10v4H4v-4zm0 6h16v4H4v-4zm12-6h4v4h-4v-4z"/></svg>
@@ -2359,10 +2441,12 @@ function switchTab(tabName) {
   if (tabName === 'join') loadJoinRules();
   if (tabName === 'perms') { loadAdmins(true); loadSuperAdmins(); loadGrants(); loadBlocks(); }
   if (tabName === 'groupcfg') loadGroupCfgGroups();
+  if (tabName === 'commands') loadCommands();
   if (tabName === 'tasks') loadUnbans();
   if (tabName === 'guard') loadGuard();
   if (tabName === 'broadcast') loadBroadcast();
   if (tabName === 'names') loadNames();
+  if (tabName === 'files') loadFiles();
   if (tabName === 'kick') loadKick();
   if (tabName === 'oplog') loadOplog(1);
   if (tabName === 'leavelog') loadLeaveLog(1);
@@ -4305,6 +4389,274 @@ function mpOnClick(e) {
   }
 }
 
+/* ---- 指令管理（command_center.py） ---- */
+var CMD = { list: [] };
+async function loadCommands() {
+  var ep = beginLoad('commands');
+  var res = await safeGet('minimal/commands');
+  if (!isCurrentLoad('commands', ep)) return;
+  if (isApiError(res)) { $('#cmdTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  CMD.list = (mnData(res) || {}).commands || [];
+  var cats = []; CMD.list.forEach(function(c) { if (cats.indexOf(c.category) < 0) cats.push(c.category); });
+  var sel = $('#cmdCat'), cur = sel.value;
+  sel.innerHTML = '<option value="">所有分类</option>' + cats.map(function(c) { return '<option value="' + escAttr(c) + '">' + esc(c) + '</option>'; }).join('');
+  sel.value = cur;
+  cmdRender();
+}
+function cmdRender() {
+  var cat = $('#cmdCat').value, kw = $('#cmdKeyword').value.trim().toLowerCase();
+  var rows = CMD.list.filter(function(c) {
+    return (!cat || c.category === cat) && (!kw || (c.name + ' ' + c.desc).toLowerCase().indexOf(kw) >= 0);
+  });
+  var off = CMD.list.filter(function(c) { return !c.enabled; }).length;
+  var changed = CMD.list.filter(function(c) { return !c.is_default; }).length;
+  $('#cmdSummary').textContent = '共 ' + CMD.list.length + ' 条，关闭 ' + off + ' 条，改过 ' + changed + ' 条';
+  var current = '';
+  $('#cmdTable').innerHTML = rows.length ? '<table class="mn-table"><thead><tr><th>指令</th><th>说明</th><th>开关</th><th>谁能用</th><th>功能总开关</th></tr></thead><tbody>' +
+    rows.map(function(c) {
+      var head = '';
+      if (c.category !== current) { current = c.category; head = '<tr><td colspan="5" style="background:var(--bg);font-weight:600;font-size:12px">' + esc(c.category) + '</td></tr>'; }
+      var i = CMD.list.indexOf(c);
+      var levels = c.levels.length > 1
+        ? '<select class="input-sm" data-cmd-level="' + i + '" style="width:200px">' + c.levels.map(function(lv) { return '<option value="' + escAttr(lv.value) + '"' + (lv.value === c.level ? ' selected' : '') + '>' + esc(lv.label) + '</option>'; }).join('') + '</select>'
+        : '<span class="mn-hint">' + esc(c.level_label) + '（固定）</span>';
+      var feature = !c.cfg_key ? '<span class="mn-hint">—</span>'
+        : (c.feature_on ? '<span class="mn-chip" style="color:var(--success)">已开启</span>'
+          : '<span class="mn-chip" style="color:var(--warning)">未开启</span> <button class="btn btn-ghost btn-sm" data-cmd-feature="' + i + '">打开</button>');
+      return head + '<tr' + (c.enabled ? '' : ' style="opacity:.6"') + '><td style="white-space:nowrap"><code>/' + esc(c.name) + '</code>' + (c.is_default ? '' : ' <span class="mn-chip">已改</span>') + '</td>' +
+        '<td style="max-width:320px">' + esc(c.desc) + '</td>' +
+        '<td><label class="toggle"><input type="checkbox" data-cmd-enabled="' + i + '"' + (c.enabled ? ' checked' : '') + ' /><span class="slider"></span></label></td>' +
+        '<td>' + levels + '</td><td style="white-space:nowrap" title="' + escAttr(c.cfg_key || '') + '">' + feature + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的指令</p>';
+}
+async function cmdSet(c, values, el) {
+  if (el) el.disabled = true;
+  var res = await safePost('minimal/commands/set', Object.assign({ name: c.name }, values));
+  if (el) el.disabled = false;
+  if (isApiError(res)) { toast(mnErr(res), 'error'); cmdRender(); return; }
+  CMD.list = (mnData(res) || {}).commands || CMD.list;
+  toast('已保存', 'success');
+  cmdRender();
+}
+async function cmdOnChange(e) {
+  var t = e.target;
+  if (t.hasAttribute('data-cmd-enabled')) cmdSet(CMD.list[Number(t.getAttribute('data-cmd-enabled'))], { enabled: t.checked }, t);
+  else if (t.hasAttribute('data-cmd-level')) cmdSet(CMD.list[Number(t.getAttribute('data-cmd-level'))], { level: t.value }, t);
+}
+async function cmdOnClick(e) {
+  var b = e.target.closest('[data-cmd-feature]');
+  if (!b) return;
+  var c = CMD.list[Number(b.getAttribute('data-cmd-feature'))];
+  if (!c || !c.cfg_key) return;
+  var shared = CMD.list.filter(function(x) { return x.cfg_key === c.cfg_key; }).map(function(x) { return '/' + x.name; });
+  if (!await mnConfirm('打开功能总开关 ' + c.cfg_key + '？\n会同时影响：' + shared.join('、') + '，以及 WebUI 里用到它的功能。')) return;
+  var values = {}; values[c.cfg_key] = true;
+  if (await mnSaveConfig(values, '已打开')) loadCommands();
+}
+
+/* ---- 群文件（group_files.py） ---- */
+var GF = { files: [], dups: {}, sel: {}, timer: null, state: null };
+function gfKey(f) { return f.group_id + ':' + f.file_id; }
+function gfSize(n) { n = Number(n || 0); return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : (n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B'); }
+function gfGroupName(gid) { var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0]; return (g && g.group_name) || gid; }
+async function loadFiles() {
+  if (!await mnLoadOverview()) return;
+  mnRenderGroupPicker('#gfGroups', false);
+  await gfFetch(true);
+}
+async function gfFetch(withFiles) {
+  var res = await safeGet('minimal/files/state', { with_files: withFiles ? 1 : 0 });
+  if (isApiError(res)) { $('#gfProgress').textContent = mnErr(res); return; }
+  var d = mnData(res) || {};
+  GF.state = d;
+  var errs = Object.keys(d.errors || {});
+  if (d.running) {
+    $('#gfProgress').textContent = '正在扫描：' + d.done + ' / ' + d.total + ' 个群' + (d.current ? '（' + gfGroupName(d.current) + '）' : '') + '，已找到 ' + d.file_count + ' 个文件……';
+    clearTimeout(GF.timer); GF.timer = setTimeout(function() { if ($('#tab-files').classList.contains('active')) gfFetch(false); }, 1500);
+    return;
+  }
+  if (d.finished_at) {
+    $('#gfProgress').innerHTML = esc('扫描完成（' + mnTime(d.finished_at) + '）：' + d.total + ' 个群、' + d.folders + ' 个文件夹，共 ' + d.file_count + ' 个文件') +
+      (errs.length ? '<br><span style="color:var(--danger)">' + errs.map(function(g) { return esc((g === '*' ? '' : gfGroupName(g) + '：') + d.errors[g]); }).join('<br>') + '</span>' : '');
+  }
+  if (withFiles || !GF.files.length) {
+    if (!d.files) { gfFetch(true); return; }
+    GF.files = d.files || [];
+    GF.dups = {}; (d.duplicates || []).forEach(function(k) { GF.dups[k] = true; });
+    var known = {}; GF.files.forEach(function(f) { known[gfKey(f)] = true; });
+    Object.keys(GF.sel).forEach(function(k) { if (!known[k]) delete GF.sel[k]; });
+    var gs = $('#gfGroupSel'), cur = gs.value, gids = [];
+    GF.files.forEach(function(f) { if (gids.indexOf(f.group_id) < 0) gids.push(f.group_id); });
+    gs.innerHTML = '<option value="">所有群</option>' + gids.map(function(g) { return '<option value="' + escAttr(g) + '">' + esc(gfGroupName(g)) + '</option>'; }).join('');
+    gs.value = gids.indexOf(cur) >= 0 ? cur : '';
+    gfRender();
+  }
+}
+function gfFiltered() {
+  var gid = $('#gfGroupSel').value, up = $('#gfUploader').value.trim(), kw = $('#gfKeyword').value.trim().toLowerCase(), view = $('#gfView').value;
+  return GF.files.filter(function(f) {
+    if (gid && f.group_id !== gid) return false;
+    if (up && f.uploader !== up) return false;
+    if (kw && f.name.toLowerCase().indexOf(kw) < 0) return false;
+    if (view === 'dups') return !!GF.dups[gfKey(f)];
+    return true;
+  });
+}
+function gfUpdateDeleteBtn() {
+  var n = Object.keys(GF.sel).length, b = $('#btnGfDelete');
+  b.textContent = '删除选中（' + n + '）'; b.disabled = !n;
+}
+function gfRender() {
+  var view = $('#gfView').value, rows = gfFiltered();
+  gfUpdateDeleteBtn();
+  if (!GF.files.length) { $('#gfTable').innerHTML = '<p class="empty">' + (GF.state && GF.state.finished_at ? '扫描的群里没有文件' : '还没有扫描。在上面勾选群后点「扫描」。') + '</p>'; return; }
+  if (view === 'uploaders') {
+    var by = {};
+    rows.forEach(function(f) {
+      var u = by[f.uploader] = by[f.uploader] || { uploader: f.uploader, name: f.uploader_name, files: 0, size: 0, groups: {}, last: 0 };
+      u.files += 1; u.size += f.size; u.groups[f.group_id] = true; u.last = Math.max(u.last, f.upload_time); if (f.uploader_name) u.name = f.uploader_name;
+    });
+    var list = Object.keys(by).map(function(k) { return by[k]; }).sort(function(a, b) { return Object.keys(b.groups).length - Object.keys(a.groups).length || b.files - a.files; });
+    $('#gfTable').innerHTML = list.length ? '<table class="mn-table"><thead><tr><th>上传者</th><th>文件</th><th>群</th><th>大小</th><th>最近上传</th><th>操作</th></tr></thead><tbody>' + list.map(function(u) {
+      var ng = Object.keys(u.groups).length;
+      return '<tr><td>' + esc(u.uploader || '未知') + (u.name ? '<br><span class="mn-hint">' + esc(u.name) + '</span>' : '') + '</td><td><strong>' + u.files + '</strong> 个</td>' +
+        '<td' + (ng > 1 ? ' style="color:var(--danger);font-weight:600"' : '') + '>' + ng + ' 个群</td><td>' + esc(gfSize(u.size)) + '</td><td style="white-space:nowrap">' + esc(mnTime(u.last)) + '</td>' +
+        '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" data-gf-only="' + escAttr(u.uploader) + '">只看他的</button>' +
+        '<button class="btn btn-danger btn-sm" data-gf-selup="' + escAttr(u.uploader) + '">选中他的全部文件</button>' +
+        (u.uploader ? '<button class="btn btn-ghost btn-sm" data-gf-kick="' + escAttr(u.uploader) + '">去踢人 / 拉黑</button>' : '') + '</div></td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的文件</p>';
+    return;
+  }
+  $('#gfTable').innerHTML = rows.length ? '<table class="mn-table"><thead><tr><th style="width:28px"></th><th>文件名</th><th>群</th><th>大小</th><th>上传者</th><th>上传时间</th></tr></thead><tbody>' + rows.slice(0, 1000).map(function(f) {
+    var k = gfKey(f);
+    return '<tr><td><input type="checkbox" data-gf-ck="' + escAttr(k) + '"' + (GF.sel[k] ? ' checked' : '') + ' /></td>' +
+      '<td style="word-break:break-all;max-width:300px">' + esc(f.name) + (GF.dups[k] ? ' <span class="mn-chip" style="color:var(--warning)">重复</span>' : '') + (f.folder_name ? '<br><span class="mn-hint">文件夹：' + esc(f.folder_name) + '</span>' : '') + '</td>' +
+      '<td>' + esc(gfGroupName(f.group_id)) + '<br><span class="mn-hint">' + esc(f.group_id) + '</span></td><td style="white-space:nowrap">' + esc(gfSize(f.size)) + '</td>' +
+      '<td><a href="javascript:void(0)" data-gf-only="' + escAttr(f.uploader) + '">' + esc(f.uploader || '未知') + '</a>' + (f.uploader_name ? '<br><span class="mn-hint">' + esc(f.uploader_name) + '</span>' : '') + '</td>' +
+      '<td style="white-space:nowrap">' + esc(mnTime(f.upload_time)) + '</td></tr>';
+  }).join('') + '</tbody></table>' + (rows.length > 1000 ? '<p class="mn-hint">只显示前 1000 个，请用上面的条件缩小范围（「选中当前列表」会选中全部 ' + rows.length + ' 个）</p>' : '')
+    : '<p class="empty">' + ($('#gfView').value === 'dups' ? '没有重复文件' : '没有符合条件的文件') + '</p>';
+}
+async function gfScan() {
+  var groups = mnSelectedGroups('#gfGroups');
+  if (!groups.length) { toast('请至少勾选一个群', 'warning'); return; }
+  var res = await safePost('minimal/files/scan', { groups: groups });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  GF.files = []; GF.sel = {}; gfRender();
+  gfFetch(false);
+}
+async function gfDelete() {
+  var keys = Object.keys(GF.sel);
+  if (!keys.length) return;
+  var files = GF.files.filter(function(f) { return GF.sel[gfKey(f)]; });
+  var groups = {}, ups = {};
+  files.forEach(function(f) { groups[f.group_id] = true; if (f.uploader) ups[f.uploader] = true; });
+  if (!await mnConfirm('删除 ' + files.length + ' 个群文件（' + Object.keys(groups).length + ' 个群，上传者：' + Object.keys(ups).slice(0, 5).join('、') + (Object.keys(ups).length > 5 ? ' 等' : '') + '）？\n删除后不能恢复。', { title: '删除群文件', okText: '删除', danger: true })) return;
+  var res = await safePost('minimal/files/delete', { items: files.map(function(f) { return { group_id: f.group_id, file_id: f.file_id }; }), reason: $('#gfReason').value.trim() });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var job = (mnData(res) || {}).job || {};
+  toast('已创建批量任务 #' + job.id + '（' + job.items + ' 项），在「批量任务」里查看进度', 'success');
+  GF.sel = {}; gfRender();
+}
+function gfOnClick(e) {
+  var t = e.target, v;
+  if ((v = t.closest('[data-gf-only]'))) { $('#gfUploader').value = v.getAttribute('data-gf-only'); $('#gfView').value = 'files'; gfRender(); return; }
+  if ((v = t.closest('[data-gf-selup]'))) {
+    var up = v.getAttribute('data-gf-selup');
+    GF.files.forEach(function(f) { if (f.uploader === up) GF.sel[gfKey(f)] = true; });
+    $('#gfUploader').value = up; $('#gfView').value = 'files'; gfRender(); return;
+  }
+  if ((v = t.closest('[data-gf-kick]'))) { switchTab('kick'); var box = document.getElementById('kickIds'); if (box) { box.value = v.getAttribute('data-gf-kick'); box.focus(); } }
+}
+function gfOnChange(e) {
+  var k = e.target.getAttribute && e.target.getAttribute('data-gf-ck');
+  if (!k) return;
+  if (e.target.checked) GF.sel[k] = true; else delete GF.sel[k];
+  gfUpdateDeleteBtn();
+}
+
+/* ---- 批量发言 / 批量传群文件 ---- */
+var BULK = { image: null, file: null, noticeImage: null };
+function bulkReadFile(input) {
+  return new Promise(function(resolve, reject) {
+    var f = input.files && input.files[0];
+    if (!f) { resolve(null); return; }
+    var r = new FileReader();
+    r.onload = function() { resolve({ name: f.name, size: f.size, data: String(r.result || '') }); };
+    r.onerror = function() { reject(r.error); };
+    r.readAsDataURL(f);
+  });
+}
+async function bulkOutbox(file) {
+  var res = await safePost('minimal/outbox', { name: file.name, data_base64: file.data }, 180000);
+  if (isApiError(res)) throw new Error(mnErr(res));
+  return mnData(res);
+}
+async function bulkPickImage() {
+  var f = await bulkReadFile($('#bmImage'));
+  if (!f) { BULK.image = null; $('#bmImageInfo').textContent = '不带图片'; return; }
+  if (f.size > 20 * 1048576) { toast('图片不能超过 20 MB', 'warning'); $('#bmImage').value = ''; return; }
+  $('#bmImageInfo').textContent = '正在上传 ' + f.name + '……';
+  try { BULK.image = await bulkOutbox(f); $('#bmImageInfo').innerHTML = esc(f.name + '（' + gfSize(f.size) + '）') + ' <a href="javascript:void(0)" id="bmImageClear">去掉</a>'; bindIfExists('bmImageClear', function() { BULK.image = null; $('#bmImage').value = ''; $('#bmImageInfo').textContent = '不带图片'; }); }
+  catch (e) { BULK.image = null; $('#bmImageInfo').textContent = '上传失败：' + e.message; }
+}
+async function bulkPickFile() {
+  var f = await bulkReadFile($('#bfFile'));
+  if (!f) { BULK.file = null; $('#bfFileInfo').textContent = '未选择'; return; }
+  if (f.size > 30 * 1048576) { toast('从电脑选择的文件不能超过 30 MB，大文件请用「服务器上的文件路径」', 'warning'); $('#bfFile').value = ''; return; }
+  $('#bfFileInfo').textContent = '正在上传 ' + f.name + '（' + gfSize(f.size) + '）……';
+  try { BULK.file = await bulkOutbox(f); $('#bfFileInfo').textContent = f.name + '（' + gfSize(f.size) + '），已准备好'; }
+  catch (e) { BULK.file = null; $('#bfFileInfo').textContent = '上传失败：' + e.message; }
+}
+function bulkJobMsg(box, res, what) {
+  if (isApiError(res)) { $(box).innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return false; }
+  var d = mnData(res) || {}, job = d.job || {};
+  $(box).innerHTML = '<div class="mn-result ok">已创建批量任务 #' + job.id + '：' + esc(what) + ' ' + job.items + ' 个群，在「批量任务」里查看进度' +
+    ((d.denied || []).length ? '；' + d.denied.length + ' 个群不在插件管理范围，已跳过' : '') + '</div>';
+  return true;
+}
+function bcClearImage() {
+  BULK.noticeImage = null; $('#bcImageFile').value = ''; $('#bcImage').disabled = false;
+  $('#bcImageInfoRow').style.display = 'none';
+}
+async function bcPickImage() {
+  var f = await bulkReadFile($('#bcImageFile'));
+  if (!f) { bcClearImage(); return; }
+  if (f.size > 20 * 1048576) { toast('配图不能超过 20 MB', 'warning'); $('#bcImageFile').value = ''; return; }
+  $('#bcImageInfoRow').style.display = '';
+  $('#bcImageInfo').textContent = '正在上传 ' + f.name + '……';
+  try {
+    BULK.noticeImage = await bulkOutbox(f);
+    $('#bcImage').disabled = true;
+    $('#bcImageInfo').innerHTML = '<img alt="配图" src="' + escAttr(f.data) + '" style="max-width:120px;max-height:80px;border-radius:4px;vertical-align:middle;margin-right:6px;border:1px solid var(--border)" />' +
+      esc(f.name + '（' + gfSize(f.size) + '），作为配图（旁边填的图片地址不再使用）') + ' <a href="javascript:void(0)" id="bcImageClear">去掉</a>';
+    bindIfExists('bcImageClear', bcClearImage);
+  } catch (e) { BULK.noticeImage = null; $('#bcImageInfo').textContent = '上传失败：' + e.message; }
+}
+async function bulkSendMsg() {
+  var groups = mnSelectedGroups('#bcGroups'), text = $('#bmText').value.trim();
+  if (!groups.length) { toast('请在「发到哪些群」里勾选要发送的群', 'warning'); return; }
+  if (!text && !BULK.image) { toast('请填写消息或选择图片', 'warning'); return; }
+  if (!await mnConfirm('把这条消息发到 ' + groups.length + ' 个群？', { title: '批量发言', okText: '发送' })) return;
+  var res = await safePost('minimal/bulk/send', { groups: groups, text: text, image: BULK.image });
+  if (bulkJobMsg('#bmResult', res, '发送到')) { $('#bmText').value = ''; }
+}
+async function bulkSendFile() {
+  var groups = mnSelectedGroups('#bcGroups');
+  if (!groups.length) { toast('请在「发到哪些群」里勾选要上传到的群', 'warning'); return; }
+  var file = BULK.file;
+  if (($('input[name=bfSrc]:checked') || {}).value === 'local') {
+    var res0 = await safePost('minimal/outbox', { local_path: $('#bfLocalPath').value.trim() });
+    if (isApiError(res0)) { $('#bfResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res0)) + '</div>'; return; }
+    file = mnData(res0);
+  }
+  if (!file) { toast('请先选择文件', 'warning'); return; }
+  var name = $('#bfName').value.trim() || file.name;
+  if (!await mnConfirm('把「' + name + '」（' + gfSize(file.size) + '）上传到 ' + groups.length + ' 个群的群文件？', { title: '批量传群文件', okText: '上传' })) return;
+  var res = await safePost('minimal/bulk/upload', { groups: groups, file: file, name: name });
+  bulkJobMsg('#bfResult', res, '上传到');
+}
+
 /* ---- 码管理 ---- */
 var CS = { page: 1, pageSize: 50, items: [], window: 5, ttl: 10 };
 var CS_OUTCOME = { pass: '放行', limit: '超限撤回', rule: '规则撤回', allow: '白名单放行' };
@@ -4606,7 +4958,7 @@ async function mnSendBroadcast() {
   var btn = $('#btnBcSend'); btn.disabled = true;
   $('#bcResult').innerHTML = '<div class="mn-result no">正在发布，群多时需要一些时间……</div>';
   var res = await safePost('minimal/broadcast', {
-    groups: groups, content: content, todo: todo, image: $('#bcImage').value.trim(),
+    groups: groups, content: content, todo: todo, image: $('#bcImage').value.trim(), image_file: BULK.noticeImage,
     pinned: $('#bcPinned').checked, confirm_required: $('#bcConfirm').checked,
     tip_window: $('#bcTip').checked, send_new_member: $('#bcNew').checked
   }, 120000);
@@ -6337,6 +6689,36 @@ function initMinimalPages() {
   var tabCodes = document.getElementById('tab-codes');
   if (tabCodes) tabCodes.addEventListener('click', csOnClick);
   bindIfExists('btnCuFilter', function() { CU.page = 1; cuLoad(); });
+  bindIfExists('btnGfAll', function() { mnSetGroupChecks('#gfGroups', true); });
+  bindIfExists('btnGfNone', function() { mnSetGroupChecks('#gfGroups', false); });
+  bindIfExists('btnGfScan', gfScan);
+  bindIfExists('btnGfDelete', gfDelete);
+  bindIfExists('btnGfSelAll', function() { gfFiltered().forEach(function(f) { GF.sel[gfKey(f)] = true; }); gfRender(); });
+  bindIfExists('btnGfSelNone', function() { GF.sel = {}; gfRender(); });
+  ['gfView', 'gfGroupSel'].forEach(function(id) { bindIfExists(id, gfRender, 'change'); });
+  ['gfUploader', 'gfKeyword'].forEach(function(id) { bindIfExists(id, gfRender, 'input'); });
+  var gfTable = document.getElementById('gfTable');
+  if (gfTable) { gfTable.addEventListener('click', gfOnClick); gfTable.addEventListener('change', gfOnChange); }
+  bindIfExists('bmImage', bulkPickImage, 'change');
+  bindIfExists('bcImageFile', bcPickImage, 'change');
+  bindIfExists('bfFile', bulkPickFile, 'change');
+  bindIfExists('btnBmSend', bulkSendMsg);
+  bindIfExists('btnBfSend', bulkSendFile);
+  $$('input[name=bfSrc]').forEach(function(r) { r.addEventListener('change', function() {
+    var local = ($('input[name=bfSrc]:checked') || {}).value === 'local';
+    $('#bfUploadRow').style.display = local ? 'none' : ''; $('#bfLocalRow').style.display = local ? '' : 'none';
+  }); });
+  bindIfExists('btnCmdRefresh', loadCommands);
+  bindIfExists('btnCmdReset', async function() {
+    if (!await mnConfirm('所有指令恢复默认：全部开启、仅群主和插件管理员可用（跨群 / 插件级指令仍仅插件管理员）？')) return;
+    var res = await safePost('minimal/commands/reset', {});
+    if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+    CMD.list = (mnData(res) || {}).commands || []; cmdRender(); toast('已恢复默认', 'success');
+  });
+  var cmdTable = document.getElementById('cmdTable');
+  if (cmdTable) { cmdTable.addEventListener('change', cmdOnChange); cmdTable.addEventListener('click', cmdOnClick); }
+  bindIfExists('cmdCat', cmdRender, 'change');
+  bindIfExists('cmdKeyword', cmdRender, 'input');
   bindIfExists('btnMpRefresh', function() { loadMiniapps(); });
   bindIfExists('btnMpFilter', function() { MP.page = 1; mpLoadStats(); });
   ['mpBy', 'mpSort', 'mpDaysSel', 'mpGroup'].forEach(function(id) { var el = document.getElementById(id); if (el) el.addEventListener('change', function() { MP.page = 1; mpLoadStats(); }); });
