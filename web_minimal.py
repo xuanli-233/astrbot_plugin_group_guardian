@@ -32,6 +32,10 @@ try:
 except ImportError:  # 单元测试环境
     jsonify = None
     quart_request = None
+try:
+    from .miniapp import extract_links
+except ImportError:
+    from miniapp import extract_links
 
 # 规则配置项 → 是否每条都按正则处理
 RULE_KEYS = {"keyword_rules": False, "wxcode_regex_rules": True}
@@ -51,6 +55,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
     "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history", "leave_log_save_images", "leave_log_image_days",
+    "miniapp_store_enabled", "miniapp_store_days",
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
@@ -568,7 +573,106 @@ class MinimalWebMixin:
             g["group_name"] = names.get(g["group_id"], "")
         data["store_enabled"] = bool(self._cfg("code_store_enabled", True))
         data["wxcode_enabled"] = bool(self._cfg("wxcode_enabled", False))
+        mp_screen = getattr(self, "_mp_screen", None)
+        data["miniapps"] = mp_screen(hours=self._safe_int(args.get("hours", 24), 24)) if callable(mp_screen) else None
         return jsonify({"status": "success", "data": data})
+
+    # ------------------------------------------------------------------
+    # 规则组（rule_groups.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_rulegroups(self):
+        groups = [self._rg_public(g) for g in self._rg_list()]
+        return jsonify({"status": "success", "data": {"groups": groups}})
+
+    async def _web_minimal_rulegroups_save(self):
+        data = await self._minimal_body()
+        group = data.get("group") if isinstance(data.get("group"), dict) else data
+        saved, err, errors = self._rg_save(group, **WEB_LOG)
+        if err:
+            return self._minimal_error(err, errors=errors)
+        return jsonify({"status": "success", "data": {"group": saved,
+                                                      "groups": [self._rg_public(g) for g in self._rg_list()]}})
+
+    async def _web_minimal_rulegroups_delete(self):
+        data = await self._minimal_body()
+        err = self._rg_delete(self._safe_int(data.get("id"), 0), **WEB_LOG)
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"groups": [self._rg_public(g) for g in self._rg_list()]}})
+
+    async def _web_minimal_rulegroups_move(self):
+        data = await self._minimal_body()
+        err = self._rg_move(self._safe_int(data.get("id"), 0), self._safe_int(data.get("dir"), 1))
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"groups": [self._rg_public(g) for g in self._rg_list()]}})
+
+    async def _web_minimal_rulegroups_test(self):
+        data = await self._minimal_body()
+        result = self._rg_test(text=str(data.get("text") or ""), code=str(data.get("code") or ""),
+                               app=str(data.get("app") or ""), group_id=str(data.get("group_id") or "").strip(),
+                               title=str(data.get("title") or ""))
+        links = extract_links(str(data.get("text") or ""))
+        if links and not result.get("app"):  # 文字里带 #小程序:// 链接时，也按小程序规则测一次
+            for link in links:
+                item = dict(self._mp_lookup(link["name"]), link_name=link["name"])
+                group, rule = self._rg_match_app(item, str(data.get("group_id") or "").strip())
+                if group:
+                    result["app"] = {"group": group["name"], "rule": rule}
+                    break
+        return jsonify({"status": "success", "data": result})
+
+    # ------------------------------------------------------------------
+    # 小程序（miniapp.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_miniapps(self):
+        args = quart_request.args
+        by = "user" if str(args.get("by", "")) == "user" else "app"
+        sort = str(args.get("sort", "") or "count")
+        items, total = self._mp_stats(
+            days=self._safe_int(args.get("days", 7), 7), keyword=str(args.get("keyword", "") or ""),
+            group_id=str(args.get("group_id", "") or "").strip(), by=by, sort=sort,
+            page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+        )
+        return jsonify({"status": "success", "data": {
+            "items": items, "total": total, "by": by, "sort": sort if sort in self.MP_SORTS else "count",
+            "store_days": self._mp_store_days(), "store_enabled": bool(self._cfg("miniapp_store_enabled", True)),
+            "allow": self._mp_list("allow"),
+        }})
+
+    async def _web_minimal_miniapps_detail(self):
+        args = quart_request.args
+        app_key = str(args.get("app_key", "") or "").strip()
+        if not app_key:
+            return self._minimal_error("缺少 app_key")
+        return jsonify({"status": "success", "data": self._mp_detail(
+            app_key, user_id=str(args.get("user_id", "") or "").strip())})
+
+    async def _web_minimal_miniapps_feed(self):
+        data = self._mp_feed(since_id=self._safe_int(quart_request.args.get("since_id", 0), 0))
+        names = {}
+        try:
+            names = {gid: (g or {}).get("group_name") or "" for gid, g in self._dir()["groups"].items()}
+        except Exception:
+            names = {}
+        data["group_names"] = {gid: names.get(gid, "") for gid in {i["group_id"] for i in data["items"]}}
+        data["enabled"] = bool(self._cfg("miniapp_store_enabled", True))
+        return jsonify({"status": "success", "data": data})
+
+    async def _web_minimal_miniapps_list(self):
+        data = await self._minimal_body()
+        kind = str(data.get("kind") or "")
+        on = bool(data.get("on", True))
+        if kind == "allow":
+            err = self._mp_set_allowed(str(data.get("app_key") or ""), on, **WEB_LOG)
+        elif kind == "block":
+            entry = str(data.get("entry") or data.get("app_key") or "")
+            err = self._rg_add_app(entry, **WEB_LOG) if on else self._rg_remove_app(entry, **WEB_LOG)
+        else:
+            return self._minimal_error("kind 只能是 allow 或 block")
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"allow": self._mp_list("allow")}})
 
     async def _web_minimal_codes_lists(self):
         return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})

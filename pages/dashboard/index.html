@@ -456,6 +456,24 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .cb-orig{display:flex;justify-content:center;background:var(--info-light);padding:6px;cursor:zoom-in}
     .cb-orig img{max-width:100%;max-height:240px;border-radius:4px}
     .cb-codes{padding:4px 10px 8px}
+    .rg-card{border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+    .rg-card.off{opacity:.55}
+    .rg-card.default{border-style:dashed}
+    .rg-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .rg-head b{font-size:14px}
+    .rg-head .rg-acts{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+    .rg-sum{font-size:12px;color:var(--text-secondary);display:flex;gap:6px;flex-wrap:wrap}
+    .rg-list{display:flex;flex-direction:column;gap:8px}
+    .rg-form label.rg-l{display:block;font-size:12px;font-weight:600;margin:10px 0 4px;color:var(--text-primary)}
+    .rg-form textarea{width:100%;box-sizing:border-box;font-family:monospace;font-size:12px}
+    .mp-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+    .mp-item{display:flex;gap:8px;border:1px solid var(--border);border-radius:var(--radius);padding:8px;min-width:0;background:var(--surface)}
+    .mp-item.rule{border-color:var(--danger);background:var(--danger-light)}
+    .mp-item img{width:56px;height:56px;object-fit:cover;border-radius:4px;flex-shrink:0;background:var(--bg)}
+    .mp-item .noimg{width:56px;height:56px;border:1px dashed var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)}
+    .mp-item .info{min-width:0;font-size:12px;display:flex;flex-direction:column;gap:2px}
+    .mp-item .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mp-item .c{word-break:break-all;color:var(--text-secondary)}
     .mn-chip{display:inline-block;font-size:12px;line-height:18px;padding:0 6px;margin:2px;border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);background:var(--surface)}
     .cb-code{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
     .cb-code:first-child{border-top:none}
@@ -642,6 +660,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
         <a class="nav-item" data-tab="codes">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
           <span>码管理</span>
+        </a>
+        <a class="nav-item" data-tab="miniapps">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>
+          <span>小程序</span>
         </a>
         <a class="nav-item" data-tab="livelog">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
@@ -944,37 +966,29 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       <!-- ===== 最小化插件新增页面（数据来自 /minimal/* 接口） ===== -->
       <div class="tab-panel" id="tab-guard">
         <div class="page-header"><h1>关键词与识别</h1><button class="btn btn-ghost btn-sm" id="btnGuardRefresh">刷新</button></div>
-        <p class="mn-intro">群消息命中下面<strong>你自己的规则</strong>时：先把原消息备份到备份群，再撤回。原版插件自带的词库与 AI 审核已删除。</p>
+        <p class="mn-intro">群消息命中下面<strong>你自己的规则组</strong>时：先把原消息备份到备份群，再撤回，按组的设置禁言、提示。原版插件自带的词库与 AI 审核已删除。</p>
+        <div class="card">
+          <div class="card-header"><h2>撤回 / 禁言规则组</h2>
+            <div class="header-actions"><button class="btn btn-primary btn-sm" id="btnRgNew">新建规则组</button></div></div>
+          <div class="mn-body">
+            <p class="mn-hint" style="margin-bottom:8px">每个组有自己的关键词、码内容规则、小程序，以及命中后的处理（撤回 + 可选禁言、群内提示），可以只对部分群生效。从上往下检查，第一个命中的组决定怎么处理；「默认组」总是最后检查，码黑名单、码发送超限、解不出的码也按它的处理方式。</p>
+            <div class="rg-list" id="rgList"><p class="empty">加载中...</p></div>
+            <div class="mn-row" style="margin-top:14px"><label>测试：</label><select class="input-sm" id="rgTestGroup" style="width:220px"></select></div>
+            <textarea class="input-md" id="rgTestText" rows="2" placeholder="一段群消息（可以带 #小程序://名称/内容）"></textarea>
+            <div class="mn-row" style="margin-top:6px"><input class="input-sm" id="rgTestCode" style="flex:1" placeholder="码内容（可选），例如 https://weixin.qq.com/g/xxx" />
+              <input class="input-sm" id="rgTestApp" style="width:180px" placeholder="小程序名或 appid（可选）" />
+              <input class="input-sm" id="rgTestTitle" style="width:200px" placeholder="小程序卡片标题（可选）" />
+              <button class="btn btn-outline btn-sm" id="btnRgTest">测试</button></div>
+            <div id="rgTestResult"></div>
+          </div>
+        </div>
         <div class="mn-grid">
           <div class="card">
-            <div class="card-header"><h2>关键词规则</h2><span class="rules-subtle" id="kwCount"></span></div>
-            <div class="mn-body">
-              <div class="mn-row">
-                <select class="input-sm" id="kwType" style="width:130px">
-                  <option value="contains">包含（最常用）</option>
-                  <option value="exact">整条消息完全相同</option>
-                  <option value="regex">正则表达式</option>
-                </select>
-                <input class="input-sm" id="kwValue" style="flex:1;min-width:160px" placeholder="例如：加微信" />
-                <button class="btn btn-primary btn-sm" id="btnKwAdd">添加</button>
-              </div>
-              <p class="mn-hint" id="kwTypeHint"></p>
-              <div id="kwAddMsg"></div>
-              <div class="mn-rule-list" id="kwList"></div>
-              <div class="mn-row"><button class="btn btn-outline btn-sm" id="btnKwImport">批量导入（每行一条）</button></div>
-              <div class="mn-row" style="margin-top:14px"><label>测试：</label></div>
-              <textarea class="input-md" id="kwTestText" rows="2" placeholder="输入一段群消息，看看会命中哪条规则"></textarea>
-              <div class="mn-row" style="margin-top:8px"><button class="btn btn-outline btn-sm" id="btnKwTest">测试</button></div>
-              <div id="kwTestResult"></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h2>命中后怎么处理</h2></div>
+            <div class="card-header"><h2>开关与备份</h2></div>
             <div class="settings-list" id="guardSwitches"></div>
             <div class="mn-body">
               <div class="mn-row"><label style="width:84px">备份群</label><select class="input-sm" id="guardBackupGroup" style="flex:1"></select></div>
-              <div class="mn-row"><label style="width:84px">群内提示</label><input class="input-sm" id="guardNoticeTpl" style="flex:1" /></div>
-              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnGuardSave">保存</button><span class="mn-hint">提示模板可用 {name} 昵称、{uid} QQ号、{group} 群号</span></div>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnGuardSave">保存</button><span class="mn-hint">禁言时长、群内提示在各规则组里设置</span></div>
             </div>
           </div>
         </div>
@@ -1010,20 +1024,11 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               <div class="mn-row"><label style="width:84px">转发到</label><select class="input-sm" id="wxForward" style="flex:1"></select></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnWxSave">保存</button><span class="mn-hint">接入方法见插件目录 examples/wxcode_recognizer_example.py</span></div>
               <p class="mn-hint">码的白名单 / 黑名单、发送次数限制、码记录和保存的图片在「码管理」页。</p>
-              <div class="mn-row" style="margin-top:6px"><label>码内容正则规则</label><span class="rules-subtle" id="wxCount"></span></div>
-              <p class="mn-hint" style="margin-bottom:8px">对解码出的内容（二维码和葵花码都适用）逐条做正则匹配，不区分大小写。</p>
-              <div class="mn-row">
-                <input class="input-sm" id="wxValue" style="flex:1;min-width:160px" placeholder="例如：pages/.*invite" />
-                <button class="btn btn-primary btn-sm" id="btnWxAdd">添加</button>
-              </div>
-              <div id="wxAddMsg"></div>
-              <div class="mn-rule-list" id="wxList"></div>
-              <div class="mn-row"><input class="input-sm" id="wxTestText" style="flex:1" placeholder="输入一段识别内容测试，例如 pages/invite?code=1" /><button class="btn btn-outline btn-sm" id="btnWxTest">测试</button></div>
-              <div id="wxTestResult"></div>
+              <p class="mn-hint">码内容正则写在上面的规则组里（「码内容规则」）。</p>
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><h2>图片文字识别（OCR）</h2><span class="rules-subtle">识别出的文字按「关键词规则」过滤</span></div>
+            <div class="card-header"><h2>图片文字识别（OCR）</h2><span class="rules-subtle">识别出的文字按规则组的关键词过滤</span></div>
             <div class="mn-body">
               <div class="mn-row"><label style="width:84px">接入方式</label>
                 <select class="input-sm" id="ocrDriver">
@@ -1071,7 +1076,7 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h2>码统计</h2>
+          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">码统计</h2>
             <div class="header-actions">
               <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
               <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
@@ -1135,11 +1140,51 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           <div class="bs-panel"><h2>发码最多的人</h2><ul class="bs-rank" id="bsTopUsers"></ul></div>
           <div class="bs-panel"><h2>发码最多的群</h2><ul class="bs-rank" id="bsTopGroups"></ul></div>
         </div>
+        <div class="bs-panel"><h2>出现最多的小程序 <span class="bs-note" id="bsMpNote"></span></h2><ul class="bs-rank" id="bsTopMp" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 16px"></ul></div>
         <div class="bs-panel">
           <h2>实时识别 <span class="bs-note">最新在前，每 3 秒更新；红框 = 命中处理（已撤回）</span></h2>
           <div class="bs-feed" id="bsFeed"></div>
         </div>
         <div class="bs-tip" id="bsTip"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-miniapps">
+        <div class="page-header"><h1>小程序</h1><button class="btn btn-ghost btn-sm" id="btnMpRefresh">刷新</button></div>
+        <p class="mn-intro">群里出现的小程序都在这里（「微店买买」这类平台小程序里有很多店铺 / 商品，可以在详情里「按这个标题拉黑」只拦部分内容）：卡片（如「[微信小程序]我正在[刺猬云印]…」）和链接（<code>#小程序://刺猬云印/N937Lf7Xrcnhc3r</code>）。看每个小程序出现了多少次、谁发的、在哪些群、发的什么内容。「拉黑」加入默认规则组的小程序列表（命中撤回，可在「关键词与识别 → 规则组」里改到别的组）；「加白名单」一律放行。</p>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>记录</h2></div>
+            <div class="settings-list" id="mpSwitches"></div>
+            <div class="mn-body">
+              <div class="mn-row"><label style="width:110px">记录保留</label><input type="number" min="1" max="3650" class="input-sm" id="mpDays" style="width:100px" /><span>天</span><button class="btn btn-primary btn-sm" id="btnMpSave">保存</button></div>
+              <p class="mn-hint">卡片按 appid 区分小程序；链接只有名字，若已知的卡片小程序里恰好有一个名字以它开头（「刺猬云印」→「刺猬云印丨打印5分 包邮到家」），就算同一个小程序。小程序名称和缩略图一直保留。</p>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>白名单</h2><span class="rules-subtle" id="mpAllowCount"></span></div>
+            <div class="mn-body">
+              <p class="mn-hint">白名单里的小程序：卡片文字不参与关键词匹配，也不按规则组的小程序条目撤回。</p>
+              <div class="mn-rule-list" id="mpAllowList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:8px"><h2 style="white-space:nowrap">小程序统计</h2>
+            <div class="header-actions">
+              <select class="input-sm" id="mpBy" style="width:120px"><option value="app">按小程序</option><option value="user">按小程序 + 人</option></select>
+              <select class="input-sm" id="mpSort" style="width:150px"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
+              <select class="input-sm" id="mpDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
+              <select class="input-sm" id="mpGroup" style="width:180px"><option value="">所有群</option></select>
+              <input class="input-sm" id="mpKeyword" placeholder="小程序名 / appid / QQ号 / 内容" style="width:190px" />
+              <button class="btn btn-outline btn-sm" id="btnMpFilter">筛选</button>
+            </div></div>
+          <div class="log-container" id="mpTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body" style="padding-top:0"><div class="mn-row" id="mpPager"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>小程序看板</h2><span class="rules-subtle" id="mpFeedNote">最近出现的小程序，新的在前，每 3 秒更新；红框 = 这条消息被撤回</span></div>
+          <div class="mn-body"><div class="mp-feed" id="mpFeed"><p class="empty">加载中...</p></div></div>
+        </div>
       </div>
 
       <div class="tab-panel" id="tab-broadcast">
@@ -1633,6 +1678,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
     <a class="mobile-nav-item" data-tab="codes">
       <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
       <span>码管理</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="miniapps">
+      <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>
+      <span>小程序</span>
     </a>
     <a class="mobile-nav-item" data-tab="livelog">
       <svg viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
@@ -2318,6 +2367,7 @@ function switchTab(tabName) {
   if (tabName === 'oplog') loadOplog(1);
   if (tabName === 'leavelog') loadLeaveLog(1);
   if (tabName === 'codes') loadCodes(1);
+  if (tabName === 'miniapps') loadMiniapps(1);
   if (tabName === 'livelog') loadLive();
   if (tabName === 'bigscreen') loadBigScreen(); else bsSetFull(false);
   if (tabName === 'batch') loadBatch();
@@ -2882,6 +2932,8 @@ var MANUAL_SETTING_KEYS = {
   leave_log_msg_count: true,
   leave_log_use_history: true,
   leave_log_save_images: true,
+  miniapp_store_enabled: true,
+  miniapp_store_days: true,
   leave_log_image_days: true,
   leave_auto_blacklist_times: true,
   leave_auto_blacklist_days: true,
@@ -3660,12 +3712,13 @@ function renderGroupCfgItems(items) {
 var MN = { overview: null, kw: [], wx: [], kwErrors: {}, wxErrors: {}, names: [] };
 var MN_SWITCHES = {
   guardSwitches: [
-    { key: 'keyword_guard_enabled', label: '关键词撤回', desc: '消息命中关键词规则时撤回' },
+    { key: 'keyword_guard_enabled', label: '关键词撤回', desc: '消息（含图片 OCR 文字）命中规则组里的关键词时撤回' },
     { key: 'backup_enabled', label: '撤回前先备份', desc: '机器人的所有撤回（命中撤回、撤回指令、退群撤回）都先把原消息以合并转发的形式发到备份群' },
-    { key: 'hit_mute_enabled', label: '同时禁言', desc: '时长取「自动审核禁言时长」，默认 30 分钟' },
-    { key: 'hit_notice_enabled', label: '群内提示', desc: '撤回后在群里发一条提示' },
     { key: 'card_parse_enabled', label: '解析小程序 / 分享卡片', desc: '小程序名、标题、appid、跳转链接也参与关键词匹配，例如规则写 wx 开头的 appid 可拦某个小程序' },
     { key: 'card_scan_preview', label: '卡片预览图也识别', desc: '卡片封面当作图片，开启葵花码识别 / OCR 时一起识别' }
+  ],
+  mpSwitches: [
+    { key: 'miniapp_store_enabled', label: '记录小程序', desc: '每次出现小程序（卡片或 #小程序:// 链接）都记下来，统计和看板用' }
   ],
   csSwitches: [
     { key: 'code_store_enabled', label: '记录码并保存图片', desc: '关闭后不再记录新的码（统计为空），发送次数限制照常计次' }
@@ -3869,85 +3922,125 @@ function mnGroupOptions(selected, emptyLabel) {
   return html;
 }
 
-/* ---- 规则列表 ---- */
-function mnRenderRules(kind) {
-  var isKw = kind === 'kw';
-  var list = isKw ? MN.kw : MN.wx;
-  var errors = isKw ? MN.kwErrors : MN.wxErrors;
-  var box = $(isKw ? '#kwList' : '#wxList');
-  $(isKw ? '#kwCount' : '#wxCount').textContent = list.length ? '共 ' + list.length + ' 条' : '';
-  if (!list.length) {
-    box.innerHTML = '<div class="mn-empty">' + (isKw ? '还没有关键词规则。在上面选择类型、输入内容后点「添加」。' : '还没有葵花码规则。') + '</div>';
-    return;
+/* ---- 规则组（rule_groups.py） ---- */
+var RG = { groups: [] };
+function rgActionText(a) {
+  var parts = ['撤回'];
+  if (a.mute) parts.push('禁言 ' + a.mute_minutes + ' 分钟');
+  if (a.notice) parts.push('群内提示');
+  return parts.join(' + ');
+}
+function rgScopeText(g) {
+  if (!g.scope || !g.scope.length) return '所有群';
+  var names = {}; mnGroups().forEach(function(x) { names[x.group_id] = x.group_name; });
+  var shown = g.scope.slice(0, 3).map(function(id) { return names[id] || id; }).join('、');
+  return g.scope.length > 3 ? shown + ' 等 ' + g.scope.length + ' 个群' : shown;
+}
+async function rgLoad() {
+  var res = await safeGet('minimal/rulegroups');
+  if (isApiError(res)) { $('#rgList').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  RG.groups = (mnData(res) || {}).groups || [];
+  rgRender();
+}
+function rgRender() {
+  var others = RG.groups.filter(function(g) { return !g.is_default; });
+  $('#rgList').innerHTML = RG.groups.length ? RG.groups.map(function(g) {
+    var i = others.indexOf(g);
+    var acts = '<button class="btn btn-outline btn-sm" data-rg-act="edit" data-id="' + g.id + '">编辑</button>' +
+      (g.is_default ? '' : '<button class="btn btn-ghost btn-sm" data-rg-act="up" data-id="' + g.id + '"' + (i <= 0 ? ' disabled' : '') + '>上移</button>' +
+        '<button class="btn btn-ghost btn-sm" data-rg-act="down" data-id="' + g.id + '"' + (i >= others.length - 1 ? ' disabled' : '') + '>下移</button>' +
+        '<button class="btn btn-ghost btn-sm" data-rg-act="toggle" data-id="' + g.id + '">' + (g.enabled ? '停用' : '启用') + '</button>' +
+        '<button class="btn btn-danger btn-sm" data-rg-act="del" data-id="' + g.id + '">删除</button>');
+    return '<div class="rg-card' + (g.enabled ? '' : ' off') + (g.is_default ? ' default' : '') + '">' +
+      '<div class="rg-head"><b>' + esc(g.name) + '</b>' + (g.is_default ? '<span class="mn-chip">默认组 · 最后检查</span>' : '') +
+      (g.enabled ? '' : '<span class="mn-chip">已停用</span>') + '<div class="rg-acts">' + acts + '</div></div>' +
+      '<div class="rg-sum"><span class="mn-chip">关键词 ' + g.keywords.length + '</span><span class="mn-chip">码规则 ' + g.code_rules.length + '</span>' +
+      '<span class="mn-chip">小程序 ' + g.apps.length + '</span><span>命中：' + esc(rgActionText(g.action)) + '</span><span>· 生效：' + esc(rgScopeText(g)) + '</span></div>' +
+      (g.keywords.length ? '<div class="mn-hint" style="word-break:break-all">' + esc(g.keywords.slice(0, 8).map(function(r) { return mnRuleParse(r).value; }).join('、')) + (g.keywords.length > 8 ? ' …' : '') + '</div>' : '') +
+      '</div>';
+  }).join('') : '<p class="empty">还没有规则组</p>';
+}
+function rgFind(id) { return RG.groups.filter(function(g) { return String(g.id) === String(id); })[0]; }
+function rgEdit(g) {
+  var isNew = !g;
+  g = g || { name: '', enabled: true, scope: [], keywords: [], code_rules: [], apps: [], action: { mute: false, mute_minutes: 30, notice: false, notice_template: '' } };
+  var all = !g.scope.length;
+  var groups = mnGroups();
+  var body = '<div class="rg-form">' +
+    '<label class="rg-l">组名</label><input class="input-sm" id="rgName" style="width:100%" maxlength="40" value="' + escAttr(g.name) + '" placeholder="例如：引流广告" />' +
+    '<label class="rg-l">关键词（每行一条：普通文字 = 包含；= 开头 = 整条消息完全相同；re: 开头 = 正则）</label>' +
+    '<textarea id="rgKeywords" rows="6" placeholder="加微信&#10;=1&#10;re:v[x信]\\s*\\d{5,}">' + esc(g.keywords.join('\n')) + '</textarea>' +
+    '<label class="rg-l">码内容规则（每行一个正则，匹配二维码 / 葵花码解出的内容）</label>' +
+    '<textarea id="rgCodes" rows="3" placeholder="pages/.*invite">' + esc(g.code_rules.join('\n')) + '</textarea>' +
+    '<label class="rg-l">小程序（每行一个；卡片和 #小程序:// 链接都算）</label>' +
+    '<p class="mn-hint" style="margin-bottom:4px">写 appid（wx 开头）或小程序名（名字包含即命中）= 整个小程序；<b>小程序 | 标题条件</b> = 只拦这个小程序里标题符合条件的（适合「微店买买」这类一个小程序里有很多店铺 / 商品的）；<b>* | 标题条件</b> = 任何小程序按标题拦。标题条件写法同关键词：普通文字包含、= 开头完全相同、re: 开头正则。</p>' +
+    '<textarea id="rgApps" rows="4" placeholder="wx9580c9208762a7c5&#10;刺猬云印&#10;微店买买 | 考研&#10;* | re:差\\d+人">' + esc(g.apps.join('\n')) + '</textarea>' +
+    '<label class="rg-l">命中后</label>' +
+    '<div class="mn-row"><span>撤回（总是）</span><label><input type="checkbox" id="rgMute"' + (g.action.mute ? ' checked' : '') + ' /> 同时禁言</label>' +
+    '<input type="number" class="input-sm" id="rgMuteMin" min="1" max="43200" style="width:90px" value="' + escAttr(g.action.mute_minutes) + '" /><span>分钟</span></div>' +
+    '<div class="mn-row"><label><input type="checkbox" id="rgNotice"' + (g.action.notice ? ' checked' : '') + ' /> 群内提示</label>' +
+    '<input class="input-sm" id="rgNoticeTpl" style="flex:1" maxlength="200" value="' + escAttr(g.action.notice_template) + '" placeholder="留空用默认：[群管] {name} 的消息含违规内容，已撤回" /></div>' +
+    '<p class="mn-hint">提示模板可用 {name} 昵称、{uid} QQ号、{group} 群号。同一个人 60 秒内连续命中只禁言 / 提示一次。</p>' +
+    '<label class="rg-l">生效的群</label>' +
+    '<div class="mn-row"><label><input type="radio" name="rgScope" value="all"' + (all ? ' checked' : '') + ' /> 所有群</label><label><input type="radio" name="rgScope" value="some"' + (all ? '' : ' checked') + ' /> 只在勾选的群</label></div>' +
+    '<div id="rgScopeBox" style="' + (all ? 'display:none' : '') + '"><div class="gp-grid" id="rgScopeGroups">' +
+    groups.map(function(x) { return mnGroupChip(x, g.scope.indexOf(String(x.group_id)) >= 0, 'rg-scope-ck'); }).join('') + '</div></div>' +
+    (g.is_default ? '' : '<div class="mn-row" style="margin-top:8px"><label><input type="checkbox" id="rgEnabled"' + (g.enabled ? ' checked' : '') + ' /> 启用这个组</label></div>') +
+    '<div id="rgErr"></div></div>';
+  showModal(isNew ? '新建规则组' : '编辑规则组：' + g.name, body,
+    '<button class="btn btn-ghost btn-sm" id="rgCancel">取消</button><button class="btn btn-primary btn-sm" id="rgSaveBtn">保存</button>');
+  mnGroupFilter('#rgScopeGroups');
+  $$('input[name=rgScope]').forEach(function(r) { r.addEventListener('change', function() { $('#rgScopeBox').style.display = r.value === 'some' && r.checked ? '' : (r.value === 'all' && r.checked ? 'none' : $('#rgScopeBox').style.display); }); });
+  $('#rgCancel').addEventListener('click', closeModal);
+  $('#rgSaveBtn').addEventListener('click', function() { rgSave(g, isNew); });
+}
+function rgLines(id) { return $(id).value.split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean); }
+async function rgSave(g, isNew) {
+  var some = ($('input[name=rgScope]:checked') || {}).value === 'some';
+  var scope = some ? $$('.rg-scope-ck').filter(function(c) { return c.checked; }).map(function(c) { return c.value; }) : [];
+  if (some && !scope.length) { $('#rgErr').innerHTML = '<div class="mn-result err">请勾选至少一个群，或选「所有群」</div>'; return; }
+  var data = { name: $('#rgName').value.trim(), keywords: rgLines('#rgKeywords'), code_rules: rgLines('#rgCodes'), apps: rgLines('#rgApps'),
+    scope: scope, enabled: g.is_default ? true : (document.getElementById('rgEnabled') ? $('#rgEnabled').checked : true),
+    action: { mute: $('#rgMute').checked, mute_minutes: Number($('#rgMuteMin').value), notice: $('#rgNotice').checked, notice_template: $('#rgNoticeTpl').value.trim() } };
+  if (!isNew) data.id = g.id;
+  var res = await safePost('minimal/rulegroups/save', { group: data });
+  if (isApiError(res)) { $('#rgErr').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  RG.groups = (mnData(res) || {}).groups || RG.groups;
+  closeModal(); rgRender(); toast('已保存', 'success');
+}
+async function rgOnClick(e) {
+  var b = e.target.closest('[data-rg-act]');
+  if (!b) return;
+  var g = rgFind(b.getAttribute('data-id'));
+  if (!g) return;
+  var act = b.getAttribute('data-rg-act'), res;
+  if (act === 'edit') { rgEdit(g); return; }
+  if (act === 'del') {
+    if (!await mnConfirm('删除规则组「' + g.name + '」？组里的规则会一起删除。')) return;
+    res = await safePost('minimal/rulegroups/delete', { id: g.id });
+  } else if (act === 'toggle') {
+    res = await safePost('minimal/rulegroups/save', { group: Object.assign({}, g, { enabled: !g.enabled }) });
+  } else {
+    res = await safePost('minimal/rulegroups/move', { id: g.id, dir: act === 'up' ? -1 : 1 });
   }
-  box.innerHTML = list.map(function(raw, i) {
-    var p = isKw ? mnRuleParse(raw) : { type: 'regex', value: raw };
-    var err = errors[raw];
-    return '<div class="mn-rule' + (err ? ' mn-bad' : '') + '"><span class="mn-type ' + p.type + '">' + esc(MN_TYPES[p.type].label) + '</span>' +
-      '<span class="mn-val">' + esc(p.value) + (err ? '<div class="mn-err">' + esc(err) + '</div>' : '') + '</span>' +
-      '<button class="btn btn-ghost btn-sm" data-mn-del="' + escAttr(raw) + '">删除</button></div>';
-  }).join('');
-  $$('[data-mn-del]', box).forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      // 按规则内容删除（不按序号），排队时前面的操作改变了顺序也不会删错
-      var raw = btn.getAttribute('data-mn-del');
-      btn.disabled = true;
-      mnRuleOp(kind, function(cur) {
-        var next = cur.filter(function(r) { return r !== raw; });
-        return next.length === cur.length ? null : next;
-      }).then(function(ok) { if (!ok) btn.disabled = false; });
-    });
-  });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  RG.groups = (mnData(res) || {}).groups || RG.groups;
+  rgRender();
 }
-
-// 规则增删排队执行：每次都在上一次保存完成后、基于最新的规则列表计算新列表。
-// 以前用点击当时的列表生成完整列表提交，连续操作时后一个请求会覆盖前一个（丢掉新增或恢复已删）。
-var MN_RULE_QUEUE = { kw: Promise.resolve(), wx: Promise.resolve() };
-function mnRuleOp(kind, makeNext) {
-  var run = MN_RULE_QUEUE[kind].then(function() {
-    var next = makeNext((kind === 'kw' ? MN.kw : MN.wx).slice());
-    return next ? mnSaveRules(kind, next) : false;
-  });
-  MN_RULE_QUEUE[kind] = run.catch(function() { return false; });
-  return run;
-}
-async function mnSaveRules(kind, rules) {
-  var isKw = kind === 'kw';
-  var msg = $(isKw ? '#kwAddMsg' : '#wxAddMsg');
-  var res = await safePost('minimal/rules/save', { key: isKw ? 'keyword_rules' : 'wxcode_regex_rules', rules: rules });
-  if (isApiError(res)) {
-    var errs = {};
-    (res.errors || []).forEach(function(e) { errs[e.rule] = e.error; });
-    if (isKw) MN.kwErrors = errs; else MN.wxErrors = errs;
-    // 错误原因（后端已写进 message）直接显示在输入框下方，不只是短暂弹出
-    msg.innerHTML = '<div class="mn-result err">没有保存。' + esc(mnErr(res, '保存失败')) + '</div>';
-    return false;
-  }
-  var data = mnData(res);
-  if (isKw) { MN.kw = data.rules || []; MN.kwErrors = {}; } else { MN.wx = data.rules || []; MN.wxErrors = {}; }
-  msg.innerHTML = '';
-  mnRenderRules(kind);
-  toast('规则已保存', 'success');
-  return true;
-}
-
-async function mnTestRules(kind) {
-  var isKw = kind === 'kw';
-  var text = $(isKw ? '#kwTestText' : '#wxTestText').value;
-  var out = $(isKw ? '#kwTestResult' : '#wxTestResult');
-  if (!text.trim()) { out.innerHTML = '<div class="mn-result no">请先输入要测试的内容</div>'; return; }
-  var res = await safePost('minimal/rules/test', { key: isKw ? 'keyword_rules' : 'wxcode_regex_rules', text: text });
+async function rgTest() {
+  var out = $('#rgTestResult');
+  var data = { text: $('#rgTestText').value, code: $('#rgTestCode').value, app: $('#rgTestApp').value, title: $('#rgTestTitle').value, group_id: $('#rgTestGroup').value };
+  if (!data.text.trim() && !data.code.trim() && !data.app.trim() && !data.title.trim()) { out.innerHTML = '<div class="mn-result no">请先输入要测试的内容</div>'; return; }
+  var res = await safePost('minimal/rulegroups/test', data);
   if (isApiError(res)) { out.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
-  var hits = (mnData(res).hits) || [];
-  out.innerHTML = hits.length
-    ? '<div class="mn-result ok">会被撤回：命中 ' + hits.map(function(r) { return '「' + esc(isKw ? mnRuleParse(r).value : r) + '」'; }).join('、') + '</div>'
-    : '<div class="mn-result no">不会命中任何规则</div>';
-}
-
-function mnUpdateTypeHint() {
-  var t = MN_TYPES[$('#kwType').value];
-  $('#kwTypeHint').textContent = t.hint;
-  $('#kwValue').placeholder = t.placeholder;
+  var d = mnData(res) || {};
+  var line = function(label, r, filled) {
+    if (!filled) return '';
+    return r ? '<div class="mn-result ok">' + label + '：会被撤回，命中「' + esc(r.group) + '」的规则「' + esc(r.rule) + '」</div>'
+      : '<div class="mn-result no">' + label + '：不会命中</div>';
+  };
+  out.innerHTML = line('消息文字', d.text, data.text.trim()) + line('码内容', d.code, data.code.trim()) +
+    line('小程序', d.app, data.app.trim() || data.title.trim() || /#小程序:\/\//.test(data.text));
 }
 
 function mnToggleDriverRows() {
@@ -4000,15 +4093,13 @@ function mnCodeTestFile() {
 
 async function loadGuard() {
   if (!await mnLoadOverview()) return;
-  MN.kw = (mnCfg('keyword_rules') || []).slice();
-  MN.wx = (mnCfg('wxcode_regex_rules') || []).slice();
   mnRenderSwitches('guardSwitches');
   mnRenderSwitches('wxSwitches');
-  mnRenderRules('kw');
-  mnRenderRules('wx');
-  mnUpdateTypeHint();
   $('#guardBackupGroup').innerHTML = mnGroupOptions(mnCfg('backup_group_id') || '', '不备份');
-  $('#guardNoticeTpl').value = mnCfg('hit_notice_template') || '';
+  var tg = $('#rgTestGroup'), tcur = tg.value;
+  tg.innerHTML = '<option value="">不限群（所有组都参与）</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
+  tg.value = tcur;
+  rgLoad();
   $('#wxDriver').value = mnCfg('wxcode_driver') || 'two_stage';
   $('#codeDetectUrl').value = mnCfg('code_detect_url') || '';
   $('#codeDetectKey').value = '';
@@ -4026,6 +4117,192 @@ async function loadGuard() {
   $('#ocrUrl').value = mnCfg('local_ocr_service_url') || '';
   $('#ocrModule').value = mnCfg('local_ocr_python_module') || '';
   mnToggleDriverRows();
+}
+
+/* ---- 小程序（miniapp.py） ---- */
+var MP = { page: 1, pageSize: 50, items: [], allow: [], feedLast: 0, feed: [], timer: null, inflight: false, detail: null };
+function mpActive() { var p = $('#tab-miniapps'); return !!(p && p.classList.contains('active') && !document.hidden); }
+function mpGroupName(gid) { var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0]; return (g && g.group_name) || gid; }
+function mpEntry(it) { return it.appid || (String(it.app_key).indexOf('name:') === 0 ? String(it.app_key).slice(5) : it.app_key); }
+function mpStateTag(state) {
+  if (state === 'allow') return '<span class="cb-tag allowed">白名单</span>';
+  if (state === 'block') return '<span class="cb-tag blocked">已拉黑</span>';
+  if (state === 'partial') return '<span class="mn-chip" style="color:var(--warning);border-color:var(--warning)" title="只拦部分标题，见详情">部分拉黑</span>';
+  return '';
+}
+function mpActs(it, prefix, i) {
+  return (it.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-' + prefix + '-act="unallow" data-i="' + i + '">移出白名单</button>'
+      : '<button class="btn btn-outline btn-sm" data-' + prefix + '-act="allow" data-i="' + i + '">加白名单</button>') +
+    (it.state === 'block' ? '<button class="btn btn-outline btn-sm" data-' + prefix + '-act="unblock" data-i="' + i + '">解除拉黑</button>'
+      : '<button class="btn btn-danger btn-sm" data-' + prefix + '-act="block" data-i="' + i + '">拉黑</button>');
+}
+async function loadMiniapps(page) {
+  if (page) MP.page = page;
+  if (!await mnLoadOverview()) return;
+  mnRenderSwitches('mpSwitches');
+  $('#mpDays').value = Number(mnCfg('miniapp_store_days')) || 90;
+  var g = $('#mpGroup'), cur = g.value;
+  g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
+  g.value = cur;
+  await mpLoadStats();
+  MP.feedLast = 0; MP.feed = [];
+  mpPoll();
+}
+async function mpLoadStats() {
+  var ep = beginLoad('mp-stats');
+  var res = await safeGet('minimal/miniapps', { by: $('#mpBy').value, sort: $('#mpSort').value, days: $('#mpDaysSel').value,
+    group_id: $('#mpGroup').value, keyword: $('#mpKeyword').value.trim(), page: MP.page, page_size: MP.pageSize });
+  if (!isCurrentLoad('mp-stats', ep)) return;
+  if (isApiError(res)) { $('#mpTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res) || {};
+  MP.items = d.items || []; MP.allow = d.allow || [];
+  mpRenderAllow();
+  var byUser = d.by === 'user';
+  $('#mpTable').innerHTML = MP.items.length ? '<table class="mn-table"><thead><tr><th>小程序</th>' + (byUser ? '<th>发送者</th>' : '') +
+    '<th>次数</th><th>内容 / 人 / 群</th><th>最近</th><th>操作</th></tr></thead><tbody>' + MP.items.map(function(it, i) {
+      var parts = ['卡片 ' + it.cards, '链接 ' + it.links];
+      if (it.ruled) parts.push('<span style="color:var(--danger)">撤回 ' + it.ruled + '</span>');
+      if (it.allowed) parts.push('白名单 ' + it.allowed);
+      return '<tr><td style="max-width:300px"><div style="display:flex;gap:8px;align-items:center">' +
+        (it.thumb ? '<img alt="图标" src="' + escAttr(it.thumb) + '" style="width:36px;height:36px;border-radius:6px;flex-shrink:0" />' : '') +
+        '<div style="min-width:0"><a href="javascript:void(0)" data-mp-act="detail" data-i="' + i + '">' + esc(it.name) + '</a> ' + mpStateTag(it.state) +
+        (it.appid ? '<br><span class="mn-hint">' + esc(it.appid) + '</span>' : '<br><span class="mn-hint">只出现过链接</span>') + '</div></div></td>' +
+        (byUser ? '<td>' + esc(it.user_id) + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' : '') +
+        '<td style="white-space:nowrap"><strong>' + it.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
+        '<td style="white-space:nowrap">' + it.contents + ' 个内容<br><span class="mn-hint">' + it.users + ' 人 / ' + it.groups + ' 群</span></td>' +
+        '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
+        '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-mp-act="detail" data-i="' + i + '">详情</button>' + mpActs(it, 'mp', i) + '</div></td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '这段时间没有出现小程序' : '小程序记录已关闭') + '</p>';
+  var pages = Math.max(1, Math.ceil((d.total || 0) / MP.pageSize));
+  $('#mpPager').innerHTML = '<span class="mn-hint">共 ' + (d.total || 0) + ' 项，第 ' + MP.page + ' / ' + pages + ' 页；记录保留 ' + d.store_days + ' 天</span>' +
+    '<button class="btn btn-ghost btn-sm" id="mpPrev"' + (MP.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+    '<button class="btn btn-ghost btn-sm" id="mpNext"' + (MP.page >= pages ? ' disabled' : '') + '>下一页</button>';
+  bindIfExists('mpPrev', function() { MP.page -= 1; mpLoadStats(); });
+  bindIfExists('mpNext', function() { MP.page += 1; mpLoadStats(); });
+}
+function mpRenderAllow() {
+  $('#mpAllowCount').textContent = MP.allow.length + ' 个';
+  $('#mpAllowList').innerHTML = MP.allow.length ? MP.allow.map(function(k, i) {
+    return '<div class="mn-rule"><span class="mn-val" style="word-break:break-all">' + esc(String(k).indexOf('name:') === 0 ? String(k).slice(5) : k) + '</span>' +
+      '<button class="btn btn-ghost btn-sm" data-mp-allow="' + i + '">移出</button></div>';
+  }).join('') : '<p class="mn-hint">空</p>';
+}
+async function mpListSet(it, act) {
+  var on = act.indexOf('un') !== 0, kind = act.indexOf('allow') >= 0 ? 'allow' : 'block';
+  if (kind === 'block' && on && !await mnConfirm('拉黑小程序「' + it.name + '」？之后群里再出现它（卡片或链接）会按默认规则组撤回。')) return false;
+  var res = await safePost('minimal/miniapps/list', { kind: kind, on: on, app_key: it.app_key, entry: mpEntry(it) });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return false; }
+  toast('已更新', 'success');
+  return true;
+}
+async function mpShowDetail(it) {
+  var res = await safeGet('minimal/miniapps/detail', { app_key: it.app_key, user_id: it.user_id || '' });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  var d = mnData(res) || {};
+  MP.detail = { app: it, data: d };
+  var contents = (d.contents || []).map(function(c, ci) {
+    var titleBtn = c.title ? '<br><button class="btn btn-outline btn-sm" style="margin-top:4px" data-mpd-title="' + ci + '">按这个标题拉黑</button>' : '';
+    return '<tr><td style="width:64px">' + (c.thumb ? '<img alt="预览" src="' + escAttr(c.thumb) + '" style="width:56px;height:56px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">' + (c.form === 'link' ? '链接' : '无图') + '</span>') + '</td>' +
+      '<td style="word-break:break-all;max-width:320px">' + (c.title ? esc(c.title) + '<br>' : '') + '<span class="mn-hint">' + esc(c.content) + '</span></td>' +
+      '<td style="white-space:nowrap"><strong>' + c.total + '</strong> 次<br><span class="mn-hint">' + c.users + ' 人</span>' + titleBtn + '</td><td style="white-space:nowrap">' + esc(mnTime(c.last_ts)) + '</td></tr>';
+  }).join('');
+  var rules = (d.rules || []).map(function(r, ri) {
+    return '<div class="mn-rule"><span class="mn-type ' + (r.title ? 'regex' : 'contains') + '">' + (r.title ? '按标题' : '整个') + '</span>' +
+      '<span class="mn-val" style="word-break:break-all">' + esc(r.entry) + ' <span class="mn-hint">（' + esc(r.group) + (r.enabled ? '' : '，已停用') + '）</span></span>' +
+      '<button class="btn btn-ghost btn-sm" data-mpd-unrule="' + ri + '">移除</button></div>';
+  }).join('');
+  var groups = (d.groups || []).map(function(g) { return '<span class="mn-chip">' + esc(mpGroupName(g.group_id)) + '：' + g.total + ' 次 / ' + g.users + ' 人</span>'; }).join('');
+  var sends = (d.sends || []).slice(0, 50).map(function(r) {
+    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(mpGroupName(r.group_id)) + '</td><td>' + esc(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') + '</td>' +
+      '<td>' + (r.form === 'link' ? '链接' : '卡片') + '</td><td' + (r.outcome === 'rule' ? ' style="color:var(--danger)"' : '') + ' title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
+  }).join('');
+  showModal('小程序：' + d.name,
+    '<div class="mn-row" style="margin-bottom:6px">' + (d.thumb ? '<img alt="图标" src="' + escAttr(d.thumb) + '" style="width:40px;height:40px;border-radius:8px" />' : '') +
+    '<div><b>' + esc(d.name) + '</b> ' + mpStateTag(d.state) + '<br><span class="mn-hint">' + (d.appid ? 'appid ' + esc(d.appid) : '只出现过链接，没有 appid') +
+    (d.aliases && d.aliases.length ? '；链接里的名字：' + esc(d.aliases.join('、')) : '') + '</span></div></div>' +
+    (groups ? '<div style="margin-bottom:8px">' + groups + '</div>' : '') +
+    '<p class="mn-hint" style="margin:6px 0">规则组里针对它的规则（「按这个标题拉黑」可以只拦部分标题，同一个小程序的其它内容放行）</p>' +
+    '<div class="mn-rule-list" style="margin-bottom:8px">' + (rules || '<p class="mn-hint">没有，整个小程序都放行</p>') + '</div>' +
+    '<p class="mn-hint" style="margin:6px 0">发过的内容（按次数）</p><div style="max-height:40vh;overflow:auto"><table class="mn-table"><tbody>' + (contents || '<tr><td>没有记录</td></tr>') + '</tbody></table></div>' +
+    '<p class="mn-hint" style="margin:10px 0 6px">最近的记录（保留 ' + d.store_days + ' 天）</p><div style="max-height:30vh;overflow:auto"><table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>形式</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table></div>',
+    '<button class="btn btn-primary btn-sm" id="mpDetailClose">关闭</button>');
+  $('#mpDetailClose').addEventListener('click', closeModal);
+  $('#modalBody').onclick = mpDetailClick;  // 弹窗共用一个 body：赋值而不是叠加监听（其它弹窗里没有 data-mpd-* 按钮，不受影响）
+}
+async function mpDetailClick(e) {
+  var det = MP.detail;
+  if (!det) return;
+  var tb = e.target.closest('[data-mpd-title]'), ub = e.target.closest('[data-mpd-unrule]');
+  if (tb) {
+    var c = (det.data.contents || [])[Number(tb.getAttribute('data-mpd-title'))];
+    if (!c) return;
+    var kw = await promptModal({ title: '按标题拉黑：' + det.data.name,
+      label: '标题里含有下面的文字就撤回（建议删短到关键的几个字，例如「考研」；也可写 re:正则 或 =完全相同）。只影响这个小程序，它的其它内容照常放行。',
+      value: String(c.title || '').trim().slice(0, 60), okText: '拉黑' });
+    if (!kw) { mpShowDetail(det.app); return; }
+    var res = await safePost('minimal/miniapps/list', { kind: 'block', on: true, entry: mpEntry(det.app) + ' | ' + kw });
+    if (isApiError(res)) { toast(mnErr(res), 'error'); } else { toast('已加入默认组', 'success'); mpLoadStats(); }
+    mpShowDetail(det.app);
+    return;
+  }
+  if (ub) {
+    var r = (det.data.rules || [])[Number(ub.getAttribute('data-mpd-unrule'))];
+    if (!r) return;
+    var res2 = await safePost('minimal/miniapps/list', { kind: 'block', on: false, entry: r.entry });
+    if (isApiError(res2)) { toast(mnErr(res2), 'error'); return; }
+    toast('已移除', 'success'); mpLoadStats(); mpShowDetail(det.app);
+  }
+}
+async function mpPoll() {
+  clearTimeout(MP.timer); MP.timer = null;
+  if (!mpActive() || MP.inflight) return;
+  MP.inflight = true;
+  try {
+    var res = await safeGet('minimal/miniapps/feed', { since_id: MP.feedLast });
+    if (isApiError(res)) { $('#mpFeedNote').textContent = '获取失败：' + mnErr(res); return; }
+    var d = mnData(res) || {};
+    var fresh = d.items || [];
+    var first = !MP.feedLast;
+    fresh.forEach(function(x) { x._new = !first; });
+    MP.feed = fresh.concat(MP.feed).slice(0, 30);
+    MP.feedLast = Math.max(MP.feedLast, d.last_id || 0);
+    MP.names = Object.assign(MP.names || {}, d.group_names || {});
+    if (fresh.length || first) mpRenderFeed(d.enabled !== false);
+  } finally {
+    MP.inflight = false;
+    if (mpActive()) MP.timer = setTimeout(mpPoll, 3000);
+  }
+}
+function mpRenderFeed(enabled) {
+  if (!MP.feed.length) { $('#mpFeed').innerHTML = '<div class="mn-empty" style="grid-column:1/-1">' + (enabled ? '还没有记录。群里有人发小程序卡片或 #小程序:// 链接后会出现在这里。' : '小程序记录已关闭（上面「记录」里打开）。') + '</div>'; return; }
+  $('#mpFeed').innerHTML = MP.feed.map(function(x) {
+    var img = x.preview || x.icon;
+    var html = '<div class="mp-item' + (x.outcome === 'rule' ? ' rule' : '') + '"' + (x._new ? ' style="animation:fadeIn .6s"' : '') + '>' +
+      (img ? '<img alt="预览" src="' + escAttr(img) + '" />' : '<span class="noimg">' + (x.form === 'link' ? '链接' : '卡片') + '</span>') +
+      '<div class="info"><div class="t"><b>' + esc(x.name) + '</b></div>' +
+      '<div class="t mn-hint">' + esc(mnTime(x.ts)) + ' · ' + esc((MP.names || {})[x.group_id] || mpGroupName(x.group_id)) + '</div>' +
+      '<div class="t mn-hint">' + esc(x.user_name || x.user_id) + (x.user_name ? '（' + esc(x.user_id) + '）' : '') + '</div>' +
+      '<div class="c">' + esc((x.title ? x.title + ' ' : '') + x.content).slice(0, 120) + '</div>' +
+      '<div class="t"' + (x.outcome === 'rule' ? ' style="color:var(--danger)"' : '') + ' title="' + escAttr(x.reason || '') + '">' + esc(x.outcome_label) + (x.outcome === 'rule' && x.reason ? '：' + esc(x.reason) : '') + '</div></div></div>';
+    x._new = false;
+    return html;
+  }).join('');
+}
+function mpOnClick(e) {
+  var b = e.target.closest('[data-mp-act]');
+  if (b) {
+    var it = MP.items[Number(b.getAttribute('data-i'))];
+    if (!it) return;
+    var act = b.getAttribute('data-mp-act');
+    if (act === 'detail') mpShowDetail(it);
+    else mpListSet(it, act).then(function(ok) { if (ok) mpLoadStats(); });
+    return;
+  }
+  var a = e.target.closest('[data-mp-allow]');
+  if (a) {
+    var key = MP.allow[Number(a.getAttribute('data-mp-allow'))];
+    if (key) mpListSet({ app_key: key, name: key }, 'unallow').then(function(ok) { if (ok) mpLoadStats(); });
+  }
 }
 
 /* ---- 码管理 ---- */
@@ -4245,33 +4522,6 @@ async function clSave() {
   var tpl = $('#clTpl').value.trim();
   if (tpl) values.code_limit_warn_template = tpl;
   if (await mnSaveConfig(values, '已保存')) csLoadStats();
-}
-
-async function mnAddRule(kind) {
-  var isKw = kind === 'kw';
-  var input = $(isKw ? '#kwValue' : '#wxValue');
-  var rule = isKw ? mnRuleBuild($('#kwType').value, input.value) : input.value.trim();
-  if (!rule) { toast('请输入规则内容', 'warning'); return; }
-  var typed = input.value;
-  var ok = await mnRuleOp(kind, function(cur) {
-    if (cur.indexOf(rule) >= 0) { toast('这条规则已经存在', 'warning'); return null; }
-    return cur.concat([rule]);
-  });
-  if (ok && input.value === typed) input.value = '';
-}
-
-function mnImportRules() {
-  showModal('批量导入关键词', '<p class="mn-hint" style="margin-bottom:8px">每行一条。普通文字 = 包含；以 = 开头 = 完全相同；以 re: 开头 = 正则。</p><textarea class="input-md" id="kwImportText" rows="10" placeholder="加微信&#10;=1&#10;re:v[x信]\\s*\\d{5,}"></textarea>',
-    '<button class="btn btn-ghost btn-sm" id="kwImportCancel">取消</button><button class="btn btn-primary btn-sm" id="kwImportOk">导入</button>');
-  bindIfExists('kwImportCancel', closeModal);
-  bindIfExists('kwImportOk', async function() {
-    var lines = $('#kwImportText').value.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(Boolean);
-    var ok = await mnRuleOp('kw', function(cur) {
-      lines.forEach(function(l) { if (cur.indexOf(l) < 0) cur.push(l); });
-      return cur;
-    });
-    if (ok) closeModal();
-  });
 }
 
 /* ---- 批量公告 ---- */
@@ -5462,6 +5712,16 @@ function bsRender(d) {
     return '<li><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(u.user_name || u.user_id) + (u.user_name ? ' <span class="sub">' + esc(u.user_id) + '</span>' : '') + '</div>' +
       '<div class="sub">' + u.codes + ' 个码 · ' + u.groups + ' 群' + (u.bad ? ' · 撤回 ' + u.bad : '') + '</div>' + meter(u.total, mu) + '</div><span class="cnt">' + bsNum(u.total) + '</span></li>';
   }).join('') : '<li class="bs-empty">这段时间没有人发码</li>';
+  var mp = d.miniapps;
+  if (mp) {
+    var mm = maxOf(mp.top || []);
+    $('#bsMpNote').textContent = '最近 ' + mp.hours + ' 小时共 ' + bsNum(mp.total) + ' 次、' + bsNum(mp.apps) + ' 个小程序' + (mp.ruled ? '，撤回 ' + bsNum(mp.ruled) + ' 次' : '');
+    $('#bsTopMp').innerHTML = (mp.top || []).length ? mp.top.map(function(a, i) {
+      return '<li><span class="n">' + (i + 1) + '</span>' + (a.thumb ? '<img alt="图标" src="' + escAttr(a.thumb) + '" />' : '<span class="noimg"></span>') +
+        '<div class="main"><div class="name">' + esc(a.name) + '</div><div class="sub">' + a.users + ' 人 · ' + a.groups + ' 群' + (a.ruled ? ' · 撤回 ' + a.ruled : '') + '</div>' + meter(a.total, mm) + '</div>' +
+        '<span class="cnt">' + bsNum(a.total) + '</span></li>';
+    }).join('') : '<li class="bs-empty">这段时间没有小程序</li>';
+  }
   $('#bsTopGroups').innerHTML = topGroups.length ? topGroups.map(function(g, i) {
     if (g.group_name) BS.names[g.group_id] = g.group_name;
     return '<li><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(g.group_name || g.group_id) + '</div>' +
@@ -5916,18 +6176,14 @@ async function mnDirFind() {
 
 function initMinimalPages() {
   bindIfExists('btnGuardRefresh', loadGuard);
-  bindIfExists('kwType', mnUpdateTypeHint, 'change');
-  bindIfExists('btnKwAdd', function() { mnAddRule('kw'); });
-  bindIfExists('kwValue', function(e) { if (e.key === 'Enter') mnAddRule('kw'); }, 'keydown');
-  bindIfExists('btnKwImport', mnImportRules);
-  bindIfExists('btnKwTest', function() { mnTestRules('kw'); });
-  bindIfExists('btnWxAdd', function() { mnAddRule('wx'); });
-  bindIfExists('wxValue', function(e) { if (e.key === 'Enter') mnAddRule('wx'); }, 'keydown');
-  bindIfExists('btnWxTest', function() { mnTestRules('wx'); });
   bindIfExists('wxDriver', mnToggleDriverRows, 'change');
   bindIfExists('ocrDriver', mnToggleDriverRows, 'change');
+  bindIfExists('btnRgNew', function() { rgEdit(null); });
+  bindIfExists('btnRgTest', rgTest);
+  var rgList = document.getElementById('rgList');
+  if (rgList) rgList.addEventListener('click', rgOnClick);
   bindIfExists('btnGuardSave', function() {
-    mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value, hit_notice_template: $('#guardNoticeTpl').value }, '已保存').then(function(ok) { if (ok) loadGuard(); });
+    mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value }, '已保存').then(function(ok) { if (ok) loadGuard(); });
   });
   bindIfExists('btnWxSave', function() {
     var values = { wxcode_driver: $('#wxDriver').value, wxcode_service_url: $('#wxUrl').value.trim(),
@@ -6081,6 +6337,19 @@ function initMinimalPages() {
   var tabCodes = document.getElementById('tab-codes');
   if (tabCodes) tabCodes.addEventListener('click', csOnClick);
   bindIfExists('btnCuFilter', function() { CU.page = 1; cuLoad(); });
+  bindIfExists('btnMpRefresh', function() { loadMiniapps(); });
+  bindIfExists('btnMpFilter', function() { MP.page = 1; mpLoadStats(); });
+  ['mpBy', 'mpSort', 'mpDaysSel', 'mpGroup'].forEach(function(id) { var el = document.getElementById(id); if (el) el.addEventListener('change', function() { MP.page = 1; mpLoadStats(); }); });
+  var mpKw = document.getElementById('mpKeyword');
+  if (mpKw) mpKw.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { MP.page = 1; mpLoadStats(); } });
+  var mpTab = document.getElementById('tab-miniapps');
+  if (mpTab) mpTab.addEventListener('click', mpOnClick);
+  bindIfExists('btnMpSave', function() {
+    var n = Number($('#mpDays').value);
+    if (!(n >= 1 && n <= 3650) || Math.floor(n) !== n) { toast('填 1–3650 的整数', 'warning'); return; }
+    mnSaveConfig({ miniapp_store_days: n }, '已保存').then(function(ok) { if (ok) mpLoadStats(); });
+  });
+  document.addEventListener('visibilitychange', function() { if (mpActive()) mpPoll(); });
   bindIfExists('btnBsFull', function() { bsSetFull(!document.body.classList.contains('bs-full')); });
   var bsHours = document.getElementById('bsHours');
   if (bsHours) bsHours.addEventListener('change', function() { bsLoadStats(); });

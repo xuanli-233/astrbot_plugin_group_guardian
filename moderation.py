@@ -179,6 +179,7 @@ class ModerationMixin(ImageAuditMixin):
 
         # 小程序 / 分享卡片（card_parse.py）：标题、来源、appid、链接并入文字参与关键词匹配，
         # 预览图送码识别 / OCR，实时日志里显示卡片内容
+        cards = []
         extract_cards = getattr(self, "_card_extract", None)
         if callable(extract_cards) and self._cfg("card_parse_enabled", True, group_id=group_id):
             try:
@@ -186,21 +187,58 @@ class ModerationMixin(ImageAuditMixin):
             except Exception as e:
                 logger.debug(f"[GroupMgr] 解析卡片失败: {e}")
                 cards = []
-            if cards:
-                card_lines = "\n".join(self._card_text(c) for c in cards)
-                text = (text + "\n" + card_lines) if text else card_lines
-                if self._cfg("card_scan_preview", True, group_id=group_id):
-                    previews = [c["preview"] for c in cards if c.get("preview")]
-                    for c in cards:
-                        c["_scan"] = bool(c.get("preview"))
-                    if previews:
-                        image_urls = self._select_image_urls(image_urls + previews)
-                live_detail(self._card_live_lines(cards))
 
-        # 关键词撤回 + 葵花码 / OCR 识别过滤（keyword_guard.py），命中即备份到指定群并撤回
+        # 小程序（miniapp.py）：卡片 + 文字里的 #小程序:// 链接。白名单里的小程序不参与关键词匹配
+        mp_items = []
+        mp_extract = getattr(self, "_mp_items", None)
+        if callable(mp_extract):
+            try:
+                mp_items = mp_extract(cards, text)
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 识别小程序失败: {e}")
+                mp_items = []
+            allowed_cards = set()
+            for item in mp_items:
+                if self._mp_is_allowed(item):
+                    item["_allowed"] = True
+                    if item.get("card") is not None:
+                        allowed_cards.add(id(item["card"]))
+                    elif item.get("raw"):
+                        text = text.replace(item["raw"], "")
+            if allowed_cards:
+                cards = [c for c in cards if id(c) not in allowed_cards]
+            if mp_items:
+                live_detail([f"小程序（{'卡片' if i['form'] == 'card' else '链接'}）：{i['name']}"
+                             + (f"（appid {i['appid']}）" if i.get("appid") else "")
+                             + (f" · {i['content'][:80]}" if i.get("content") else "")
+                             + ("；白名单，放行" if i.get("_allowed") else "") for i in mp_items])
+
+        if cards:
+            card_lines = "\n".join(self._card_text(c) for c in cards)
+            text = (text + "\n" + card_lines) if text else card_lines
+            if self._cfg("card_scan_preview", True, group_id=group_id):
+                previews = [c["preview"] for c in cards if c.get("preview")]
+                for c in cards:
+                    c["_scan"] = bool(c.get("preview"))
+                if previews:
+                    image_urls = self._select_image_urls(image_urls + previews)
+            live_detail(self._card_live_lines(cards))
+
+        # 小程序 + 关键词撤回 + 葵花码 / OCR 识别过滤（keyword_guard.py），命中即备份到指定群并撤回
         hit_guards = getattr(self, "_run_hit_guards", None)
         if callable(hit_guards):
-            handled, hit_notice = await hit_guards(event, group_id, user_id, user_name, text, image_urls)
+            self._last_hit_reason = ""
+            if mp_items:
+                handled, hit_notice = await hit_guards(event, group_id, user_id, user_name, text, image_urls,
+                                                       mp_items=mp_items)
+            else:
+                handled, hit_notice = await hit_guards(event, group_id, user_id, user_name, text, image_urls)
+            if mp_items:
+                try:
+                    self._mp_record(group_id, user_id, user_name, mp_items, "rule" if handled else "pass",
+                                    reason=getattr(self, "_last_hit_reason", "") if handled else "")
+                except Exception as e:
+                    logger.debug(f"[GroupMgr] 记录小程序失败: {e}")
             if handled:
                 if hit_notice:
                     yield event.plain_result(hit_notice)

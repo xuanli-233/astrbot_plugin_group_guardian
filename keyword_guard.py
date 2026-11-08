@@ -7,6 +7,9 @@
   3. 图片交给 OCR 识别器（local_ocr_driver，默认关），识别文字再匹配 keyword_rules。
 任一命中 → 先备份 / 转发到指定群 → 撤回 →（可选）禁言、群内提示 → 记审核日志 → 结束本条消息。
 
+有规则组（rule_groups.py）时：关键词 / 码内容规则 / 小程序都按规则组匹配，命中组的处理方式（禁言时长、群内提示）
+生效；上面的 keyword_rules、wxcode_regex_rules 只在没有规则组（单独测试本模块）时使用。
+
 规则写法（keyword_rules）：
   普通文本        包含即命中（不区分大小写）
   =文本           整条消息（去首尾空白）与之完全相同才命中
@@ -77,6 +80,12 @@ class KeywordGuardMixin:
         hit = cache.get(config_key)
         if hit and hit[0] == raw and hit[1] == regex_only:
             return hit[2]
+        compiled = self._compile_rule_list(raw, regex_only)
+        cache[config_key] = (raw, regex_only, compiled)
+        return compiled
+
+    def _compile_rule_list(self, raw, regex_only: bool = False) -> list:
+        """一组规则原文 → [(kind, 原始规则, 匹配值)]（规则组也用它）。"""
         compiled = []
         for rule in raw:
             if regex_only or rule.lower().startswith("re:"):
@@ -90,8 +99,24 @@ class KeywordGuardMixin:
                     compiled.append(("exact", rule, exact))
             else:
                 compiled.append(("contains", rule, rule.casefold()))
-        cache[config_key] = (raw, regex_only, compiled)
         return compiled
+
+    def _match_compiled(self, text: str, compiled: list, first: bool = True):
+        """在编译好的规则里匹配。first=True 返回第一条命中的规则原文（没有返回 None），否则返回全部命中。"""
+        hits = []
+        if not text:
+            return None if first else hits
+        text = str(text)[: self.MATCH_TEXT_MAX]
+        folded = text.casefold()
+        stripped = folded.strip()
+        for kind, rule, value in compiled:
+            if ((kind == "contains" and value in folded)
+                    or (kind == "exact" and stripped == value)
+                    or (kind == "regex" and value.search(text))):
+                if first:
+                    return rule
+                hits.append(rule)
+        return None if first else hits
 
     def _validate_rule(self, rule: str, regex_only: bool = False) -> str:
         """校验单条规则，返回错误说明；合法返回空串。WebUI 保存规则前调用。"""
@@ -181,8 +206,31 @@ class KeywordGuardMixin:
     async def _execute_hit_action(self, event: AstrMessageEvent, group_id: str, user_id: str,
                                   user_name: str, text: str, reason: str,
                                   kind: str = "keyword", extra_text: str = "",
-                                  image_urls: list = None) -> Optional[str]:
-        """备份 → 撤回 →（可选）禁言 → 记日志。返回要发到群里的提示（未开启提示时为 None）。"""
+                                  image_urls: list = None, action: Optional[dict] = None) -> Optional[str]:
+        """备份 → 撤回 →（可选）禁言 → 记日志。返回要发到群里的提示（未开启提示时为 None）。
+
+        action：命中的规则组的处理方式（rule_groups.py）；不传时用默认组的（码黑名单、码超限、解不出的码等），
+        没有规则组（单独测试本模块）时用原配置 hit_mute_enabled / hit_notice_enabled。
+        """
+        if action is None and callable(getattr(self, "_rg_default_action", None)):
+            try:
+                action = self._rg_default_action()
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 读取默认规则组失败: {e}")
+        if action:
+            mute_on = bool(action.get("mute"))
+            duration = int(action.get("mute_minutes", 30) or 30) * 60
+            notice_on = bool(action.get("notice"))
+            template = action.get("notice_template") or self._cfg_str(
+                "hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id)
+            if action.get("group") and kind != "code_limit":
+                reason = f"{reason}（{action['group']}）"
+        else:
+            mute_on = bool(self._cfg("hit_mute_enabled", False, group_id=group_id))
+            duration = self._cfg_int("moderation_ban_duration", 1800, group_id=group_id)
+            notice_on = bool(self._cfg("hit_notice_enabled", False, group_id=group_id))
+            template = self._cfg_str("hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id)
+        self._last_hit_reason = reason
         backed_up = await self._backup_message(
             event, group_id, user_id, user_name, reason, extra_text=extra_text, kind=kind,
         )
@@ -191,9 +239,7 @@ class KeywordGuardMixin:
         recalled = recall_result is True
 
         muted = False
-        if self._cfg("hit_mute_enabled", False, group_id=group_id) and \
-                not self._hit_throttled("mute", group_id, user_id):
-            duration = self._cfg_int("moderation_ban_duration", 1800, group_id=group_id)
+        if mute_on and not self._hit_throttled("mute", group_id, user_id):
             muted = await self._mute_member(event, duration)
             if muted and hasattr(self, "_schedule_unban"):
                 self._schedule_unban(group_id, user_id, duration)
@@ -207,7 +253,8 @@ class KeywordGuardMixin:
         live_set("hit", action, reason)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
         self._record_op(
-            {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回"}.get(kind, "关键词撤回"), source="自动", group_id=group_id,
+            {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回", "miniapp": "小程序撤回"}.get(kind, "关键词撤回"),
+            source="自动", group_id=group_id,
             target=user_id, reason=reason, result=action,
             detail=(f"{user_name}：" if user_name else "") + (text or "")[:200]
             + (f"｜{extra_text[:200]}" if extra_text else ""),
@@ -216,11 +263,7 @@ class KeywordGuardMixin:
         self._log_moderation(group_id, user_id, user_name, log_text, action, reason, image_urls or [])
         event.stop_event()
 
-        if recalled and self._cfg("hit_notice_enabled", False, group_id=group_id) and \
-                not self._hit_throttled("notice", group_id, user_id):
-            template = self._cfg_str(
-                "hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id,
-            )
+        if recalled and notice_on and not self._hit_throttled("notice", group_id, user_id):
             return (template.replace("{name}", user_name or user_id)
                     .replace("{uid}", user_id).replace("{group}", group_id))
         return None
@@ -228,16 +271,73 @@ class KeywordGuardMixin:
     # ------------------------------------------------------------------
     # 流水线入口
     # ------------------------------------------------------------------
+    def _hg_rule_groups(self) -> bool:
+        """是否使用规则组（rule_groups.py）。单独测试本模块、没有存储时用原配置。"""
+        active = getattr(self, "_rg_active", None)
+        return callable(active) and active()
+
+    def _hg_text(self, text: str, group_id: str = "") -> Tuple[Optional[str], Optional[dict]]:
+        """文字（消息 / OCR）→ (命中的规则, 处理方式)。"""
+        if self._hg_rule_groups():
+            group, rule = self._rg_match_text(text, group_id)
+            return rule, self._rg_action(group)
+        return self._match_rules(text, "keyword_rules"), None
+
+    def _hg_code(self, text: str, group_id: str = "") -> Tuple[Optional[str], Optional[dict]]:
+        """一个码的内容 → (命中说明, 处理方式)。白名单放行；已拉黑的码用默认组的处理方式（None）。"""
+        t = str(text or "").strip()
+        allowed = getattr(self, "_code_allowed", None)
+        if not t or (callable(allowed) and allowed(t)):
+            return None, None
+        blocked = getattr(self, "_code_block_set", None)
+        if callable(blocked) and t in blocked():
+            return "已拉黑的码", None
+        if self._hg_rule_groups():
+            group, rule = self._rg_match_code(t, group_id)
+            return rule, self._rg_action(group)
+        return self._match_rules(t, "wxcode_regex_rules", regex_only=True), None
+
+    def _hg_first_code(self, texts: List[str], joined: str, group_id: str = "") -> Tuple[Optional[str], Optional[dict]]:
+        """一条消息里所有码：逐个匹配，再把（白名单以外的）码拼起来整体匹配一次。"""
+        for t in texts:
+            rule, action = self._hg_code(t, group_id)
+            if rule:
+                return rule, action
+        if not joined:
+            return None, None
+        if self._hg_rule_groups():
+            group, rule = self._rg_match_code(joined, group_id)
+            return rule, self._rg_action(group)
+        return self._match_rules(joined, "wxcode_regex_rules", regex_only=True), None
+
     async def _run_hit_guards(self, event: AstrMessageEvent, group_id: str, user_id: str,
-                              user_name: str, text: str, image_urls: list) -> Tuple[bool, Optional[str]]:
-        """依次执行关键词、葵花码、OCR 三道检查。返回 (是否已处理, 群内提示)。"""
+                              user_name: str, text: str, image_urls: list,
+                              mp_items: Optional[list] = None) -> Tuple[bool, Optional[str]]:
+        """依次执行小程序、关键词、葵花码、OCR 检查。返回 (是否已处理, 群内提示)。
+
+        mp_items：这条消息里的小程序（miniapp.py，白名单的已标 _allowed），按规则组的「小程序」条目匹配。
+        """
+        if mp_items and self._hg_rule_groups():
+            live_stage("检查小程序")
+            for item in mp_items:
+                if item.get("_allowed"):
+                    continue
+                group, entry = self._rg_match_app(item, group_id)
+                if group:
+                    label = "小程序卡片" if item.get("form") == "card" else "小程序链接"
+                    notice = await self._execute_hit_action(
+                        event, group_id, user_id, user_name, text, f"{label}: {item.get('name') or entry}（规则 {entry}）",
+                        kind="miniapp", image_urls=image_urls, action=self._rg_action(group),
+                    )
+                    return True, notice
+
         if self._cfg("keyword_guard_enabled", True, group_id=group_id):
             live_stage("检查关键词")
-            rule = self._match_rules(text, "keyword_rules")
+            rule, action = self._hg_text(text, group_id)
             if rule:
                 notice = await self._execute_hit_action(
                     event, group_id, user_id, user_name, text, f"关键词: {rule}",
-                    kind="keyword", image_urls=image_urls,
+                    kind="keyword", image_urls=image_urls, action=action,
                 )
                 return True, notice
 
@@ -252,9 +352,8 @@ class KeywordGuardMixin:
                 # 两阶段：定位服务 → 扩大框裁剪 → 解码服务（code_pipeline.py）
                 # 命中即停：解出一个码就匹配规则，命中后不再解码剩下的码 / 图，尽快撤回
                 # 命中 = 已拉黑的码（完全一致）或码内容正则规则（code_board._code_rule_hit）
-                hit_rule = getattr(self, "_code_rule_hit", None)
-                if not callable(hit_rule):
-                    hit_rule = lambda t: self._match_rules(t, "wxcode_regex_rules", regex_only=True)  # noqa: E731
+                def hit_rule(t):
+                    return self._hg_code(t, group_id)[0]
                 # 二维码看板 / 码记录（保存图片）要用到原图字节
                 keep_images = self._cfg("code_board_enabled", True) or self._cfg("code_store_enabled", True)
                 collected = [] if keep_images else None
@@ -268,8 +367,7 @@ class KeywordGuardMixin:
                 live_lines = getattr(self, "_code_live_lines", None)
                 if callable(live_lines):
                     live_detail(live_lines(scans, hit_rule=hit_rule))
-                rule = next((r for r in (hit_rule(t) for t in texts) if r), None) or \
-                    self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                rule, code_action = self._hg_first_code(texts, joined, group_id)
                 reason = f"码内容规则: {rule}" if rule else ""
                 if not rule and self._code_undecoded(scans) and \
                         self._cfg_str("code_undecoded_action", "pass", group_id=group_id) == "recall":
@@ -280,6 +378,7 @@ class KeywordGuardMixin:
                     notice = await self._execute_hit_action(
                         event, group_id, user_id, user_name, text or "[图片]", reason,
                         kind="wxcode", extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
+                        action=code_action,
                     )
                     log_rule = getattr(self, "_cs_log_rule", None)
                     if callable(log_rule) and texts:
@@ -302,18 +401,15 @@ class KeywordGuardMixin:
                 texts = await self._recognize_images(image_urls, "wxcode")
                 allowed = getattr(self, "_code_allowed", None)
                 joined = "\n".join(t for t in texts if not (callable(allowed) and allowed(t)))
-                hit_rule = getattr(self, "_code_rule_hit", None)
-                if not callable(hit_rule):
-                    hit_rule = lambda t: self._match_rules(t, "wxcode_regex_rules", regex_only=True)  # noqa: E731
-                per_text = [(t, hit_rule(t)) for t in texts]
-                rule = next((r for _t, r in per_text if r), None) or \
-                    self._match_rules(joined, "wxcode_regex_rules", regex_only=True)
+                per_text = [(t, self._hg_code(t, group_id)[0]) for t in texts]
+                rule, code_action = self._hg_first_code(texts, joined, group_id)
                 live_detail([f"码内容：{t}" + (f" ← 命中规则 {r}" if r else "") for t, r in per_text]
                             or ["识别模块未返回码内容"])
                 if rule:
                     notice = await self._execute_hit_action(
                         event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
                         kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
+                        action=code_action,
                     )
                     log_rule = getattr(self, "_cs_log_rule", None)
                     if callable(log_rule):
@@ -330,7 +426,7 @@ class KeywordGuardMixin:
             live_stage("OCR 识别图片文字")
             texts = await self._recognize_images(image_urls, "local_ocr")
             joined = "\n".join(texts)
-            rule = self._match_rules(joined, "keyword_rules")
+            rule, ocr_action = self._hg_text(joined, group_id)
             ocr_text = " ".join(t.strip() for t in texts if t and t.strip())
             live_detail([f"OCR 文字：{ocr_text[:150]}" + ("…" if len(ocr_text) > 150 else "")
                          + (f" ← 命中规则 {rule}" if rule else "")] if ocr_text else ["OCR 未识别到文字"])
@@ -338,6 +434,7 @@ class KeywordGuardMixin:
                 notice = await self._execute_hit_action(
                     event, group_id, user_id, user_name, text or "[图片]", f"图片文字关键词: {rule}",
                     kind="keyword", extra_text=f"OCR 内容：\n{joined}", image_urls=image_urls,
+                    action=ocr_action,
                 )
                 return True, notice
         return False, None

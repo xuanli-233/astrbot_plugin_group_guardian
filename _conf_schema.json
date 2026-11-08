@@ -404,6 +404,18 @@
         "default": true,
         "hint": "本地记录不足时（如插件刚重启）后台调用一次 get_group_msg_history（最近 100 条）补上"
     },
+    "miniapp_store_enabled": {
+        "description": "小程序：记录出现情况",
+        "type": "bool",
+        "default": true,
+        "hint": "群里每次出现小程序（卡片或 #小程序:// 链接）都记一行：时间、群、发送者、哪个小程序、内容、是否被撤回；WebUI「小程序」页统计和看板用"
+    },
+    "miniapp_store_days": {
+        "description": "小程序：记录保留天数",
+        "type": "int",
+        "default": 90,
+        "hint": "范围 1–3650；小程序名称和缩略图不清理"
+    },
     "log_image_save_enabled": {
         "description": "违规记录：保存图片",
         "type": "bool",

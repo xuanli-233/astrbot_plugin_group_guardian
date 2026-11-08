@@ -133,6 +133,9 @@ class CodeBoardMixin:
             return None
         if t in self._code_block_set():
             return "已拉黑的码"
+        hg_code = getattr(self, "_hg_code", None)
+        if callable(hg_code):  # 规则组（rule_groups.py）
+            return hg_code(t)[0]
         return self._match_rules(t, "wxcode_regex_rules", regex_only=True)
 
     def _code_set_in_list(self, kind: str, text: str, on: bool, source: str = "WebUI", operator: str = "") -> str:
