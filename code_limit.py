@@ -591,7 +591,15 @@ class CodeLimitMixin:
                 images.append({"ts": r["ts"], "group_id": r["group_id"], "user_id": r["user_id"],
                                "orig": self._cs_read_image(r["img_hash"]), "crop": self._cs_read_image(r["crop_hash"])})
         text = rows[0]["code_text"] if rows else ""
-        return {"code_hash": code_hash, "text": text, "sends": sends, "images": images,
+        if not text:
+            with self._storage._connect() as conn:  # 发送记录已过期：从长期累计里找回内容
+                r = conn.execute("SELECT MAX(code_text) AS t FROM code_user_stats WHERE code_hash=?",
+                                 (str(code_hash),)).fetchone()
+            text = (r["t"] if r else "") or ""
+        allow = getattr(self, "_code_allowed", lambda _t: False)
+        block = getattr(self, "_code_block_set", lambda: set())()
+        state = "" if not text else ("allow" if allow(text) else ("block" if text in block else ""))
+        return {"code_hash": code_hash, "text": text, "sends": sends, "images": images, "state": state,
                 "ttl_hours": self._cs_ttl_hours()}
 
     # ------------------------------------------------------------------

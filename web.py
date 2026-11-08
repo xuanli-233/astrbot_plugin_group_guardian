@@ -717,6 +717,8 @@ class WebMixin:
                 ("/minimal/outbox", self._web_minimal_outbox, ["POST"], "上传待发送的图片 / 文件"),
                 ("/minimal/bulk/send", self._web_minimal_bulk_send, ["POST"], "批量发言"),
                 ("/minimal/bulk/upload", self._web_minimal_bulk_upload, ["POST"], "批量传群文件"),
+                ("/minimal/member/search", self._web_minimal_member_search, ["GET"], "群成员查找"),
+                ("/minimal/member/profile", self._web_minimal_member_profile, ["GET"], "群成员档案"),
                 ("/minimal/codes/lists", self._web_minimal_codes_lists, ["GET"], "码白名单 / 黑名单"),
                 ("/minimal/codes/list", self._web_minimal_codes_list_set, ["POST"], "码加入 / 移出白名单或黑名单"),
                 ("/minimal/leavelog/image", self._web_minimal_leavelog_image, ["GET"], "退群记录里的图片"),

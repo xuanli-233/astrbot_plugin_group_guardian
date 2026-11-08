@@ -486,6 +486,39 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mp-item .c{word-break:break-all;color:var(--text-secondary)}
     .mn-table .toggle{display:inline-block;vertical-align:middle}
     #cmdTable th{white-space:nowrap}
+    /* 左右分栏：左边列表、右边详情（右栏跟随滚动） */
+    .split{display:grid;grid-template-columns:minmax(280px,min(400px,34%)) minmax(0,1fr);gap:16px;align-items:start}
+    .split.wide-left{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+    .split-right{position:sticky;top:0}
+    .split-list{max-height:calc(100vh - 230px);overflow:auto}
+    .split-item{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;min-width:0}
+    .split-item:hover{background:var(--info-light)}
+    .split-item.on{background:var(--primary-light);box-shadow:inset 3px 0 0 var(--primary)}
+    .split-item .si-main{min-width:0;flex:1}
+    .split-item .si-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .split-item .si-sub{font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .si-thumb{width:40px;height:40px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0;border:1px solid var(--border)}
+    .si-noimg{width:40px;height:40px;border:1px dashed var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)}
+    .split-detail-body{max-height:calc(100vh - 210px);overflow:auto}
+    .split-empty{padding:40px 16px;text-align:center;color:var(--text-muted);font-size:13px}
+    .subtabs{display:flex;gap:4px;flex-wrap:wrap;padding:8px 18px 0;border-bottom:1px solid var(--border)}
+    .subtab{border:none;background:none;padding:8px 10px;font-size:13px;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+    .subtab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+    .subtab .n{font-size:11px;color:var(--text-muted);margin-left:3px}
+    a.mbr{color:inherit;text-decoration:none;border-bottom:1px dashed var(--text-muted);cursor:pointer}
+    a.mbr:hover{color:var(--primary);border-bottom-color:var(--primary)}
+    .rg-rows{display:flex;flex-direction:column;gap:6px}
+    .rg-row{display:flex;gap:6px;align-items:center}
+    .rg-row select{width:120px;flex:none}
+    .rg-row input.v{flex:1;min-width:0}
+    .rg-sec{padding:12px 18px;border-bottom:1px solid var(--border)}
+    .rg-sec:last-child{border-bottom:none}
+    .rg-sec h3{font-size:13px;font-weight:600;margin:0 0 6px;display:flex;align-items:baseline;gap:4px 8px;flex-wrap:wrap;white-space:nowrap}
+    .rg-sec h3 .n{white-space:normal}
+    .rg-sec h3 .n{font-weight:400;color:var(--text-muted);font-size:12px}
+    .rg-presets{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+    .rg-presets .btn{font-size:12px;padding:3px 8px}
+    .rg-dirty{color:var(--warning);font-size:12px;font-weight:500}
     .mn-chip{display:inline-block;font-size:12px;line-height:18px;padding:0 6px;margin:2px;border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);background:var(--surface)}
     .cb-code{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
     .cb-code:first-child{border-top:none}
@@ -584,54 +617,57 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .lv-detail.bad{color:var(--warning)}
     .lv-slow{color:var(--warning)}
 
-/* ---- 码大屏：固定深色，适合挂在第二块屏幕上 ---- */
-#tab-bigscreen{--bs-bg:#0b1220;--bs-surface:#111a2e;--bs-border:#22304d;--bs-text:#e6edf3;--bs-muted:#8b9bb4;
-  --bs-pass:#3b8eea;--bs-bad:#f85149;--bs-ok:#3fb950;background:var(--bs-bg);color:var(--bs-text);
-  margin:-24px -32px;padding:20px 24px;min-height:100vh;box-sizing:border-box}
+/* ---- 码大屏：跟随站点浅色 / 深色主题 ---- */
+#tab-bigscreen{--bs-surface:var(--surface);--bs-border:var(--border);--bs-text:var(--text-primary);--bs-muted:var(--text-secondary);
+  --bs-pass:var(--primary);--bs-bad:var(--danger);--bs-ok:var(--success)}
 #tab-bigscreen.active{display:flex;flex-direction:column;gap:14px}
 .bs-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.bs-head h1{font-size:24px;margin:0;color:var(--bs-text);letter-spacing:1px}
-.bs-clock{font-size:20px;font-variant-numeric:tabular-nums;color:var(--bs-muted)}
+.bs-head h1{font-size:20px;margin:0;font-weight:600}
+.bs-clock{font-size:15px;font-variant-numeric:tabular-nums;color:var(--bs-muted)}
 .bs-head .bs-tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.bs-head select,.bs-head button{background:var(--bs-surface);color:var(--bs-text);border:1px solid var(--bs-border);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
-.bs-head button:hover{border-color:var(--bs-pass)}
 .bs-note{font-size:12px;color:var(--bs-muted)}
+#bsNotice{background:var(--warning-light);border:1px solid var(--warning);color:var(--text-primary);border-radius:var(--radius);padding:8px 12px}
 .bs-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.bs-kpi{background:var(--bs-surface);border:1px solid var(--bs-border);border-radius:8px;padding:12px 14px}
+.bs-kpi{background:var(--bs-surface);border:1px solid var(--bs-border);border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.bs-kpi:hover{border-color:var(--primary);box-shadow:var(--shadow-lg)}
 .bs-kpi .k{font-size:13px;color:var(--bs-muted)}
-.bs-kpi .v{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:4px}
+.bs-kpi .v{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:4px}
 .bs-kpi .s{font-size:12px;color:var(--bs-muted)}
 .bs-kpi.bad .v{color:var(--bs-bad)}
-.bs-panel{background:var(--bs-surface);border:1px solid var(--bs-border);border-radius:8px;padding:12px 14px;min-width:0}
-.bs-panel h2{font-size:15px;margin:0 0 10px;color:var(--bs-text);display:flex;align-items:center;gap:10px}
+.bs-panel{background:var(--bs-surface);border:1px solid var(--bs-border);border-radius:var(--radius-lg);padding:12px 14px;min-width:0}
+.bs-panel h2{font-size:14px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .bs-panel h2 .bs-note{font-weight:400}
+.bs-panel h2 .bs-more{margin-left:auto;font-size:12px;font-weight:400}
 .bs-legend{display:flex;gap:14px;font-size:12px;color:var(--bs-muted);margin-left:auto}
 .bs-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .bs-chart{position:relative;height:150px;display:flex;align-items:flex-end;gap:2px;padding-bottom:18px}
 .bs-bar{flex:1;display:flex;flex-direction:column-reverse;gap:2px;height:100%;justify-content:flex-start;position:relative;cursor:default;min-width:3px}
-.bs-bar .p{background:var(--bs-pass);border-radius:0}
-.bs-bar .b{background:var(--bs-bad);border-radius:4px 4px 0 0}
-.bs-bar .p.top{border-radius:4px 4px 0 0}
-.bs-bar:hover{background:rgba(255,255,255,.04)}
+.bs-bar .p{background:var(--bs-pass);opacity:.75}
+.bs-bar .b{background:var(--bs-bad);border-radius:3px 3px 0 0}
+.bs-bar .p.top{border-radius:3px 3px 0 0}
+.bs-bar:hover{background:var(--info-light)}
 .bs-bar .t{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--bs-muted);white-space:nowrap}
-.bs-tip{position:fixed;z-index:9999;background:#1c2740;border:1px solid var(--bs-border);color:var(--bs-text);border-radius:6px;padding:6px 10px;font-size:12px;pointer-events:none;display:none;white-space:nowrap}
+.bs-tip{position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-lg);color:var(--text-primary);border-radius:6px;padding:6px 10px;font-size:12px;pointer-events:none;display:none;white-space:nowrap}
 .bs-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.bs-rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.bs-rank li{display:flex;align-items:center;gap:10px;min-width:0;font-size:13px}
+.bs-rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.bs-rank li{display:flex;align-items:center;gap:10px;min-width:0;font-size:13px;padding:5px 6px;border-radius:6px}
+.bs-rank li[data-bs-go]{cursor:pointer}
+.bs-rank li[data-bs-go]:hover{background:var(--primary-light)}
 .bs-rank .n{width:20px;text-align:right;color:var(--bs-muted);font-variant-numeric:tabular-nums;flex-shrink:0}
 .bs-rank .main{flex:1;min-width:0}
 .bs-rank .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bs-rank .sub{font-size:11px;color:var(--bs-muted)}
-.bs-rank .meter{height:4px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:3px;overflow:hidden}
+.bs-rank .meter{height:4px;background:var(--border);border-radius:2px;margin-top:3px;overflow:hidden}
 .bs-rank .meter span{display:block;height:100%;background:var(--bs-pass);border-radius:2px}
 .bs-rank .cnt{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0}
-.bs-rank img{width:36px;height:36px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0}
+.bs-rank img{width:36px;height:36px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:4px;flex-shrink:0}
 .bs-rank .noimg{width:36px;height:36px;border:1px dashed var(--bs-border);border-radius:4px;flex-shrink:0}
 .bs-tag{font-size:11px;padding:0 5px;border-radius:3px;margin-left:4px;border:1px solid currentColor}
 .bs-tag.block{color:var(--bs-bad)}.bs-tag.allow{color:var(--bs-ok)}
-.bs-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-.bs-card{border:1px solid var(--bs-border);border-radius:8px;padding:8px;display:flex;gap:8px;min-width:0;background:rgba(255,255,255,.02)}
-.bs-card.hit{border-color:var(--bs-bad);background:rgba(248,81,73,.08)}
+.bs-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.bs-card{border:1px solid var(--bs-border);border-radius:8px;padding:8px;display:flex;gap:8px;min-width:0;background:var(--bg);cursor:pointer}
+.bs-card:hover{border-color:var(--primary)}
+.bs-card.hit{border-color:var(--bs-bad);background:var(--danger-light)}
 .bs-card.new{animation:bsFlash 1.6s ease-out}
 @keyframes bsFlash{0%{box-shadow:0 0 0 3px var(--bs-pass)}100%{box-shadow:0 0 0 0 transparent}}
 .bs-card img{width:64px;height:64px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0}
@@ -642,8 +678,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .bs-empty{color:var(--bs-muted);font-size:13px;padding:16px 0;text-align:center}
 body.bs-full .sidebar,body.bs-full .mobile-nav,body.bs-full .taskbar{display:none!important}
 body.bs-full .main-content{padding:0}
-body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
-@media (max-width:900px){.bs-cols{grid-template-columns:1fr}#tab-bigscreen{margin:-16px;padding:16px}.bs-kpi .v{font-size:26px}}
+body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border-box;background:var(--bg)}
+@media (max-width:900px){.bs-cols{grid-template-columns:1fr}.bs-kpi .v{font-size:24px}}
   </style>
 </head>
 <body>
@@ -690,6 +726,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           <span>违规记录</span>
         </a>
         <div class="nav-section">成员管理</div>
+        <a class="nav-item" data-tab="member">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <span>群成员查找</span>
+        </a>
         <a class="nav-item" data-tab="kick">
 
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 8c0-2.21-1.79-4-4-4S6 5.79 6 8s1.79 4 4 4 4-1.79 4-4zm3 2v2h6v-2h-6zM2 18v2h16v-2c0-2.66-5.33-4-8-4s-8 1.34-8 4z"/></svg>
@@ -864,14 +904,21 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
 
       <div class="tab-panel" id="tab-records">
         <div class="page-header"><h1>违规记录</h1></div>
-        <p class="mn-intro">被撤回的消息都记在这里：上面按人汇总（被撤回几次、在哪些群），下面是逐条的审核日志，点「查看」看完整内容和保存下来的图片。可以导出 CSV。</p>
-        <div class="card">
-          <div class="card-header"><h2>被撤回用户</h2><div class="header-actions">
-            <button class="btn btn-ghost btn-sm" id="btnRefreshUsers">刷新</button>
-            <button class="btn btn-danger btn-sm" id="btnBatchDelete">批量删除</button>
-            <button class="btn btn-ghost btn-sm" id="btnExport">导出CSV</button>
-          </div></div>
-          <div class="user-container" id="userContainer"><p class="empty">暂无数据</p></div>
+        <p class="mn-intro">被撤回的消息都记在这里：左边按人汇总（被撤回几次、在哪些群），点一个人在右边看他每条被撤回的消息；最下面是逐条的审核日志，点「查看」看完整内容和保存下来的图片。可以导出 CSV。</p>
+        <div class="split" id="vrSplit">
+          <div class="card">
+            <div class="card-header"><h2>被撤回用户</h2><div class="header-actions">
+              <button class="btn btn-ghost btn-sm" id="btnRefreshUsers">刷新</button>
+              <button class="btn btn-danger btn-sm" id="btnBatchDelete" title="删除勾选的人的全部记录">批量删除</button>
+              <button class="btn btn-ghost btn-sm" id="btnExport">导出CSV</button>
+            </div></div>
+            <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="gap:6px">
+              <input class="input-sm" id="vrKeyword" placeholder="QQ号 / 昵称 / 群号" style="flex:1" />
+              <label class="mn-hint" style="white-space:nowrap"><input type="checkbox" id="vrCheckAll" /> 全选</label>
+            </div></div>
+            <div class="split-list" id="userContainer"><div class="split-empty">暂无数据</div></div>
+          </div>
+          <div class="split-right"><div class="card" id="vrDetail"><div class="split-empty">在左边点一个人：看他被撤回的每条消息</div></div></div>
         </div>
         <div class="card">
           <div class="card-header"><h2>审核日志</h2><button class="btn btn-ghost btn-sm" id="btnRefreshLogs">刷新</button></div>
@@ -1008,13 +1055,18 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       <div class="tab-panel" id="tab-guard">
         <div class="page-header"><h1>关键词与识别</h1><button class="btn btn-ghost btn-sm" id="btnGuardRefresh">刷新</button></div>
         <p class="mn-intro">群消息命中下面<strong>你自己的规则组</strong>时：先把原消息备份到备份群，再撤回，按组的设置禁言、提示。原版插件自带的词库与 AI 审核已删除。</p>
+        <div class="split" id="rgSplit">
+          <div class="card">
+            <div class="card-header"><h2>撤回 / 禁言规则组</h2><button class="btn btn-primary btn-sm" id="btnRgNew">新建</button></div>
+            <p class="mn-hint" style="padding:8px 18px 0">从上往下检查，第一个命中的组决定怎么处理；「默认组」最后检查，码黑名单 / 超限 / 解不出的码也用它的处理方式。</p>
+            <div class="split-list" id="rgList"><div class="split-empty">加载中...</div></div>
+          </div>
+          <div class="split-right"><div class="card" id="rgEditor"><div class="split-empty">在左边选一个规则组</div></div></div>
+        </div>
         <div class="card">
-          <div class="card-header"><h2>撤回 / 禁言规则组</h2>
-            <div class="header-actions"><button class="btn btn-primary btn-sm" id="btnRgNew">新建规则组</button></div></div>
+          <div class="card-header"><h2>测试规则组</h2><span class="rules-subtle">用已保存的规则测试，看会命中哪个组的哪条规则</span></div>
           <div class="mn-body">
-            <p class="mn-hint" style="margin-bottom:8px">每个组有自己的关键词、码内容规则、小程序，以及命中后的处理（撤回 + 可选禁言、群内提示），可以只对部分群生效。从上往下检查，第一个命中的组决定怎么处理；「默认组」总是最后检查，码黑名单、码发送超限、解不出的码也按它的处理方式。</p>
-            <div class="rg-list" id="rgList"><p class="empty">加载中...</p></div>
-            <div class="mn-row" style="margin-top:14px"><label>测试：</label><select class="input-sm" id="rgTestGroup" style="width:220px"></select></div>
+            <div class="mn-row"><label>在哪个群：</label><select class="input-sm" id="rgTestGroup" style="width:240px"></select></div>
             <textarea class="input-md" id="rgTestText" rows="2" placeholder="一段群消息（可以带 #小程序://名称/内容）"></textarea>
             <div class="mn-row" style="margin-top:6px"><input class="input-sm" id="rgTestCode" style="flex:1" placeholder="码内容（可选），例如 https://weixin.qq.com/g/xxx" />
               <input class="input-sm" id="rgTestApp" style="width:180px" placeholder="小程序名或 appid（可选）" />
@@ -1089,6 +1141,33 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       <div class="tab-panel" id="tab-codes">
         <div class="page-header"><h1>码管理</h1><button class="btn btn-ghost btn-sm" id="btnCodesRefresh">刷新</button></div>
         <p class="mn-intro">群图片里解出的二维码 / 小程序码 / 葵花码都在这里：每个码发了多少次、在哪些群、谁发的、怎么处理的，以及保存下来的原图和裁剪图。可以一键加白名单（一律放行）或拉黑（一律撤回）。识别本身在「关键词与识别」里配置。</p>
+        <div class="split" id="csSplit">
+          <div class="card">
+            <div class="card-header"><h2>码统计</h2><span class="rules-subtle" id="csCount"></span></div>
+            <div class="subtabs"><button type="button" class="subtab on" data-cs-view="code">按码</button><button type="button" class="subtab" data-cs-view="user">按人（长期累计）</button></div>
+            <div id="csViewCode">
+              <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
+                <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
+                <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
+                <select class="input-sm" id="csHours" style="width:180px"></select>
+                <select class="input-sm" id="csGroup" style="width:180px"><option value="">所有群</option></select>
+                <input class="input-sm" id="csKeyword" placeholder="码内容 / QQ号 / 昵称" style="flex:1;min-width:150px" />
+              </div></div>
+              <div class="split-list" id="csTable"><div class="split-empty">加载中...</div></div>
+              <div class="mn-body" style="padding-top:6px" id="csPager"></div>
+            </div>
+            <div id="csViewUser" style="display:none">
+              <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
+                <select class="input-sm" id="cuSort" style="width:170px" title="排列顺序"><option value="codes">按发过的码数（多→少）</option><option value="total">按发码总次数（多→少）</option><option value="bad">按被撤回次数（多→少）</option><option value="recent">按最近发码</option></select>
+                <select class="input-sm" id="cuGroup" style="width:180px"><option value="">所有群</option></select>
+                <input class="input-sm" id="cuKeyword" placeholder="QQ号 / 昵称 / 码内容" style="flex:1;min-width:150px" />
+              </div></div>
+              <div class="split-list" id="cuTable"><div class="split-empty">加载中...</div></div>
+              <div class="mn-body" style="padding-top:6px" id="cuPager"></div>
+            </div>
+          </div>
+          <div class="split-right"><div class="card" id="csDetail"><div class="split-empty">在左边点一个码（或切到「按人」点一个人），详情显示在这里</div></div></div>
+        </div>
         <div class="mn-grid">
           <div class="card">
             <div class="card-header"><h2>发送次数限制</h2><span class="rules-subtle">没命中规则的码，一段时间内发太多次也撤回</span></div>
@@ -1116,28 +1195,6 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
             </div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-header"><h2>码统计</h2>
-            <div class="header-actions">
-              <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
-              <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
-              <select class="input-sm" id="csHours" style="width:150px"></select>
-              <select class="input-sm" id="csGroup" style="width:180px"><option value="">所有群</option></select>
-              <input class="input-sm" id="csKeyword" placeholder="码内容 / QQ号 / 昵称" style="width:170px" />
-            </div></div>
-          <div class="log-container" id="csTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0" id="csPager"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h2>按人统计</h2><span class="rules-subtle">长期累计，不随码记录的保留时长清理</span>
-            <div class="header-actions">
-              <select class="input-sm" id="cuSort" style="width:170px" title="排列顺序"><option value="codes">按发过的码数（多→少）</option><option value="total">按发码总次数（多→少）</option><option value="bad">按被撤回次数（多→少）</option><option value="recent">按最近发码</option></select>
-              <select class="input-sm" id="cuGroup" style="width:180px"><option value="">所有群</option></select>
-              <input class="input-sm" id="cuKeyword" placeholder="QQ号 / 昵称 / 码内容" style="width:170px" />
-            </div></div>
-          <div class="log-container" id="cuTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0" id="cuPager"></div>
-        </div>
         <div class="mn-grid">
           <div class="card">
             <div class="card-header"><h2>白名单</h2><span class="rules-subtle" id="csAllowCount"></span></div>
@@ -1163,10 +1220,13 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           <h1>码监控大屏</h1><span class="bs-clock" id="bsClock"></span>
           <div class="bs-tools">
             <span class="bs-note" id="bsUpdated"></span>
-            <select id="bsHours" title="统计时段"><option value="1">最近 1 小时</option><option value="6">最近 6 小时</option><option value="24" selected>最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select>
-            <button id="btnBsFull" type="button">全屏</button>
+            <select class="input-sm" id="bsHours" title="统计时段" style="width:130px"><option value="1">最近 1 小时</option><option value="6">最近 6 小时</option><option value="24" selected>最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select>
+            <select class="input-sm" id="bsTop" title="排行显示几名" style="width:100px"><option value="10" selected>前 10 名</option><option value="20">前 20 名</option><option value="50">前 50 名</option></select>
+            <button class="btn btn-ghost btn-sm" id="btnBsRefresh" type="button">刷新</button>
+            <button class="btn btn-outline btn-sm" id="btnBsFull" type="button">全屏</button>
           </div>
         </div>
+        <p class="mn-intro" style="margin:0">所有数字、排行和卡片都能点：码 → 码管理里的详情（发送记录、原图、拉黑 / 白名单）；人 → 群成员档案（在哪些群、发过什么、可以踢出 / 拉黑）；群 → 码管理按群筛选；小程序 → 小程序详情。</p>
         <div class="bs-note" id="bsNotice" style="display:none"></div>
         <div class="bs-kpis" id="bsKpis"></div>
         <div class="bs-panel">
@@ -1175,13 +1235,14 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
           <div class="bs-chart" id="bsChart" role="img" aria-label="每小时发码次数"></div>
         </div>
         <div class="bs-cols">
-          <div class="bs-panel"><h2>发得最多的码</h2><ul class="bs-rank" id="bsTopCodes"></ul></div>
-          <div class="bs-panel"><h2>发码最多的人</h2><ul class="bs-rank" id="bsTopUsers"></ul></div>
+          <div class="bs-panel"><h2>发得最多的码 <a href="javascript:void(0)" class="bs-more" data-bs-go="codes">全部 →</a></h2><ul class="bs-rank" id="bsTopCodes"></ul></div>
+          <div class="bs-panel"><h2>发码最多的人 <a href="javascript:void(0)" class="bs-more" data-bs-go="users">全部 →</a></h2><ul class="bs-rank" id="bsTopUsers"></ul></div>
           <div class="bs-panel"><h2>发码最多的群</h2><ul class="bs-rank" id="bsTopGroups"></ul></div>
         </div>
-        <div class="bs-panel"><h2>出现最多的小程序 <span class="bs-note" id="bsMpNote"></span></h2><ul class="bs-rank" id="bsTopMp" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 16px"></ul></div>
+        <div class="bs-panel"><h2>出现最多的小程序 <span class="bs-note" id="bsMpNote"></span><a href="javascript:void(0)" class="bs-more" data-bs-go="miniapps">全部 →</a></h2><ul class="bs-rank" id="bsTopMp" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 16px"></ul></div>
         <div class="bs-panel">
-          <h2>实时识别 <span class="bs-note">最新在前，每 3 秒更新；红框 = 命中处理（已撤回）</span></h2>
+          <h2>实时识别 <span class="bs-note">最新在前，每 3 秒更新；红框 = 命中处理（已撤回）；点卡片看这个码的详情</span>
+            <select class="input-sm bs-more" id="bsFeedFilter" style="width:120px"><option value="">全部</option><option value="hit">只看已撤回</option><option value="pass">只看放行</option></select></h2>
           <div class="bs-feed" id="bsFeed"></div>
         </div>
         <div class="bs-tip" id="bsTip"></div>
@@ -1190,6 +1251,25 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       <div class="tab-panel" id="tab-miniapps">
         <div class="page-header"><h1>小程序</h1><button class="btn btn-ghost btn-sm" id="btnMpRefresh">刷新</button></div>
         <p class="mn-intro">群里出现的小程序都在这里（「微店买买」这类平台小程序里有很多店铺 / 商品，可以在详情里「按这个标题拉黑」只拦部分内容）：卡片（如「[微信小程序]我正在[刺猬云印]…」）和链接（<code>#小程序://刺猬云印/N937Lf7Xrcnhc3r</code>）。看每个小程序出现了多少次、谁发的、在哪些群、发的什么内容。「拉黑」加入默认规则组的小程序列表（命中撤回，可在「关键词与识别 → 规则组」里改到别的组）；「加白名单」一律放行。</p>
+        <div class="split" id="mpSplit">
+          <div class="card">
+            <div class="card-header"><h2>小程序统计</h2><span class="rules-subtle" id="mpCount"></span></div>
+            <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
+              <select class="input-sm" id="mpBy" style="width:120px"><option value="app">按小程序</option><option value="user">按小程序 + 人</option></select>
+              <select class="input-sm" id="mpSort" style="width:150px"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
+              <select class="input-sm" id="mpDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
+              <select class="input-sm" id="mpGroup" style="width:180px"><option value="">所有群</option></select>
+              <input class="input-sm" id="mpKeyword" placeholder="小程序名 / appid / QQ号 / 内容" style="flex:1;min-width:150px" />
+            </div></div>
+            <div class="split-list" id="mpTable"><div class="split-empty">加载中...</div></div>
+            <div class="mn-body" style="padding-top:6px" id="mpPager"></div>
+          </div>
+          <div class="split-right"><div class="card" id="mpDetail"><div class="split-empty">在左边点一个小程序：看它发过的内容、谁发的、在哪些群，可整个拉黑或只拦部分标题</div></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>小程序看板</h2><span class="rules-subtle" id="mpFeedNote">最近出现的小程序，新的在前，每 3 秒更新；红框 = 这条消息被撤回</span></div>
+          <div class="mn-body"><div class="mp-feed" id="mpFeed"><p class="empty">加载中...</p></div></div>
+        </div>
         <div class="mn-grid">
           <div class="card">
             <div class="card-header"><h2>记录</h2></div>
@@ -1206,22 +1286,6 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               <div class="mn-rule-list" id="mpAllowList"></div>
             </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h2>小程序统计</h2>
-            <div class="header-actions">
-              <select class="input-sm" id="mpBy" style="width:120px"><option value="app">按小程序</option><option value="user">按小程序 + 人</option></select>
-              <select class="input-sm" id="mpSort" style="width:150px"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
-              <select class="input-sm" id="mpDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
-              <select class="input-sm" id="mpGroup" style="width:180px"><option value="">所有群</option></select>
-              <input class="input-sm" id="mpKeyword" placeholder="小程序名 / appid / QQ号 / 内容" style="width:190px" />
-            </div></div>
-          <div class="log-container" id="mpTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0" id="mpPager"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h2>小程序看板</h2><span class="rules-subtle" id="mpFeedNote">最近出现的小程序，新的在前，每 3 秒更新；红框 = 这条消息被撤回</span></div>
-          <div class="mn-body"><div class="mp-feed" id="mpFeed"><p class="empty">加载中...</p></div></div>
         </div>
       </div>
 
@@ -1343,6 +1407,21 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
               <p class="mn-hint">模板里用 {days} 表示剩余天数、{date} 表示目标日期；到期当天「{days}天」显示为「今天」，过期后自动去掉后缀。</p>
               <div id="nmCountdownResult"></div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-member">
+        <div class="page-header"><h1>群成员查找</h1></div>
+        <p class="mn-intro">按 QQ 号、昵称或群名片在所有群里找人（只查本地群成员缓存，不调用接口；缓存不全时先到「群成员缓存」刷新）。点一个人查看：在哪些群、群等级、入群时间、群名片，以及他发过的码、小程序、上传的群文件、退群记录、违规记录和对他的操作。其它页面里带虚线的 QQ 号点一下也会打开这里。</p>
+        <div class="split">
+          <div class="card">
+            <div class="card-header"><h2>找人</h2><span class="rules-subtle" id="mbrCount"></span></div>
+            <div class="mn-body" style="padding-bottom:8px"><input class="input-sm" id="mbrQuery" style="width:100%" placeholder="QQ 号（开头即可）/ 昵称 / 群名片" /></div>
+            <div class="split-list" id="mbrList"><div class="split-empty">输入后自动搜索</div></div>
+          </div>
+          <div class="split-right">
+            <div class="card" id="mbrProfile"><div class="split-empty">在左边选一个人</div></div>
           </div>
         </div>
       </div>
@@ -1594,6 +1673,18 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
       <div class="tab-panel" id="tab-leavelog">
         <div class="page-header"><h1>退群记录</h1><button class="btn btn-ghost btn-sm" id="btnLlRefresh">刷新</button></div>
         <p class="mn-intro">成员主动退群、被踢出时记下时间、群、方式和退群前的最近几条消息。点 QQ 号看这个人一共退过几次、退过哪些群；点「消息」看他退群前说了什么。「退群自动拉黑」按这里的记录计次，在「踢人与黑名单」设置。</p>
+        <div class="split" id="llSplit">
+          <div class="card">
+            <div class="card-header"><h2>记录</h2><span class="rules-subtle" id="llCount"></span></div>
+            <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="gap:6px">
+              <select class="input-sm" id="llKind" style="width:110px"><option value="">全部方式</option><option value="leave">主动退群</option><option value="kick">被踢出</option></select>
+              <input class="input-sm" id="llKeyword" placeholder="QQ号 / 群号 / 昵称 / 群名" style="flex:1;min-width:150px" />
+            </div></div>
+            <div class="split-list" id="llTable"><div class="split-empty">加载中...</div></div>
+            <div class="mn-body" style="padding-top:6px" id="llPager"></div>
+          </div>
+          <div class="split-right"><div class="card" id="llDetail"><div class="split-empty">在左边点一条记录：看他退群前说了什么、一共退过几次群</div></div></div>
+        </div>
         <div class="card">
           <div class="card-header"><h2>设置</h2></div>
           <div class="settings-list" id="leaveLogSwitches"></div>
@@ -1602,19 +1693,6 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
             <div class="mn-row"><label style="width:150px">图片保留</label><input type="number" min="1" max="3650" class="input-sm" id="llImgDays" style="width:100px" /><span class="mn-hint">天（1–3650），到期只删图片</span><button class="btn btn-primary btn-sm" id="btnLlSave">保存</button></div>
             <p class="mn-hint">消息只记开启之后插件收到的（文字最多 120 字，表情 / 卡片写成 [表情] 这样的占位），只存内存；插件重启后靠群历史兜底（最近 100 条）。被撤回的消息群历史里可能已经没有了。开启「保存图片」后，退群时把这些消息里的图片下载保存（每条最多 4 张），点缩略图看大图；退群前很久发的图片链接可能已失效，会显示「图片未能保存」。</p>
           </div>
-        </div>
-        <div class="card" id="llUserCard" style="display:none">
-          <div class="card-header"><h2 id="llUserTitle">退群汇总</h2><button class="btn btn-ghost btn-sm" id="btnLlUserClose">关闭</button></div>
-          <div class="mn-body" id="llUserBody"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h2>记录</h2>
-            <div class="header-actions">
-              <select class="input-sm" id="llKind" style="width:110px"><option value="">全部方式</option><option value="leave">主动退群</option><option value="kick">被踢出</option></select>
-              <input class="input-sm" id="llKeyword" placeholder="QQ号 / 群号 / 昵称 / 群名" style="width:180px" />
-            </div></div>
-          <div class="log-container" id="llTable"><p class="empty">加载中...</p></div>
-          <div class="mn-body" style="padding-top:0" id="llPager"></div>
         </div>
       </div>
 
@@ -1784,6 +1862,10 @@ body.bs-full #tab-bigscreen{margin:0;min-height:100vh}
     <a class="mobile-nav-item" data-tab="records">
       <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
       <span>违规</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="member">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span>查人</span>
     </a>
     <a class="mobile-nav-item" data-tab="kick">
 
@@ -1962,6 +2044,8 @@ function cssAttr(s) {
 
   function isErrorCode(value) {
     if (value === null || value === undefined || value === '') return false;
+    // 业务数据里叫 code 的对象（例如规则组测试结果里的「码内容命中」）不是错误码
+    if (typeof value === 'object' || typeof value === 'boolean') return false;
     if (typeof value === 'number') {
       return value !== 0 && (value < 200 || value >= 300);
     }
@@ -2464,6 +2548,7 @@ function switchTab(tabName) {
   if (tabName === 'names') loadNames();
   if (tabName === 'files') loadFiles();
   if (tabName === 'kick') loadKick();
+  if (tabName === 'member') loadMember();
   if (tabName === 'oplog') loadOplog(1);
   if (tabName === 'leavelog') loadLeaveLog(1);
   if (tabName === 'codes') loadCodes(1);
@@ -2765,78 +2850,94 @@ async function loadUsers() {
   renderUsers(res);
 }
 
+var VR = { users: [], sel: '' };
 function renderUsers(users) {
+  VR.users = users || [];
+  vrRenderList();
+  var still = VR.users.filter(function(u) { return String(u.user_id) === VR.sel; })[0];
+  if (still) vrOpen(VR.sel); else if (VR.sel) { VR.sel = ''; $('#vrDetail').innerHTML = '<div class="split-empty">在左边点一个人：看他被撤回的每条消息</div>'; }
+}
+function vrGroupName(gid) { return (typeof cuGroupName === 'function' && cuGroupName(gid)) || gid; }
+function vrRenderList() {
   var c = $('#userContainer');
-  if (!users || !users.length) { c.innerHTML = '<p class="empty">暂无数据</p>'; return; }
-  var _msgStore = {};
-  var _msgIdx = 0;
-  c.innerHTML = users.map(function(u) {
+  var kw = ($('#vrKeyword') || {}).value ? $('#vrKeyword').value.trim().toLowerCase() : '';
+  var list = VR.users.filter(function(u) {
+    if (!kw) return true;
+    var key = (u.user_id + ' ' + (u.user_name || '') + ' ' + u.records.map(function(r) { return r.group_id; }).join(' ')).toLowerCase();
+    return key.indexOf(kw) >= 0;
+  });
+  if (!list.length) { c.innerHTML = '<div class="split-empty">' + (VR.users.length ? '没有匹配的人' : '暂无数据') + '</div>'; return; }
+  c.innerHTML = list.map(function(u) {
     var groups = [];
     u.records.forEach(function(r) { if (r.group_id && groups.indexOf(r.group_id) === -1) groups.push(r.group_id); });
-    var groupStr = groups.slice(0, 2).join(', ') + (groups.length > 2 ? '...' : '');
-    var latest = u.records[u.records.length - 1];
-    return '<div class="user-card" data-uid="' + escAttr(u.user_id) + '">' +
-      '<div class="user-header">' +
-        '<label class="user-check"><input type="checkbox" class="ck" data-uid="' + escAttr(u.user_id) + '" /></label>' +
-        '<div class="user-info"><span class="user-name">' + esc(u.user_name) + '</span><span class="user-uid">' + esc(u.user_id) + '</span></div>' +
-        '<div class="user-meta"><span class="user-group">' + esc(groupStr) + '</span><span class="user-count">' + u.count + '次</span><span class="user-time">' + fmtTime(latest.ts) + '</span><span class="expand-icon">&#9654;</span></div>' +
-      '</div>' +
-      '<div class="user-records">' +
-        '<table class="record-table"><thead><tr><th>时间</th><th>群</th><th>消息</th><th>原因</th><th>操作</th></tr></thead><tbody>' +
-        u.records.map(function(r) {
-          var msgFull = r.msg_text || r.msg_preview || '';
-          var imgUrls = (r.image_urls && r.image_urls.length) ? r.image_urls : [];
-          var mid = 'uf' + (_msgIdx++);
-          _msgStore[mid] = { text: msgFull, imgs: imgUrls };
-          var msgCell = (r.msg_preview && r.msg_preview.length > 20) ?
-            '<td><span class="lin-msg-truncated">' + esc(r.msg_preview.slice(0, 20)) + '</span> <a href="javascript:void(0)" class="lin-msg-action" data-log-id="' + escAttr(String(r.id)) + '"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span class="lin-msg-action-text">查看</span></a></td>' :
-            '<td>' + esc(r.msg_preview || '') + '</td>';
-          return '<tr><td>' + fmtTime(r.ts) + '</td><td>' + esc(r.group_id) + '</td>' + msgCell + '<td>' + esc((r.reason || '').slice(0, 20)) + '</td><td><button class="btn btn-danger btn-sm" data-del="' + escAttr(r.id) + '">删除</button></td></tr>';
-        }).join('') + '</tbody></table></div></div>';
+    var latest = u.records[u.records.length - 1] || {};
+    var uid = String(u.user_id);
+    return '<div class="split-item' + (uid === VR.sel ? ' on' : '') + '" data-vr-open="' + escAttr(uid) + '">' +
+      '<input type="checkbox" class="ck" data-uid="' + escAttr(uid) + '" title="勾选后可批量删除" />' +
+      '<div class="si-main"><div class="si-title">' + esc(u.user_name || uid) + ' <span class="mn-hint">' + esc(uid) + '</span></div>' +
+      '<div class="si-sub"><b style="color:var(--danger)">' + u.count + '</b> 次 · ' + groups.length + ' 个群（' + esc(groups.slice(0, 2).map(vrGroupName).join('、')) + (groups.length > 2 ? '…' : '') + '） · ' + fmtTime(latest.ts) + '</div></div></div>';
   }).join('');
-
-  $$('.user-header', c).forEach(function(h) {
-    h.addEventListener('click', function(e) {
-      if (e.target.closest('.user-check') || e.target.closest('.ck')) return;
-      var icon = $('.expand-icon', h);
-      var rec = h.nextElementSibling;
-      icon.classList.toggle('expanded');
-      rec.style.display = rec.style.display === 'block' ? 'none' : 'block';
-    });
-  });
-
-  $$('[data-del]', c).forEach(function(btn) {
-    btn.addEventListener('click', async function() {
-      var ok = await postOrToast('logs/delete', { ids: [btn.dataset.del] }, '已删除', '删除记录失败');
-      if (ok) loadUsers();
-    });
-  });
-
-  c.querySelectorAll('.lin-msg-action').forEach(function(action) {
-    action.addEventListener('click', async function(e) {
-      e.stopPropagation();
-      var lid = this.getAttribute('data-log-id');
-      var detailEpoch = beginLoad('log-detail');
-      showModal('消息详情', '<p style="color:var(--text-muted)">加载中...</p>', '<button class="btn btn-ghost btn-sm" id="btnMsgClose2">关闭</button>');
-      $('#btnMsgClose2').addEventListener('click', closeModal);
-      try {
-        var detail = await safeGet('log_detail', { id: lid });
-        if (!isCurrentLoad('log-detail', detailEpoch)) return;
-        if (isApiError(detail)) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">' + esc(detail.message || '获取失败') + '</p>'; return; }
-        var d = detail || {};
-        var chunkCount = d.chunk_count || 0;
-        var imgUrls = d.image_urls || [];
-        var parts = [];
-        for (var ci = 0; ci < chunkCount; ci++) {
-          var cr = await safeGet('log_chunk', { id: lid, chunk: ci });
-          if (!isCurrentLoad('log-detail', detailEpoch)) return;
-          if (isApiError(cr)) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">' + esc(cr.message || '获取失败') + '</p>'; return; }
-          if (cr && cr.t) parts.push(cr.t);
-        }
-        renderMessageDetail(parts.join(''), imgUrls, d);
-      } catch(ex) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">加载失败: ' + esc(String(ex)) + '</p>'; }
-    });
-  });
+}
+function vrOpen(uid) {
+  var u = VR.users.filter(function(x) { return String(x.user_id) === String(uid); })[0];
+  if (!u) return;
+  VR.sel = String(uid);
+  $$('#userContainer [data-vr-open]').forEach(function(el) { el.classList.toggle('on', el.getAttribute('data-vr-open') === VR.sel); });
+  var recs = u.records.slice().reverse();
+  $('#vrDetail').innerHTML = '<div class="card-header"><h2>' + esc(u.user_name || uid) + ' 被撤回 ' + u.count + ' 次</h2><div class="header-actions">' +
+    '<button class="btn btn-outline btn-sm" data-member="' + escAttr(uid) + '">群成员档案</button>' +
+    '<button class="btn btn-danger btn-sm" data-vr-delall="' + escAttr(uid) + '">删除他的全部记录</button></div></div>' +
+    '<div class="mn-body split-detail-body"><p class="mn-hint" style="margin-bottom:6px">' + mbrLink(uid) + ' · 新的在前；点「查看」看完整内容和图片</p>' +
+    '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>消息</th><th>原因</th><th>操作</th></tr></thead><tbody>' +
+    recs.map(function(r) {
+      var prev = r.msg_preview || '';
+      return '<tr><td style="white-space:nowrap">' + fmtTime(r.ts) + '</td><td style="white-space:nowrap">' + esc(vrGroupName(r.group_id)) + '</td>' +
+        '<td style="word-break:break-all">' + esc(prev.length > 60 ? prev.slice(0, 60) + '…' : prev) + '</td>' +
+        '<td style="max-width:200px" title="' + escAttr(r.reason || '') + '">' + esc((r.reason || '').slice(0, 40)) + '</td>' +
+        '<td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" data-vr-view="' + escAttr(String(r.id)) + '">查看</button>' +
+        '<button class="btn btn-danger btn-sm" data-del="' + escAttr(String(r.id)) + '">删除</button></div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+async function showLogDetail(lid) {
+  var detailEpoch = beginLoad('log-detail');
+  showModal('消息详情', '<p style="color:var(--text-muted)">加载中...</p>', '<button class="btn btn-ghost btn-sm" id="btnMsgClose2">关闭</button>');
+  $('#btnMsgClose2').addEventListener('click', closeModal);
+  try {
+    var detail = await safeGet('log_detail', { id: lid });
+    if (!isCurrentLoad('log-detail', detailEpoch)) return;
+    if (isApiError(detail)) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">' + esc(detail.message || '获取失败') + '</p>'; return; }
+    var d = detail || {};
+    var parts = [];
+    for (var ci = 0; ci < (d.chunk_count || 0); ci++) {
+      var cr = await safeGet('log_chunk', { id: lid, chunk: ci });
+      if (!isCurrentLoad('log-detail', detailEpoch)) return;
+      if (isApiError(cr)) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">' + esc(cr.message || '获取失败') + '</p>'; return; }
+      if (cr && cr.t) parts.push(cr.t);
+    }
+    renderMessageDetail(parts.join(''), d.image_urls || [], d);
+  } catch (ex) { $('#modalBody').innerHTML = '<p style="color:var(--text-muted)">加载失败: ' + esc(String(ex)) + '</p>'; }
+}
+async function vrOnClick(e) {
+  if (e.target.closest('.ck')) return;  // 勾选框只勾选，不打开
+  var del = e.target.closest('[data-del]');
+  if (del) {
+    if (!await mnConfirm('删除这条违规记录？')) return;
+    var ok = await postOrToast('logs/delete', { ids: [del.getAttribute('data-del')] }, '已删除', '删除记录失败');
+    if (ok) loadUsers();
+    return;
+  }
+  var all = e.target.closest('[data-vr-delall]');
+  if (all) {
+    var uid = all.getAttribute('data-vr-delall');
+    if (!await mnConfirm('删除 ' + uid + ' 的全部违规记录？删除后不能恢复。', { danger: true, okText: '删除' })) return;
+    var ok2 = await postOrToast('logs/delete', { user_ids: [uid] }, '已删除', '删除记录失败');
+    if (ok2) loadUsers();
+    return;
+  }
+  var view = e.target.closest('[data-vr-view]');
+  if (view) { showLogDetail(view.getAttribute('data-vr-view')); return; }
+  var o = e.target.closest('[data-vr-open]');
+  if (o) vrOpen(o.getAttribute('data-vr-open'));
 }
 
 async function loadLogs() {
@@ -2877,7 +2978,7 @@ async function loadLogs() {
     var msgHtml = (l.msg_preview && l.msg_preview.length > 28) ?
       '<span class="lin-msg-truncated">' + esc(l.msg_preview.slice(0, 28)) + '</span><a href="javascript:void(0)" class="lin-msg-action" data-log-id="' + escAttr(String(l.id)) + '"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span class="lin-msg-action-text">查看</span></a>' :
       esc(l.msg_preview || '');
-    return '<tr><td>' + fmtTime(l.ts) + '</td><td>' + esc(l.group_id) + '</td><td>' + esc(l.user_name) + '<br><span style="font-size:10px;color:var(--text-muted)">' + esc(l.user_id) + '</span></td><td>' + msgHtml + '</td><td><span class="badge ' + cls + '">' + esc(a) + '</span></td><td class="reason-cell" title="' + escAttr(l.reason) + '">' + esc((l.reason || '').slice(0, 30)) + '</td></tr>';
+    return '<tr><td>' + fmtTime(l.ts) + '</td><td>' + esc(l.group_id) + '</td><td>' + esc(l.user_name) + '<br><span style="font-size:10px;color:var(--text-muted)">' + mbrLink(l.user_id) + '</span></td><td>' + msgHtml + '</td><td><span class="badge ' + cls + '">' + esc(a) + '</span></td><td class="reason-cell" title="' + escAttr(l.reason) + '">' + esc((l.reason || '').slice(0, 30)) + '</td></tr>';
   }).join('');
   c.innerHTML = '<table class="log-table"><thead><tr><th>时间</th><th>群号</th><th>用户</th><th>消息</th><th>操作</th><th>原因</th></tr></thead><tbody>' + rows + '</tbody></table>'
     + renderPager(LOGS_STATE.page, LOGS_STATE.pageSize, total, 'logs');
@@ -3610,7 +3711,7 @@ async function loadUnbans() {
   if (!list.length) { box.innerHTML = '<p class="empty">暂无计划</p>'; return; }
   box.innerHTML = '<table class="log-table"><thead><tr><th>群号</th><th>用户</th><th>解禁时间</th><th>操作</th></tr></thead><tbody>' +
     list.map(function(u) {
-      return '<tr><td>' + esc(u.group_id) + '</td><td>' + esc(u.user_id) + '</td><td>' + fmtTime(u.unban_at) +
+      return '<tr><td>' + esc(u.group_id) + '</td><td>' + mbrLink(u.user_id) + '</td><td>' + fmtTime(u.unban_at) +
         '</td><td><button class="btn btn-danger btn-sm" data-unban="' + escAttr(u.id) + '">取消</button></td></tr>';
     }).join('') + '</tbody></table>';
   $$('[data-unban]', box).forEach(function(b) {
@@ -4019,110 +4120,311 @@ function mnGroupOptions(selected, emptyLabel) {
   return html;
 }
 
-/* ---- 规则组（rule_groups.py） ---- */
-var RG = { groups: [] };
+/* ---- 规则组（rule_groups.py）：左右分栏，下拉框 / 复选框编辑（存储格式与以前相同） ---- */
+var RG = { groups: [], sel: null, draft: null, dirty: false, apps: [] };
+var RG_KW_TYPES = [['contains', '包含'], ['exact', '完全相同'], ['regex', '正则']];
+var RG_CODE_TYPES = [['contains', '包含'], ['prefix', '开头是'], ['suffix', '结尾是'], ['regex', '正则']];
+var RG_TITLE_TYPES = [['', '不限标题'], ['contains', '标题包含'], ['exact', '标题完全相同'], ['regex', '标题正则']];
+var RG_MUTE_PRESETS = [1, 5, 10, 30, 60, 180, 720, 1440, 10080];
+var RG_KW_PRESETS = [
+  ['疑似 QQ 号', 'regex', '(?<!\\d)[1-9]\\d{4,10}(?!\\d)', '消息里有 5–11 位数字（可能误伤订单号、学号）'],
+  ['疑似微信号', 'regex', 'v[x信]\\s*[:：]?\\s*[a-zA-Z][-_a-zA-Z0-9]{5,19}', '「vx: abc123」「v信 wxid_xxx」这类'],
+  ['加微信 / 加V', 'contains', '加微信', ''],
+  ['私聊领取', 'contains', '私聊领取', '']
+];
+var RG_CODE_PRESETS = [
+  ['微信群二维码', 'contains', 'weixin.qq.com/g/'], ['微信个人二维码', 'contains', 'u.wechat.com'],
+  ['QQ 群 / QQ 名片', 'contains', 'qm.qq.com'], ['企业微信', 'contains', 'work.weixin.qq.com']
+];
+function rxEscape(v) { return String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// 正则里没有特殊符号（只有转义过的普通字符）时还原成普通文字；否则返回 null
+function rxLiteral(v) {
+  var out = '', i = 0;
+  while (i < v.length) {
+    var c = v.charAt(i);
+    if (c === '\\') { var n = v.charAt(i + 1); if (n && /[.*+?^${}()|[\]\\\/-]/.test(n)) { out += n; i += 2; continue; } return null; }
+    if (/[.*+?^${}()|[\]]/.test(c)) return null;
+    out += c; i++;
+  }
+  return out;
+}
+function rgCodeParse(raw) {
+  raw = String(raw || '');
+  var l;
+  if (raw.charAt(0) === '^' && raw.slice(-1) !== '$' && (l = rxLiteral(raw.slice(1))) !== null && l) return { type: 'prefix', value: l };
+  if (raw.slice(-1) === '$' && raw.charAt(0) !== '^' && (l = rxLiteral(raw.slice(0, -1))) !== null && l) return { type: 'suffix', value: l };
+  if ((l = rxLiteral(raw)) !== null && l) return { type: 'contains', value: l };
+  return { type: 'regex', value: raw };
+}
+function rgCodeBuild(t, v) {
+  v = String(v || '').trim();
+  if (!v) return '';
+  if (t === 'regex') return v;
+  var e = rxEscape(v);
+  return t === 'prefix' ? '^' + e : (t === 'suffix' ? e + '$' : e);
+}
+function rgAppParse(raw) {
+  var parts = String(raw || '').replace(/｜/g, '|').split('|');
+  var app = parts[0].trim();
+  if (app === '*' || app === '＊') app = '';
+  var cond = parts.length > 1 ? parts.slice(1).join('|').trim() : '';
+  var c = cond ? mnRuleParse(cond) : { type: '', value: '' };
+  return { app: app, ttype: c.type, tvalue: c.value };
+}
+function rgAppBuild(r) {
+  var cond = r.ttype ? mnRuleBuild(r.ttype, r.tvalue) : '';
+  if (!r.app && !cond) return '';
+  return cond ? (r.app || '*') + ' | ' + cond : r.app;
+}
 function rgActionText(a) {
   var parts = ['撤回'];
-  if (a.mute) parts.push('禁言 ' + a.mute_minutes + ' 分钟');
-  if (a.notice) parts.push('群内提示');
+  if (a.mute) parts.push('禁言 ' + rgMinutesText(a.mute_minutes));
+  if (a.notice) parts.push('提示');
   return parts.join(' + ');
 }
+function rgMinutesText(m) { m = Number(m); return m % 1440 === 0 ? (m / 1440) + ' 天' : (m % 60 === 0 ? (m / 60) + ' 小时' : m + ' 分钟'); }
 function rgScopeText(g) {
   if (!g.scope || !g.scope.length) return '所有群';
   var names = {}; mnGroups().forEach(function(x) { names[x.group_id] = x.group_name; });
-  var shown = g.scope.slice(0, 3).map(function(id) { return names[id] || id; }).join('、');
-  return g.scope.length > 3 ? shown + ' 等 ' + g.scope.length + ' 个群' : shown;
+  var shown = g.scope.slice(0, 2).map(function(id) { return names[id] || id; }).join('、');
+  return g.scope.length > 2 ? shown + ' 等 ' + g.scope.length + ' 个群' : shown;
+}
+function rgOrdered() {
+  return RG.groups.filter(function(g) { return !g.is_default; }).concat(RG.groups.filter(function(g) { return g.is_default; }));
 }
 async function rgLoad() {
   var res = await safeGet('minimal/rulegroups');
-  if (isApiError(res)) { $('#rgList').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  if (isApiError(res)) { $('#rgList').innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
   RG.groups = (mnData(res) || {}).groups || [];
-  rgRender();
+  var keep = RG.sel && RG.groups.filter(function(g) { return g.id === RG.sel; })[0];
+  if (!RG.dirty) {
+    if (keep) rgSelect(keep.id, true);
+    else if (RG.groups.length && RG.sel !== 'new') rgSelect(rgOrdered()[0].id, true);
+  }
+  rgRenderList();
+  // 小程序名 / appid 的输入提示
+  safeGet('minimal/miniapps', { days: 3650, page_size: 200 }).then(function(r) {
+    if (isApiError(r)) return;
+    RG.apps = ((mnData(r) || {}).items || []).map(function(a) { return { name: a.name, appid: a.appid }; });
+    var dl = document.getElementById('rgAppList');
+    if (dl) dl.innerHTML = rgAppOptions();
+  });
 }
-function rgRender() {
-  var others = RG.groups.filter(function(g) { return !g.is_default; });
-  $('#rgList').innerHTML = RG.groups.length ? RG.groups.map(function(g) {
+function rgAppOptions() {
+  var opts = [];
+  RG.apps.forEach(function(a) {
+    if (a.appid) opts.push('<option value="' + escAttr(a.appid) + '">' + esc(a.name) + '</option>');
+    opts.push('<option value="' + escAttr(String(a.name).split(/[丨|]/)[0].trim()) + '">' + esc(a.name) + '</option>');
+  });
+  return opts.join('');
+}
+function rgRenderList() {
+  var list = rgOrdered(), others = list.filter(function(g) { return !g.is_default; });
+  var html = list.map(function(g) {
     var i = others.indexOf(g);
-    var acts = '<button class="btn btn-outline btn-sm" data-rg-act="edit" data-id="' + g.id + '">编辑</button>' +
-      (g.is_default ? '' : '<button class="btn btn-ghost btn-sm" data-rg-act="up" data-id="' + g.id + '"' + (i <= 0 ? ' disabled' : '') + '>上移</button>' +
-        '<button class="btn btn-ghost btn-sm" data-rg-act="down" data-id="' + g.id + '"' + (i >= others.length - 1 ? ' disabled' : '') + '>下移</button>' +
-        '<button class="btn btn-ghost btn-sm" data-rg-act="toggle" data-id="' + g.id + '">' + (g.enabled ? '停用' : '启用') + '</button>' +
-        '<button class="btn btn-danger btn-sm" data-rg-act="del" data-id="' + g.id + '">删除</button>');
-    return '<div class="rg-card' + (g.enabled ? '' : ' off') + (g.is_default ? ' default' : '') + '">' +
-      '<div class="rg-head"><b>' + esc(g.name) + '</b>' + (g.is_default ? '<span class="mn-chip">默认组 · 最后检查</span>' : '') +
-      (g.enabled ? '' : '<span class="mn-chip">已停用</span>') + '<div class="rg-acts">' + acts + '</div></div>' +
-      '<div class="rg-sum"><span class="mn-chip">关键词 ' + g.keywords.length + '</span><span class="mn-chip">码规则 ' + g.code_rules.length + '</span>' +
-      '<span class="mn-chip">小程序 ' + g.apps.length + '</span><span>命中：' + esc(rgActionText(g.action)) + '</span><span>· 生效：' + esc(rgScopeText(g)) + '</span></div>' +
-      (g.keywords.length ? '<div class="mn-hint" style="word-break:break-all">' + esc(g.keywords.slice(0, 8).map(function(r) { return mnRuleParse(r).value; }).join('、')) + (g.keywords.length > 8 ? ' …' : '') + '</div>' : '') +
-      '</div>';
-  }).join('') : '<p class="empty">还没有规则组</p>';
+    var on = RG.sel === g.id;
+    return '<div class="split-item' + (on ? ' on' : '') + '" data-rg-pick="' + g.id + '"' + (g.enabled ? '' : ' style="opacity:.55"') + '>' +
+      '<div class="si-main"><div class="si-title">' + (g.is_default ? '' : '<span class="mn-hint">' + (i + 1) + '.</span> ') + esc(g.name) +
+      (g.is_default ? ' <span class="mn-chip">默认 · 最后检查</span>' : '') + (g.enabled ? '' : ' <span class="mn-chip">已停用</span>') +
+      (on && RG.dirty ? ' <span class="rg-dirty">未保存</span>' : '') + '</div>' +
+      '<div class="si-sub">关键词 ' + g.keywords.length + ' · 码 ' + g.code_rules.length + ' · 小程序 ' + g.apps.length + ' ｜ ' + esc(rgActionText(g.action)) + ' ｜ ' + esc(rgScopeText(g)) + '</div></div></div>';
+  }).join('');
+  if (RG.sel === 'new') html = '<div class="split-item on"><div class="si-main"><div class="si-title">（新规则组） <span class="rg-dirty">未保存</span></div><div class="si-sub">在右边填写后保存</div></div></div>' + html;
+  $('#rgList').innerHTML = html || '<div class="split-empty">还没有规则组</div>';
 }
-function rgFind(id) { return RG.groups.filter(function(g) { return String(g.id) === String(id); })[0]; }
-function rgEdit(g) {
-  var isNew = !g;
-  g = g || { name: '', enabled: true, scope: [], keywords: [], code_rules: [], apps: [], action: { mute: false, mute_minutes: 30, notice: false, notice_template: '' } };
-  var all = !g.scope.length;
-  var groups = mnGroups();
-  var body = '<div class="rg-form">' +
-    '<label class="rg-l">组名</label><input class="input-sm" id="rgName" style="width:100%" maxlength="40" value="' + escAttr(g.name) + '" placeholder="例如：引流广告" />' +
-    '<label class="rg-l">关键词（每行一条：普通文字 = 包含；= 开头 = 整条消息完全相同；re: 开头 = 正则）</label>' +
-    '<textarea id="rgKeywords" rows="6" placeholder="加微信&#10;=1&#10;re:v[x信]\\s*\\d{5,}">' + esc(g.keywords.join('\n')) + '</textarea>' +
-    '<label class="rg-l">码内容规则（每行一个正则，匹配二维码 / 葵花码解出的内容）</label>' +
-    '<textarea id="rgCodes" rows="3" placeholder="pages/.*invite">' + esc(g.code_rules.join('\n')) + '</textarea>' +
-    '<label class="rg-l">小程序（每行一个；卡片和 #小程序:// 链接都算）</label>' +
-    '<p class="mn-hint" style="margin-bottom:4px">写 appid（wx 开头）或小程序名（名字包含即命中）= 整个小程序；<b>小程序 | 标题条件</b> = 只拦这个小程序里标题符合条件的（适合「微店买买」这类一个小程序里有很多店铺 / 商品的）；<b>* | 标题条件</b> = 任何小程序按标题拦。标题条件写法同关键词：普通文字包含、= 开头完全相同、re: 开头正则。</p>' +
-    '<textarea id="rgApps" rows="4" placeholder="wx9580c9208762a7c5&#10;刺猬云印&#10;微店买买 | 考研&#10;* | re:差\\d+人">' + esc(g.apps.join('\n')) + '</textarea>' +
-    '<label class="rg-l">命中后</label>' +
-    '<div class="mn-row"><span>撤回（总是）</span><label><input type="checkbox" id="rgMute"' + (g.action.mute ? ' checked' : '') + ' /> 同时禁言</label>' +
-    '<input type="number" class="input-sm" id="rgMuteMin" min="1" max="43200" style="width:90px" value="' + escAttr(g.action.mute_minutes) + '" /><span>分钟</span></div>' +
-    '<div class="mn-row"><label><input type="checkbox" id="rgNotice"' + (g.action.notice ? ' checked' : '') + ' /> 群内提示</label>' +
-    '<input class="input-sm" id="rgNoticeTpl" style="flex:1" maxlength="200" value="' + escAttr(g.action.notice_template) + '" placeholder="留空用默认：[群管] {name} 的消息含违规内容，已撤回" /></div>' +
-    '<p class="mn-hint">提示模板可用 {name} 昵称、{uid} QQ号、{group} 群号。同一个人 60 秒内连续命中只禁言 / 提示一次。</p>' +
-    '<label class="rg-l">生效的群</label>' +
-    '<div class="mn-row"><label><input type="radio" name="rgScope" value="all"' + (all ? ' checked' : '') + ' /> 所有群</label><label><input type="radio" name="rgScope" value="some"' + (all ? '' : ' checked') + ' /> 只在勾选的群</label></div>' +
-    '<div id="rgScopeBox" style="' + (all ? 'display:none' : '') + '"><div class="gp-grid" id="rgScopeGroups">' +
-    groups.map(function(x) { return mnGroupChip(x, g.scope.indexOf(String(x.group_id)) >= 0, 'rg-scope-ck'); }).join('') + '</div></div>' +
-    (g.is_default ? '' : '<div class="mn-row" style="margin-top:8px"><label><input type="checkbox" id="rgEnabled"' + (g.enabled ? ' checked' : '') + ' /> 启用这个组</label></div>') +
-    '<div id="rgErr"></div></div>';
-  showModal(isNew ? '新建规则组' : '编辑规则组：' + g.name, body,
-    '<button class="btn btn-ghost btn-sm" id="rgCancel">取消</button><button class="btn btn-primary btn-sm" id="rgSaveBtn">保存</button>');
+function rgToDraft(g) {
+  return {
+    id: g.id, is_default: g.is_default, name: g.name, enabled: g.enabled, scope: (g.scope || []).slice(),
+    keywords: g.keywords.map(mnRuleParse), codes: g.code_rules.map(rgCodeParse), apps: g.apps.map(rgAppParse),
+    action: Object.assign({ mute: false, mute_minutes: 30, notice: false, notice_template: '' }, g.action)
+  };
+}
+async function rgSelect(id, silent) {
+  if (!silent && RG.dirty && !(await mnConfirm('当前规则组的修改还没保存，放弃修改？', { okText: '放弃修改', danger: true }))) return;
+  RG.dirty = false;
+  if (id === 'new') {
+    RG.sel = 'new';
+    RG.draft = { id: 0, is_default: false, name: '', enabled: true, scope: [], keywords: [{ type: 'contains', value: '' }], codes: [], apps: [],
+      action: { mute: false, mute_minutes: 30, notice: false, notice_template: '' } };
+    RG.dirty = true;
+  } else {
+    var g = RG.groups.filter(function(x) { return x.id === Number(id); })[0];
+    if (!g) return;
+    RG.sel = g.id; RG.draft = rgToDraft(g);
+  }
+  rgRenderList();
+  rgRenderEditor();
+}
+function rgMarkDirty() { if (!RG.dirty) { RG.dirty = true; rgRenderList(); $('#rgDirtyMark').style.display = ''; } }
+function rgTypeSelect(types, value, attrs) {
+  return '<select class="input-sm" ' + attrs + '>' + types.map(function(t) { return '<option value="' + t[0] + '"' + (t[0] === value ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>';
+}
+function rgRowsHtml(kind) {
+  var d = RG.draft, rows = kind === 'kw' ? d.keywords : (kind === 'code' ? d.codes : d.apps);
+  if (!rows.length) return '<p class="mn-hint">还没有，点下面「添加」或用常用规则。</p>';
+  return rows.map(function(r, i) {
+    var del = '<button class="btn btn-ghost btn-sm" data-rg-del="' + kind + ':' + i + '" title="删除这条">删除</button>';
+    if (kind === 'kw') {
+      return '<div class="rg-row">' + rgTypeSelect(RG_KW_TYPES, r.type, 'data-rg-f="kw:' + i + ':type"') +
+        '<input class="input-sm v" data-rg-f="kw:' + i + ':value" value="' + escAttr(r.value) + '" placeholder="' + escAttr(MN_TYPES[r.type].placeholder) + '" />' + del + '</div>';
+    }
+    if (kind === 'code') {
+      return '<div class="rg-row">' + rgTypeSelect(RG_CODE_TYPES, r.type, 'data-rg-f="code:' + i + ':type"') +
+        '<input class="input-sm v" data-rg-f="code:' + i + ':value" value="' + escAttr(r.value) + '" placeholder="' + (r.type === 'regex' ? '例如 pages/.*invite' : '例如 weixin.qq.com/g/') + '" />' + del + '</div>';
+    }
+    return '<div class="rg-row"><input class="input-sm" list="rgAppList" style="width:200px;flex:none" data-rg-f="app:' + i + ':app" value="' + escAttr(r.app) + '" placeholder="小程序名 / appid（空 = 任何小程序）" />' +
+      rgTypeSelect(RG_TITLE_TYPES, r.ttype, 'data-rg-f="app:' + i + ':ttype"') +
+      '<input class="input-sm v" data-rg-f="app:' + i + ':tvalue" value="' + escAttr(r.tvalue) + '"' + (r.ttype ? '' : ' disabled') + ' placeholder="' + (r.ttype ? '例如 考研' : '整个小程序都拦') + '" />' + del + '</div>';
+  }).join('');
+}
+function rgRenderEditor() {
+  var d = RG.draft, box = $('#rgEditor');
+  if (!d) { box.innerHTML = '<div class="split-empty">在左边选一个规则组</div>'; return; }
+  var others = rgOrdered().filter(function(g) { return !g.is_default; }), idx = others.map(function(g) { return g.id; }).indexOf(d.id);
+  var all = !d.scope.length, m = Number(d.action.mute_minutes) || 30;
+  var muteOpts = RG_MUTE_PRESETS.indexOf(m) >= 0 ? RG_MUTE_PRESETS : RG_MUTE_PRESETS.concat([m]).sort(function(a, b) { return a - b; });
+  box.innerHTML =
+    '<div class="card-header"><h2>' + (d.id ? '编辑：' + esc(d.name) : '新建规则组') + ' <span class="rg-dirty" id="rgDirtyMark"' + (RG.dirty ? '' : ' style="display:none"') + '>未保存</span></h2>' +
+    '<div class="header-actions">' +
+    (d.id && !d.is_default ? '<button class="btn btn-ghost btn-sm" data-rg-act="up"' + (idx <= 0 ? ' disabled' : '') + '>上移</button><button class="btn btn-ghost btn-sm" data-rg-act="down"' + (idx >= others.length - 1 ? ' disabled' : '') + '>下移</button><button class="btn btn-ghost btn-sm" data-rg-act="del" style="color:var(--danger)">删除</button>' : '') +
+    '<button class="btn btn-ghost btn-sm" data-rg-act="revert">' + (d.id ? '还原' : '取消') + '</button><button class="btn btn-primary btn-sm" data-rg-act="save">保存</button></div></div>' +
+    '<div class="rg-sec"><div class="mn-row" style="margin:0"><label style="width:42px">组名</label><input class="input-sm" style="width:220px" maxlength="40" data-rg-f="name" value="' + escAttr(d.name) + '" placeholder="例如：引流广告" />' +
+    (d.is_default ? '<span class="mn-hint">默认组不能停用、删除</span>' : '<label><input type="checkbox" data-rg-f="enabled"' + (d.enabled ? ' checked' : '') + ' /> 启用</label>') + '</div></div>' +
+    '<div class="rg-sec"><h3>关键词 <span class="n">' + d.keywords.length + ' 条 · 匹配消息文字和图片 OCR 文字，不区分大小写</span></h3>' +
+    '<div class="rg-rows">' + rgRowsHtml('kw') + '</div>' +
+    '<div class="rg-presets"><button class="btn btn-outline btn-sm" data-rg-add="kw">＋ 添加关键词</button><button class="btn btn-ghost btn-sm" data-rg-act="paste">批量粘贴</button>' +
+    RG_KW_PRESETS.map(function(p, i) { return '<button class="btn btn-ghost btn-sm" data-rg-preset="kw:' + i + '" title="' + escAttr(p[3] || p[2]) + '">＋ ' + esc(p[0]) + '</button>'; }).join('') + '</div></div>' +
+    '<div class="rg-sec"><h3>码内容 <span class="n">' + d.codes.length + ' 条 · 匹配二维码 / 葵花码解出的内容</span></h3>' +
+    '<div class="rg-rows">' + rgRowsHtml('code') + '</div>' +
+    '<div class="rg-presets"><button class="btn btn-outline btn-sm" data-rg-add="code">＋ 添加码规则</button>' +
+    RG_CODE_PRESETS.map(function(p, i) { return '<button class="btn btn-ghost btn-sm" data-rg-preset="code:' + i + '">＋ ' + esc(p[0]) + '</button>'; }).join('') + '</div></div>' +
+    '<div class="rg-sec"><h3>小程序 <span class="n">' + d.apps.length + ' 条 · 卡片和 #小程序:// 链接都算；可以只拦某个小程序里标题符合条件的</span></h3>' +
+    '<div class="rg-rows">' + rgRowsHtml('app') + '</div><datalist id="rgAppList">' + rgAppOptions() + '</datalist>' +
+    '<div class="rg-presets"><button class="btn btn-outline btn-sm" data-rg-add="app">＋ 添加小程序</button><span class="mn-hint">小程序名包含即命中；在「小程序」页详情里也可以「按这个标题拉黑」</span></div></div>' +
+    '<div class="rg-sec"><h3>命中后</h3><div class="mn-row"><span>撤回（总是）</span>' +
+    '<label><input type="checkbox" data-rg-f="mute"' + (d.action.mute ? ' checked' : '') + ' /> 同时禁言</label>' +
+    '<select class="input-sm" style="width:110px" data-rg-f="mute_minutes"' + (d.action.mute ? '' : ' disabled') + '>' + muteOpts.map(function(x) { return '<option value="' + x + '"' + (x === m ? ' selected' : '') + '>' + rgMinutesText(x) + '</option>'; }).join('') + '<option value="custom">自定义…</option></select></div>' +
+    '<div class="mn-row" style="margin:0"><label><input type="checkbox" data-rg-f="notice"' + (d.action.notice ? ' checked' : '') + ' /> 群内提示</label>' +
+    '<input class="input-sm" style="flex:1" maxlength="200" data-rg-f="notice_template" value="' + escAttr(d.action.notice_template) + '"' + (d.action.notice ? '' : ' disabled') + ' placeholder="留空用默认：[群管] {name} 的消息含违规内容，已撤回" /></div>' +
+    '<p class="mn-hint">提示里可用 {name} 昵称、{uid} QQ号、{group} 群号；同一个人 60 秒内连续命中只禁言 / 提示一次。</p></div>' +
+    '<div class="rg-sec"><h3>生效的群</h3><div class="mn-row"><label><input type="radio" name="rgScope" value="all"' + (all ? ' checked' : '') + ' /> 所有群</label><label><input type="radio" name="rgScope" value="some"' + (all ? '' : ' checked') + ' /> 只在勾选的群（' + d.scope.length + ' 个）</label></div>' +
+    '<div id="rgScopeBox" style="' + (all ? 'display:none' : '') + '"><div class="gp-grid" id="rgScopeGroups" style="max-height:240px">' +
+    mnGroups().map(function(x) { return mnGroupChip(x, d.scope.indexOf(String(x.group_id)) >= 0, 'rg-scope-ck'); }).join('') + '</div></div></div>' +
+    '<div id="rgErr" style="padding:0 18px 12px"></div>';
   mnGroupFilter('#rgScopeGroups');
-  $$('input[name=rgScope]').forEach(function(r) { r.addEventListener('change', function() { $('#rgScopeBox').style.display = r.value === 'some' && r.checked ? '' : (r.value === 'all' && r.checked ? 'none' : $('#rgScopeBox').style.display); }); });
-  $('#rgCancel').addEventListener('click', closeModal);
-  $('#rgSaveBtn').addEventListener('click', function() { rgSave(g, isNew); });
 }
-function rgLines(id) { return $(id).value.split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean); }
-async function rgSave(g, isNew) {
+function rgField(path, el) {
+  var d = RG.draft, v = el.type === 'checkbox' ? el.checked : el.value;
+  var p = path.split(':');
+  if (p.length === 3) {
+    var rows = p[0] === 'kw' ? d.keywords : (p[0] === 'code' ? d.codes : d.apps), r = rows[Number(p[1])];
+    if (!r) return;
+    var before = r[p[2]];
+    r[p[2]] = v;
+    if (p[0] === 'code' && p[2] === 'type' && r.value) {  // 换类型时尽量保留内容：正则 ↔ 普通文字互转
+      if (before === 'regex' && v !== 'regex') { var lit = rxLiteral(r.value.replace(/^\^/, '').replace(/\$$/, '')); if (lit !== null) r.value = lit; }
+      else if (before !== 'regex' && v === 'regex') r.value = rgCodeBuild(before, r.value);
+    }
+    if (p[2] === 'type' || p[2] === 'ttype') rgRenderEditorKeep();
+  } else if (path === 'name') d.name = v;
+  else if (path === 'enabled') d.enabled = v;
+  else if (path === 'mute') { d.action.mute = v; rgRenderEditorKeep(); }
+  else if (path === 'notice') { d.action.notice = v; rgRenderEditorKeep(); }
+  else if (path === 'notice_template') d.action.notice_template = v;
+  else if (path === 'mute_minutes') {
+    if (v === 'custom') {
+      promptModal({ title: '自定义禁言时长', label: '禁言多少分钟（1–43200，最长 30 天）', value: String(d.action.mute_minutes), okText: '确定' }).then(function(x) {
+        var n = Number(x);
+        if (x !== null && n >= 1 && n <= 43200 && Math.floor(n) === n) d.action.mute_minutes = n; else if (x !== null) toast('填 1–43200 的整数', 'warning');
+        rgRenderEditorKeep();
+      });
+      return;
+    }
+    d.action.mute_minutes = Number(v);
+  }
+  rgMarkDirty();
+}
+function rgRenderEditorKeep() {  // 重绘编辑器但保留滚动位置
+  var right = $('#rgEditor'), y = document.querySelector('.main-content').scrollTop;
+  rgRenderEditor(); document.querySelector('.main-content').scrollTop = y;
+}
+function rgCollect() {
+  var d = RG.draft, bad = [];
+  var kw = d.keywords.map(function(r) { return mnRuleBuild(r.type, r.value); }).filter(Boolean);
+  var codes = d.codes.map(function(r) { return rgCodeBuild(r.type, r.value); }).filter(Boolean);
+  var apps = d.apps.map(function(r) { if (r.ttype && !String(r.tvalue).trim()) bad.push('小程序「' + (r.app || '任何小程序') + '」选了按标题，但没填标题条件'); return rgAppBuild(r); }).filter(Boolean);
   var some = ($('input[name=rgScope]:checked') || {}).value === 'some';
   var scope = some ? $$('.rg-scope-ck').filter(function(c) { return c.checked; }).map(function(c) { return c.value; }) : [];
-  if (some && !scope.length) { $('#rgErr').innerHTML = '<div class="mn-result err">请勾选至少一个群，或选「所有群」</div>'; return; }
-  var data = { name: $('#rgName').value.trim(), keywords: rgLines('#rgKeywords'), code_rules: rgLines('#rgCodes'), apps: rgLines('#rgApps'),
-    scope: scope, enabled: g.is_default ? true : (document.getElementById('rgEnabled') ? $('#rgEnabled').checked : true),
-    action: { mute: $('#rgMute').checked, mute_minutes: Number($('#rgMuteMin').value), notice: $('#rgNotice').checked, notice_template: $('#rgNoticeTpl').value.trim() } };
-  if (!isNew) data.id = g.id;
-  var res = await safePost('minimal/rulegroups/save', { group: data });
+  if (some && !scope.length) bad.push('选了「只在勾选的群」，但没有勾选群');
+  if (!String(d.name).trim()) bad.push('请填写组名');
+  return { bad: bad, data: { id: d.id || undefined, name: String(d.name).trim(), enabled: d.is_default ? true : d.enabled, scope: scope,
+    keywords: kw, code_rules: codes, apps: apps, action: d.action } };
+}
+async function rgSave() {
+  var c = rgCollect();
+  if (c.bad.length) { $('#rgErr').innerHTML = '<div class="mn-result err">' + c.bad.map(esc).join('<br>') + '</div>'; return; }
+  var res = await safePost('minimal/rulegroups/save', { group: c.data });
   if (isApiError(res)) { $('#rgErr').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
-  RG.groups = (mnData(res) || {}).groups || RG.groups;
-  closeModal(); rgRender(); toast('已保存', 'success');
+  var d = mnData(res) || {};
+  RG.groups = d.groups || RG.groups; RG.dirty = false;
+  RG.sel = d.group ? d.group.id : RG.sel;
+  rgSelect(RG.sel, true);
+  toast('已保存', 'success');
 }
 async function rgOnClick(e) {
-  var b = e.target.closest('[data-rg-act]');
-  if (!b) return;
-  var g = rgFind(b.getAttribute('data-id'));
-  if (!g) return;
-  var act = b.getAttribute('data-rg-act'), res;
-  if (act === 'edit') { rgEdit(g); return; }
-  if (act === 'del') {
-    if (!await mnConfirm('删除规则组「' + g.name + '」？组里的规则会一起删除。')) return;
-    res = await safePost('minimal/rulegroups/delete', { id: g.id });
-  } else if (act === 'toggle') {
-    res = await safePost('minimal/rulegroups/save', { group: Object.assign({}, g, { enabled: !g.enabled }) });
-  } else {
-    res = await safePost('minimal/rulegroups/move', { id: g.id, dir: act === 'up' ? -1 : 1 });
+  var t = e.target, v;
+  if ((v = t.closest('[data-rg-pick]'))) { rgSelect(v.getAttribute('data-rg-pick')); return; }
+  if ((v = t.closest('[data-rg-add]'))) {
+    var k = v.getAttribute('data-rg-add'), d = RG.draft;
+    if (k === 'kw') d.keywords.push({ type: 'contains', value: '' });
+    if (k === 'code') d.codes.push({ type: 'contains', value: '' });
+    if (k === 'app') d.apps.push({ app: '', ttype: '', tvalue: '' });
+    rgRenderEditorKeep(); rgMarkDirty();
+    var inputs = $$('[data-rg-f^="' + k + ':"]'); if (inputs.length) inputs[inputs.length - 1].focus();
+    return;
   }
-  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
-  RG.groups = (mnData(res) || {}).groups || RG.groups;
-  rgRender();
+  if ((v = t.closest('[data-rg-del]'))) {
+    var pd = v.getAttribute('data-rg-del').split(':'), arr = pd[0] === 'kw' ? RG.draft.keywords : (pd[0] === 'code' ? RG.draft.codes : RG.draft.apps);
+    arr.splice(Number(pd[1]), 1); rgRenderEditorKeep(); rgMarkDirty(); return;
+  }
+  if ((v = t.closest('[data-rg-preset]'))) {
+    var pp = v.getAttribute('data-rg-preset').split(':');
+    if (pp[0] === 'kw') { var x = RG_KW_PRESETS[Number(pp[1])]; RG.draft.keywords.push({ type: x[1], value: x[2] }); }
+    else { var y = RG_CODE_PRESETS[Number(pp[1])]; RG.draft.codes.push({ type: y[1], value: y[2] }); }
+    rgRenderEditorKeep(); rgMarkDirty(); return;
+  }
+  if ((v = t.closest('[data-rg-act]'))) {
+    var act = v.getAttribute('data-rg-act'), d2 = RG.draft;
+    if (act === 'save') { rgSave(); return; }
+    if (act === 'revert') { RG.dirty = false; if (RG.sel === 'new') { RG.sel = null; RG.draft = null; rgRenderList(); rgRenderEditor(); var f = rgOrdered()[0]; if (f) rgSelect(f.id, true); } else rgSelect(RG.sel, true); return; }
+    if (act === 'paste') {
+      var txt = await promptModal({ title: '批量粘贴关键词', label: '每行一条。普通文字 = 包含；= 开头 = 完全相同；re: 开头 = 正则。', multiline: true, okText: '添加' });
+      if (txt) { txt.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean).forEach(function(l) { RG.draft.keywords.push(mnRuleParse(l)); }); RG.draft.keywords = RG.draft.keywords.filter(function(r) { return r.value; }); rgRenderEditorKeep(); rgMarkDirty(); }
+      return;
+    }
+    if (act === 'del') {
+      if (!await mnConfirm('删除规则组「' + d2.name + '」？组里的规则会一起删除。', { danger: true, okText: '删除' })) return;
+      var r1 = await safePost('minimal/rulegroups/delete', { id: d2.id });
+      if (isApiError(r1)) { toast(mnErr(r1), 'error'); return; }
+      RG.groups = (mnData(r1) || {}).groups || RG.groups; RG.dirty = false; RG.sel = null; RG.draft = null;
+      var first = rgOrdered()[0]; if (first) rgSelect(first.id, true); else { rgRenderList(); rgRenderEditor(); }
+      return;
+    }
+    if (act === 'up' || act === 'down') {
+      var r2 = await safePost('minimal/rulegroups/move', { id: d2.id, dir: act === 'up' ? -1 : 1 });
+      if (isApiError(r2)) { toast(mnErr(r2), 'error'); return; }
+      RG.groups = (mnData(r2) || {}).groups || RG.groups; rgRenderList(); rgRenderEditorKeep();
+    }
+  }
+}
+function rgOnInput(e) {
+  var f = e.target.getAttribute && e.target.getAttribute('data-rg-f');
+  if (f) { rgField(f, e.target); return; }
+  if (e.target.name === 'rgScope') { $('#rgScopeBox').style.display = e.target.value === 'some' ? '' : 'none'; rgMarkDirty(); return; }
+  if (e.target.classList && e.target.classList.contains('rg-scope-ck')) {
+    RG.draft.scope = $$('.rg-scope-ck').filter(function(c) { return c.checked; }).map(function(c) { return c.value; });
+    rgMarkDirty();
+  }
 }
 async function rgTest() {
   var out = $('#rgTestResult');
@@ -4217,7 +4519,7 @@ async function loadGuard() {
 }
 
 /* ---- 小程序（miniapp.py） ---- */
-var MP = { page: 1, pageSize: 50, items: [], allow: [], feedLast: 0, feed: [], timer: null, inflight: false, detail: null };
+var MP = { page: 1, pageSize: 50, items: [], allow: [], feedLast: 0, feed: [], timer: null, inflight: false, detail: null, sel: null };
 function mpActive() { var p = $('#tab-miniapps'); return !!(p && p.classList.contains('active') && !document.hidden); }
 function mpGroupName(gid) { var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0]; return (g && g.group_name) || gid; }
 function mpEntry(it) { return it.appid || (String(it.app_key).indexOf('name:') === 0 ? String(it.app_key).slice(5) : it.app_key); }
@@ -4255,23 +4557,28 @@ async function mpLoadStats() {
   MP.items = d.items || []; MP.allow = d.allow || [];
   mpRenderAllow();
   var byUser = d.by === 'user';
-  $('#mpTable').innerHTML = MP.items.length ? '<table class="mn-table"><thead><tr><th>小程序</th>' + (byUser ? '<th>发送者</th>' : '') +
-    '<th>次数</th><th>内容 / 人 / 群</th><th>最近</th><th>操作</th></tr></thead><tbody>' + MP.items.map(function(it, i) {
-      var parts = ['卡片 ' + it.cards, '链接 ' + it.links];
-      if (it.ruled) parts.push('<span style="color:var(--danger)">撤回 ' + it.ruled + '</span>');
-      if (it.allowed) parts.push('白名单 ' + it.allowed);
-      return '<tr><td style="max-width:300px"><div style="display:flex;gap:8px;align-items:center">' +
-        (it.thumb ? '<img alt="图标" src="' + escAttr(it.thumb) + '" style="width:36px;height:36px;border-radius:6px;flex-shrink:0" />' : '') +
-        '<div style="min-width:0"><a href="javascript:void(0)" data-mp-act="detail" data-i="' + i + '">' + esc(it.name) + '</a> ' + mpStateTag(it.state) +
-        (it.appid ? '<br><span class="mn-hint">' + esc(it.appid) + '</span>' : '<br><span class="mn-hint">只出现过链接</span>') + '</div></div></td>' +
-        (byUser ? '<td>' + esc(it.user_id) + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' : '') +
-        '<td style="white-space:nowrap"><strong>' + it.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
-        '<td style="white-space:nowrap">' + it.contents + ' 个内容<br><span class="mn-hint">' + it.users + ' 人 / ' + it.groups + ' 群</span></td>' +
-        '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
-        '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-mp-act="detail" data-i="' + i + '">详情</button>' + mpActs(it, 'mp', i) + '</div></td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '这段时间没有出现小程序' : '小程序记录已关闭') + '</p>';
+  $('#mpCount').textContent = '共 ' + (d.total || 0) + ' 条';
+  $('#mpTable').innerHTML = MP.items.length ? MP.items.map(function(it, i) {
+    var sub = [];
+    if (byUser) sub.push(esc(it.user_name || it.user_id));
+    sub.push('<b>' + it.total + '</b> 次');
+    if (it.ruled) sub.push('<span style="color:var(--danger)">撤回 ' + it.ruled + '</span>');
+    sub.push(it.contents + ' 个内容 · ' + it.users + ' 人 / ' + it.groups + ' 群');
+    sub.push(esc(mnTime(it.last_ts)));
+    return '<div class="split-item" data-mp-open="' + i + '">' + csThumb(it.thumb, '图标') +
+      '<div class="si-main"><div class="si-title">' + esc(it.name) + ' ' + mpStateTag(it.state) + '</div>' +
+      '<div class="si-sub">' + sub.join(' · ') + '</div></div></div>';
+  }).join('') : '<div class="split-empty">' + (d.store_enabled ? '这段时间没有出现小程序' : '小程序记录已关闭') + '</div>';
+  mpMarkSel();
   $('#mpPager').innerHTML = renderPager(MP.page, MP.pageSize, d.total || 0, 'mp') + '<span class="mn-hint">记录保留 ' + d.store_days + ' 天</span>';
   bindPager($('#mpPager'));
+}
+function mpMarkSel() {
+  var s = MP.sel || {};
+  $$('#mpTable [data-mp-open]').forEach(function(el) {
+    var it = MP.items[Number(el.getAttribute('data-mp-open'))];
+    el.classList.toggle('on', !!(it && it.app_key === s.app_key && (it.user_id || '') === (s.user_id || '')));
+  });
 }
 function mpRenderAllow() {
   $('#mpAllowCount').textContent = MP.allow.length + ' 个';
@@ -4288,15 +4595,28 @@ async function mpListSet(it, act) {
   toast('已更新', 'success');
   return true;
 }
+// 小程序详情：显示在「小程序」右栏；从别处（大屏、成员档案、看板）点进来先跳过去
 async function mpShowDetail(it) {
+  if (!it || !it.app_key) return;
+  MP.sel = { app_key: it.app_key, user_id: it.user_id || '' };
+  if (!$('#tab-miniapps').classList.contains('active')) {
+    switchTab('miniapps');
+    setTimeout(function() { mainScrollTo(document.getElementById('mpSplit')); }, 0);
+  }
+  mpMarkSel();
+  var box = $('#mpDetail');
+  box.innerHTML = '<div class="split-empty">加载中...</div>';
+  var ep = beginLoad('mp-detail');
   var res = await safeGet('minimal/miniapps/detail', { app_key: it.app_key, user_id: it.user_id || '' });
-  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  if (!isCurrentLoad('mp-detail', ep)) return;
+  if (isApiError(res)) { box.innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res) || {};
-  MP.detail = { app: it, data: d };
+  var app = Object.assign({}, it, { name: d.name || it.name, appid: d.appid || it.appid || '', state: d.state });
+  MP.detail = { app: app, data: d };
   var contents = (d.contents || []).map(function(c, ci) {
     var titleBtn = c.title ? '<br><button class="btn btn-outline btn-sm" style="margin-top:4px" data-mpd-title="' + ci + '">按这个标题拉黑</button>' : '';
     return '<tr><td style="width:64px">' + (c.thumb ? '<img alt="预览" src="' + escAttr(c.thumb) + '" style="width:56px;height:56px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">' + (c.form === 'link' ? '链接' : '无图') + '</span>') + '</td>' +
-      '<td style="word-break:break-all;max-width:320px">' + (c.title ? esc(c.title) + '<br>' : '') + '<span class="mn-hint">' + esc(c.content) + '</span></td>' +
+      '<td style="word-break:break-all">' + (c.title ? esc(c.title) + '<br>' : '') + '<span class="mn-hint">' + esc(c.content) + '</span></td>' +
       '<td style="white-space:nowrap"><strong>' + c.total + '</strong> 次<br><span class="mn-hint">' + c.users + ' 人</span>' + titleBtn + '</td><td style="white-space:nowrap">' + esc(mnTime(c.last_ts)) + '</td></tr>';
   }).join('');
   var rules = (d.rules || []).map(function(r, ri) {
@@ -4306,25 +4626,34 @@ async function mpShowDetail(it) {
   }).join('');
   var groups = (d.groups || []).map(function(g) { return '<span class="mn-chip">' + esc(mpGroupName(g.group_id)) + '：' + g.total + ' 次 / ' + g.users + ' 人</span>'; }).join('');
   var sends = (d.sends || []).slice(0, 50).map(function(r) {
-    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(mpGroupName(r.group_id)) + '</td><td>' + esc(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') + '</td>' +
+    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td style="white-space:nowrap">' + esc(mpGroupName(r.group_id)) + '</td><td style="white-space:nowrap">' + mbrLink(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') + '</td>' +
       '<td>' + (r.form === 'link' ? '链接' : '卡片') + '</td><td' + (r.outcome === 'rule' ? ' style="color:var(--danger)"' : '') + ' title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
   }).join('');
-  showModal('小程序：' + d.name,
+  var acts = (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-mpd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-mpd-act="allow">加白名单</button>') +
+    (d.state === 'block' ? '<button class="btn btn-outline btn-sm" data-mpd-act="unblock">解除拉黑</button>' : '<button class="btn btn-danger btn-sm" data-mpd-act="block">整个拉黑</button>');
+  box.innerHTML = '<div class="card-header"><h2>小程序详情</h2><div class="header-actions">' + acts + '</div></div>' +
+    '<div class="mn-body split-detail-body">' +
     '<div class="mn-row" style="margin-bottom:6px">' + (d.thumb ? '<img alt="图标" src="' + escAttr(d.thumb) + '" style="width:40px;height:40px;border-radius:8px" />' : '') +
     '<div><b>' + esc(d.name) + '</b> ' + mpStateTag(d.state) + '<br><span class="mn-hint">' + (d.appid ? 'appid ' + esc(d.appid) : '只出现过链接，没有 appid') +
     (d.aliases && d.aliases.length ? '；链接里的名字：' + esc(d.aliases.join('、')) : '') + '</span></div></div>' +
-    (groups ? '<div style="margin-bottom:8px">' + groups + '</div>' : '') +
+    (it.user_id ? '<p class="mn-hint" style="margin-bottom:6px">只看 ' + mbrLink(it.user_id) + ' 发的 · <a href="javascript:void(0)" data-mpd-all="1">看所有人</a></p>' : '') +
+    (groups ? '<div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">' + groups + '</div>' : '') +
     '<p class="mn-hint" style="margin:6px 0">规则组里针对它的规则（「按这个标题拉黑」可以只拦部分标题，同一个小程序的其它内容放行）</p>' +
     '<div class="mn-rule-list" style="margin-bottom:8px">' + (rules || '<p class="mn-hint">没有，整个小程序都放行</p>') + '</div>' +
-    '<p class="mn-hint" style="margin:6px 0">发过的内容（按次数）</p><div style="max-height:40vh;overflow:auto"><table class="mn-table"><tbody>' + (contents || '<tr><td>没有记录</td></tr>') + '</tbody></table></div>' +
-    '<p class="mn-hint" style="margin:10px 0 6px">最近的记录（保留 ' + d.store_days + ' 天）</p><div style="max-height:30vh;overflow:auto"><table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>形式</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table></div>',
-    '<button class="btn btn-primary btn-sm" id="mpDetailClose">关闭</button>');
-  $('#mpDetailClose').addEventListener('click', closeModal);
-  $('#modalBody').onclick = mpDetailClick;  // 弹窗共用一个 body：赋值而不是叠加监听（其它弹窗里没有 data-mpd-* 按钮，不受影响）
+    '<p class="mn-hint" style="margin:6px 0">发过的内容（按次数）</p><table class="mn-table"><tbody>' + (contents || '<tr><td>没有记录</td></tr>') + '</tbody></table>' +
+    '<p class="mn-hint" style="margin:10px 0 6px">最近的记录（保留 ' + d.store_days + ' 天；点 QQ 号看群成员档案）</p><table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>形式</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>' +
+    '</div>';
 }
 async function mpDetailClick(e) {
   var det = MP.detail;
   if (!det) return;
+  var all = e.target.closest('[data-mpd-all]');
+  if (all) { mpShowDetail({ app_key: det.app.app_key, name: det.app.name }); return; }
+  var act = e.target.closest('[data-mpd-act]');
+  if (act) {
+    mpListSet(det.app, act.getAttribute('data-mpd-act')).then(function(ok) { if (ok) { mpLoadStats(); mpShowDetail(det.app); } });
+    return;
+  }
   var tb = e.target.closest('[data-mpd-title]'), ub = e.target.closest('[data-mpd-unrule]');
   if (tb) {
     var c = (det.data.contents || [])[Number(tb.getAttribute('data-mpd-title'))];
@@ -4332,7 +4661,7 @@ async function mpDetailClick(e) {
     var kw = await promptModal({ title: '按标题拉黑：' + det.data.name,
       label: '标题里含有下面的文字就撤回（建议删短到关键的几个字，例如「考研」；也可写 re:正则 或 =完全相同）。只影响这个小程序，它的其它内容照常放行。',
       value: String(c.title || '').trim().slice(0, 60), okText: '拉黑' });
-    if (!kw) { mpShowDetail(det.app); return; }
+    if (!kw) return;
     var res = await safePost('minimal/miniapps/list', { kind: 'block', on: true, entry: mpEntry(det.app) + ' | ' + kw });
     if (isApiError(res)) { toast(mnErr(res), 'error'); } else { toast('已加入默认组', 'success'); mpLoadStats(); }
     mpShowDetail(det.app);
@@ -4370,11 +4699,11 @@ function mpRenderFeed(enabled) {
   if (!MP.feed.length) { $('#mpFeed').innerHTML = '<div class="mn-empty" style="grid-column:1/-1">' + (enabled ? '还没有记录。群里有人发小程序卡片或 #小程序:// 链接后会出现在这里。' : '小程序记录已关闭（上面「记录」里打开）。') + '</div>'; return; }
   $('#mpFeed').innerHTML = MP.feed.map(function(x) {
     var img = x.preview || x.icon;
-    var html = '<div class="mp-item' + (x.outcome === 'rule' ? ' rule' : '') + '"' + (x._new ? ' style="animation:fadeIn .6s"' : '') + '>' +
+    var html = '<div class="mp-item' + (x.outcome === 'rule' ? ' rule' : '') + '" data-mpf="' + escAttr(x.id) + '" title="点击看这个小程序的详情" style="cursor:pointer' + (x._new ? ';animation:fadeIn .6s' : '') + '">' +
       (img ? '<img alt="预览" src="' + escAttr(img) + '" />' : '<span class="noimg">' + (x.form === 'link' ? '链接' : '卡片') + '</span>') +
       '<div class="info"><div class="t"><b>' + esc(x.name) + '</b></div>' +
       '<div class="t mn-hint">' + esc(mnTime(x.ts)) + ' · ' + esc((MP.names || {})[x.group_id] || mpGroupName(x.group_id)) + '</div>' +
-      '<div class="t mn-hint">' + esc(x.user_name || x.user_id) + (x.user_name ? '（' + esc(x.user_id) + '）' : '') + '</div>' +
+      '<div class="t mn-hint">' + mbrLink(x.user_id, x.user_name ? x.user_name + '（' + x.user_id + '）' : x.user_id) + '</div>' +
       '<div class="c">' + esc((x.title ? x.title + ' ' : '') + x.content).slice(0, 120) + '</div>' +
       '<div class="t"' + (x.outcome === 'rule' ? ' style="color:var(--danger)"' : '') + ' title="' + escAttr(x.reason || '') + '">' + esc(x.outcome_label) + (x.outcome === 'rule' && x.reason ? '：' + esc(x.reason) : '') + '</div></div></div>';
     x._new = false;
@@ -4382,6 +4711,16 @@ function mpRenderFeed(enabled) {
   }).join('');
 }
 function mpOnClick(e) {
+  if (e.target.closest('#mpDetail')) { mpDetailClick(e); return; }
+  var o = e.target.closest('[data-mp-open]');
+  if (o) { var oi = MP.items[Number(o.getAttribute('data-mp-open'))]; if (oi) mpShowDetail(oi); return; }
+  var f = e.target.closest('[data-mpf]');
+  if (f) {
+    var fid = f.getAttribute('data-mpf');
+    var x = MP.feed.filter(function(y) { return String(y.id) === fid; })[0];
+    if (x) mpShowDetail({ app_key: x.app_key, name: x.name });
+    return;
+  }
   var b = e.target.closest('[data-mp-act]');
   if (b) {
     var it = MP.items[Number(b.getAttribute('data-i'))];
@@ -4528,7 +4867,7 @@ function gfRender() {
     var list = Object.keys(by).map(function(k) { return by[k]; }).sort(function(a, b) { return Object.keys(b.groups).length - Object.keys(a.groups).length || b.files - a.files; });
     $('#gfTable').innerHTML = list.length ? '<table class="mn-table"><thead><tr><th>上传者</th><th>文件</th><th>群</th><th>大小</th><th>最近上传</th><th>操作</th></tr></thead><tbody>' + list.map(function(u) {
       var ng = Object.keys(u.groups).length;
-      return '<tr><td>' + esc(u.uploader || '未知') + (u.name ? '<br><span class="mn-hint">' + esc(u.name) + '</span>' : '') + '</td><td><strong>' + u.files + '</strong> 个</td>' +
+      return '<tr><td>' + (u.uploader ? mbrLink(u.uploader) : '未知') + (u.name ? '<br><span class="mn-hint">' + esc(u.name) + '</span>' : '') + '</td><td><strong>' + u.files + '</strong> 个</td>' +
         '<td' + (ng > 1 ? ' style="color:var(--danger);font-weight:600"' : '') + '>' + ng + ' 个群</td><td>' + esc(gfSize(u.size)) + '</td><td style="white-space:nowrap">' + esc(mnTime(u.last)) + '</td>' +
         '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" data-gf-only="' + escAttr(u.uploader) + '">只看他的</button>' +
         '<button class="btn btn-danger btn-sm" data-gf-selup="' + escAttr(u.uploader) + '">选中他的全部文件</button>' +
@@ -4732,8 +5071,168 @@ function gselEnhance(sel) {
 document.addEventListener('click', function() { gselCloseAll(null); });
 var GSEL_IDS = ['csGroup', 'cuGroup', 'mpGroup', 'gfGroupSel', 'rgTestGroup', 'guardBackupGroup', 'wxForward', 'kickScope'];
 
+/* ---- 群成员查找（member_lookup.py） ---- */
+var MBR = { items: [], uid: '', profile: null, sub: 'groups' };
+// 全站通用：带虚线的 QQ 号，点击打开群成员档案
+function mbrLink(uid, text) {
+  uid = String(uid || '');
+  if (!/^\d{5,}$/.test(uid)) return esc(text || uid);
+  return '<a class="mbr" data-member="' + escAttr(uid) + '" title="查看 ' + escAttr(uid) + ' 的群成员档案">' + esc(text || uid) + '</a>';
+}
+function mbrGo(uid) {
+  switchTab('member');
+  $('#mbrQuery').value = uid;
+  mbrSearch().then(function() { mbrOpen(uid); });
+}
+document.addEventListener('click', function(e) {
+  var a = e.target.closest && e.target.closest('[data-member]');
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  if (typeof closeModal === 'function') { try { closeModal(); } catch (err) { /* 没有弹窗 */ } }
+  mbrGo(a.getAttribute('data-member'));
+}, true);
+async function loadMember() {
+  if (!MN.overview) await mnLoadOverview();
+  if (MBR.uid && !MBR.profile) mbrOpen(MBR.uid);
+}
+async function mbrSearch() {
+  var q = $('#mbrQuery').value.trim();
+  if (!q) { MBR.items = []; $('#mbrList').innerHTML = '<div class="split-empty">输入后自动搜索</div>'; $('#mbrCount').textContent = ''; return; }
+  var ep = beginLoad('mbr-search');
+  var res = await safeGet('minimal/member/search', { q: q });
+  if (!isCurrentLoad('mbr-search', ep)) return;
+  if (isApiError(res)) { $('#mbrList').innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res) || {};
+  MBR.items = d.items || [];
+  var cov = d.coverage || {};
+  $('#mbrCount').textContent = '找到 ' + d.total + ' 人' + (d.truncated ? '（只列前 ' + MBR.items.length + ' 个）' : '') +
+    (cov.groups_cached < cov.groups_total ? '；' + (cov.groups_total - cov.groups_cached) + ' 个群还没缓存成员' : '');
+  mbrRenderList();
+}
+function mbrRenderList() {
+  $('#mbrList').innerHTML = MBR.items.length ? MBR.items.map(function(it) {
+    var roles = it.roles.map(function(r) { return '<span class="mn-chip">' + (r === 'owner' ? '群主' : '管理员') + '</span>'; }).join('');
+    return '<div class="split-item' + (it.user_id === MBR.uid ? ' on' : '') + '" data-mbr-open="' + escAttr(it.user_id) + '">' +
+      dupAvatar(it, 34) + '<div class="si-main"><div class="si-title">' + esc(it.name || it.user_id) + ' ' + roles + '</div>' +
+      '<div class="si-sub">' + esc(it.user_id) + ' · ' + it.groups + ' 个群' + (it.max_level ? ' · Lv.' + it.max_level : '') +
+      (it.names.length > 1 ? ' · 也叫 ' + esc(it.names.slice(1, 3).join('、')) : '') + '</div></div></div>';
+  }).join('') : '<div class="split-empty">没有找到</div>';
+}
+async function mbrOpen(uid) {
+  MBR.uid = String(uid); MBR.profile = null;
+  mbrRenderList();
+  $('#mbrProfile').innerHTML = '<div class="split-empty">加载中...</div>';
+  var ep = beginLoad('mbr-profile');
+  var res = await safeGet('minimal/member/profile', { user_id: uid });
+  if (!isCurrentLoad('mbr-profile', ep)) return;
+  if (isApiError(res)) { $('#mbrProfile').innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
+  MBR.profile = mnData(res);
+  mbrRenderProfile();
+}
+function mbrGroupName(gid, fallback) { return fallback || cuGroupName(gid) || gid; }
+function mbrRenderProfile() {
+  var p = MBR.profile;
+  if (!p) return;
+  var tags = [];
+  if (p.plugin_admin) tags.push('<span class="cb-tag allowed">插件管理员</span>');
+  if (p.whitelisted) tags.push('<span class="cb-tag allowed">白名单</span>');
+  if (p.blacklisted) tags.push('<span class="cb-tag blocked" title="' + escAttr(p.blacklist ? (p.blacklist.reason || '') : '') + '">已在黑名单' + (p.blacklist && p.blacklist.reason ? '：' + esc(p.blacklist.reason) : '') + '</span>');
+  var codes = p.codes || {}, mp = p.miniapps || {}, files = p.files || {}, leaves = p.leaves || {}, vio = p.violations || {}, ops = p.ops || {};
+  var subs = [['groups', '所在的群', p.groups.length], ['codes', '码', codes.code_count || 0], ['miniapps', '小程序', (mp.apps || []).length],
+    ['files', '群文件', files.total || 0], ['leaves', '退群', (leaves.summary || {}).total || 0], ['violations', '违规', vio.total || 0], ['ops', '操作记录', (ops.items || []).length]];
+  $('#mbrProfile').innerHTML =
+    '<div class="card-header"><div style="display:flex;gap:12px;align-items:center;min-width:0">' + dupAvatar({ user_id: p.user_id, avatar: p.avatar }, 48) +
+    '<div style="min-width:0"><div style="font-size:15px;font-weight:600">' + esc(p.name || p.user_id) + ' ' + tags.join(' ') + '</div>' +
+    '<div class="mn-hint">' + esc(p.user_id) + ' · 在 ' + p.groups.length + ' 个群' + (p.names.length > 1 ? ' · 其它名片：' + esc(p.names.slice(1, 5).join('、')) : '') + '</div></div></div>' +
+    '<div class="header-actions"><button class="btn btn-ghost btn-sm" data-mbr-act="copy">复制 QQ</button>' +
+    '<button class="btn btn-outline btn-sm" data-mbr-act="kick">踢人 / 拉黑</button></div></div>' +
+    '<div class="subtabs">' + subs.map(function(t) { return '<button class="subtab' + (MBR.sub === t[0] ? ' on' : '') + '" data-mbr-sub="' + t[0] + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>'; }).join('') + '</div>' +
+    '<div class="log-container" id="mbrSub">' + mbrSubHtml(MBR.sub) + '</div>';
+}
+function mbrSubHtml(sub) {
+  var p = MBR.profile, t = function(head, rows, empty) { return rows.length ? '<table class="mn-table"><thead><tr>' + head.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table>' : '<p class="empty">' + empty + '</p>'; };
+  var role = { owner: '群主', admin: '管理员', member: '成员' };
+  if (sub === 'groups') {
+    var cov = p.coverage || {};
+    return t(['群', '身份', '群名片 / 头衔', '等级', '入群时间', '最后发言'], p.groups.map(function(g) {
+      return '<tr><td>' + esc(mbrGroupName(g.group_id, g.group_name)) + '<div class="mn-hint">' + esc(g.group_id) + '</div></td><td>' + (role[g.role] || g.role) + '</td>' +
+        '<td>' + esc(g.card || g.nickname) + (g.title ? '<div class="mn-hint">头衔：' + esc(g.title) + '</div>' : '') + '</td><td>' + (g.level ? 'Lv.' + g.level : '<span class="mn-hint">—</span>') + '</td>' +
+        '<td style="white-space:nowrap">' + (g.join_time ? esc(mnTime(g.join_time)) : '<span class="mn-hint">未知</span>') + '</td>' +
+        '<td style="white-space:nowrap">' + (g.last_sent_time ? esc(mnTime(g.last_sent_time)) : '<span class="mn-hint">—</span>') + '</td></tr>';
+    }), '本地缓存里他不在任何群（缓存了 ' + (cov.groups_cached || 0) + ' / ' + (cov.groups_total || 0) + ' 个群）') +
+      '<p class="mn-hint" style="margin-top:8px">数据来自群成员缓存（缓存了 ' + (cov.groups_cached || 0) + ' / ' + (cov.groups_total || 0) + ' 个群），入群时间和等级以协议端返回为准。</p>';
+  }
+  if (sub === 'codes') {
+    var c = p.codes || {};
+    return t(['码', '内容', '次数', '群', '最近'], (c.codes || []).map(function(x, i) {
+      return '<tr><td style="width:56px">' + (x.thumb ? '<img alt="码" src="' + escAttr(x.thumb) + '" style="width:44px;height:44px;object-fit:contain" />' : '') + '</td>' +
+        '<td style="word-break:break-all"><a href="javascript:void(0)" data-mbr-code="' + i + '">' + esc(x.text.length > 90 ? x.text.slice(0, 90) + '…' : x.text) + '</a> ' + mpStateTag(x.state) + '</td>' +
+        '<td style="white-space:nowrap"><strong>' + x.total + '</strong>' + ((x.limited + x.ruled) ? '<div class="mn-hint" style="color:var(--danger)">撤回 ' + (x.limited + x.ruled) + '</div>' : '') + '</td>' +
+        '<td>' + x.group_ids.map(function(g) { return esc(mbrGroupName(g)); }).join('、') + '</td><td style="white-space:nowrap">' + esc(mnTime(x.last_ts)) + '</td></tr>';
+    }), '没有发过码（按人长期累计）');
+  }
+  if (sub === 'miniapps') {
+    var m = p.miniapps || {};
+    return t(['小程序', '次数', '群', '最近'], (m.apps || []).map(function(a, i) {
+      return '<tr><td><a href="javascript:void(0)" data-mbr-mp="' + i + '">' + esc(a.name) + '</a> ' + mpStateTag(a.state) + (a.appid ? '<div class="mn-hint">' + esc(a.appid) + '</div>' : '') + '</td>' +
+        '<td><strong>' + a.total + '</strong>' + (a.ruled ? '<div class="mn-hint" style="color:var(--danger)">撤回 ' + a.ruled + '</div>' : '') + '</td><td>' + a.groups + ' 个</td><td style="white-space:nowrap">' + esc(mnTime(a.last_ts)) + '</td></tr>';
+    }), '没有发过小程序（记录保留 ' + (m.store_days || 90) + ' 天）');
+  }
+  if (sub === 'files') {
+    var f = p.files || {};
+    var head = f.scanned_at ? '<p class="mn-hint" style="margin-bottom:8px">来自最近一次群文件扫描（' + esc(mnTime(f.scanned_at)) + '，' + f.scanned_groups + ' 个群）。' + (f.items.length ? '<a href="javascript:void(0)" data-mbr-act="files">在「群文件」页选中他的全部文件</a>' : '') + '</p>'
+      : '<p class="mn-hint" style="margin-bottom:8px">还没有扫描过群文件。<a href="javascript:void(0)" data-mbr-act="scan">去「群文件」扫描他所在的 ' + p.groups.length + ' 个群</a></p>';
+    return head + t(['文件名', '群', '大小', '上传时间'], (f.items || []).map(function(x) {
+      return '<tr><td style="word-break:break-all">' + esc(x.name) + '</td><td>' + esc(mbrGroupName(x.group_id)) + '</td><td style="white-space:nowrap">' + esc(gfSize(x.size)) + '</td><td style="white-space:nowrap">' + esc(mnTime(x.upload_time)) + '</td></tr>';
+    }), f.scanned_at ? '扫描到的群里没有他上传的文件' : '');
+  }
+  if (sub === 'leaves') {
+    var l = p.leaves || {}, sm = l.summary || {};
+    return (sm.total ? '<p class="mn-hint" style="margin-bottom:8px">共退群 ' + sm.total + ' 次：主动 ' + sm.leaves + ' 次，被踢 ' + sm.kicks + ' 次</p>' : '') +
+      t(['时间', '群', '方式', '退群前的消息'], (l.items || []).map(function(r) {
+        var last = (r.messages || []).slice(-1)[0];
+        return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(mbrGroupName(r.group_id, r.group_name)) + '</td><td>' + esc(r.kind_label) + '</td>' +
+          '<td style="word-break:break-all">' + (last ? esc(last.text) + ((r.messages || []).length > 1 ? '<span class="mn-hint">（共 ' + r.messages.length + ' 条）</span>' : '') : '<span class="mn-hint">—</span>') + '</td></tr>';
+      }), '没有退群记录');
+  }
+  if (sub === 'violations') {
+    var v = p.violations || {};
+    return t(['时间', '群', '消息', '处理', '原因'], (v.items || []).map(function(x) {
+      return '<tr><td style="white-space:nowrap">' + esc(mnTime(x.ts)) + '</td><td>' + esc(mbrGroupName(x.group_id)) + '</td><td style="word-break:break-all">' + esc((x.msg_preview || '').slice(0, 80)) + '</td>' +
+        '<td><span class="badge badge-danger">' + esc(x.action) + '</span></td><td>' + esc((x.reason || '').slice(0, 60)) + '</td></tr>';
+    }), '没有违规记录') + (v.total > (v.items || []).length ? '<p class="mn-hint" style="margin-top:8px">只显示最近 ' + v.items.length + ' 条，共 ' + v.total + ' 条</p>' : '');
+  }
+  if (sub === 'ops') {
+    var o = p.ops || {};
+    return t(['时间', '操作', '群', '结果', '原因 / 说明'], (o.items || []).map(function(x) {
+      return '<tr><td style="white-space:nowrap">' + esc(mnTime(x.ts || x.created_at)) + '</td><td>' + esc(x.action) + '<div class="mn-hint">' + esc(x.source || '') + '</div></td><td>' + esc(x.group_id ? mbrGroupName(x.group_id) : '') + '</td>' +
+        '<td>' + esc(x.result || '') + '</td><td style="word-break:break-all">' + esc(x.reason || '') + (x.detail ? '<div class="mn-hint">' + esc(String(x.detail).slice(0, 120)) + '</div>' : '') + '</td></tr>';
+    }), '没有针对他的操作记录');
+  }
+  return '';
+}
+async function mbrOnClick(e) {
+  var t = e.target, v;
+  if ((v = t.closest('[data-mbr-open]'))) { mbrOpen(v.getAttribute('data-mbr-open')); return; }
+  if ((v = t.closest('[data-mbr-sub]'))) { MBR.sub = v.getAttribute('data-mbr-sub'); mbrRenderProfile(); return; }
+  var p = MBR.profile;
+  if (!p) return;
+  if ((v = t.closest('[data-mbr-code]'))) { var c = (p.codes.codes || [])[Number(v.getAttribute('data-mbr-code'))]; if (c) csShowDetail({ code_hash: c.code_hash, user_id: '' }); return; }
+  if ((v = t.closest('[data-mbr-mp]'))) { var a = (p.miniapps.apps || [])[Number(v.getAttribute('data-mbr-mp'))]; if (a) mpShowDetail({ app_key: a.app_key, user_id: '' }); return; }
+  if ((v = t.closest('[data-mbr-act]'))) {
+    var act = v.getAttribute('data-mbr-act');
+    if (act === 'copy') cbCopy(p.user_id);
+    if (act === 'kick') { switchTab('kick'); var box = document.getElementById('kickIds'); if (box) { box.value = p.user_id; box.focus(); } }
+    if (act === 'files') { switchTab('files'); setTimeout(function() { GF.files.forEach(function(f) { if (f.uploader === p.user_id) GF.sel[gfKey(f)] = true; }); $('#gfUploader').value = p.user_id; $('#gfView').value = 'files'; gfRender(); }, 600); }
+    if (act === 'scan') {
+      switchTab('files');
+      setTimeout(function() { mnSetGroupChecks('#gfGroups', false); $$('#gfGroups input[type=checkbox]').forEach(function(cb) { if (p.groups.some(function(g) { return g.group_id === cb.value; })) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); } }); }, 800);
+    }
+  }
+}
+
 /* ---- 码管理 ---- */
-var CS = { page: 1, pageSize: 50, items: [], window: 5, ttl: 10 };
+var CS = { page: 1, pageSize: 50, items: [], window: 5, ttl: 10, view: 'code', sel: null, total: null, pendingGroup: null };
 var CS_OUTCOME = { pass: '放行', limit: '超限撤回', rule: '规则撤回', allow: '白名单放行' };
 async function loadCodes(page) {
   if (page) CS.page = page;
@@ -4751,13 +5250,14 @@ async function loadCodes(page) {
   var g = $('#csGroup'), cur = g.value;
   g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   g.value = cur;
+  if (CS.pendingGroup != null) { g.value = CS.pendingGroup; CS.pendingGroup = null; }
   var ug = $('#cuGroup'), ucur = ug.value;
   ug.innerHTML = g.innerHTML;
   ug.value = ucur;
   await Promise.all([csLoadStats(), csLoadLists(), cuLoad()]);
 }
 /* 按人统计（长期累计，code_user_stats） */
-var CU = { page: 1, pageSize: 50, items: [] };
+var CU = { page: 1, pageSize: 50, items: [], total: null };
 function cuGroupName(gid) {
   var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
   return g && g.group_name ? g.group_name : '';
@@ -4767,64 +5267,162 @@ async function cuLoad() {
   var res = await safeGet('minimal/codes/users', { sort: $('#cuSort').value, group_id: $('#cuGroup').value,
     keyword: $('#cuKeyword').value.trim(), page: CU.page, page_size: CU.pageSize });
   if (!isCurrentLoad('codes-users', loadEp)) return;
-  if (isApiError(res)) { $('#cuTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  if (isApiError(res)) { $('#cuTable').innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res);
-  CU.items = d.items || [];
-  $('#cuTable').innerHTML = CU.items.length ? '<table class="mn-table"><thead><tr><th>发送者</th><th>不同的码</th><th>总次数</th><th>群</th><th>首次 / 最近</th><th>操作</th></tr></thead><tbody>' +
-    CU.items.map(function(it, i) {
-      var bad = it.limited + it.ruled;
-      return '<tr><td>' + esc(it.user_id) + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' +
-        '<td><strong>' + it.codes + '</strong> 个</td>' +
-        '<td style="white-space:nowrap"><strong>' + it.total + '</strong>' + (bad ? '<br><span class="mn-hint" style="color:var(--danger)">撤回 ' + bad + '</span>' : '') + '</td>' +
-        '<td>' + it.groups + ' 个</td>' +
-        '<td style="white-space:nowrap"><span class="mn-hint">' + esc(mnTime(it.first_ts)) + '</span><br>' + esc(mnTime(it.last_ts)) + '</td>' +
-        '<td><button class="btn btn-ghost btn-sm" data-cu-user="' + i + '">查看发过的码</button></td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '还没有记录' : '码记录已关闭，不累计') + '</p>';
+  CU.items = d.items || []; CU.total = d.total || 0;
+  cuRenderList(d.store_enabled);
   $('#cuPager').innerHTML = renderPager(CU.page, CU.pageSize, d.total || 0, 'cu');
   bindPager($('#cuPager'));
+  if (CS.view === 'user') $('#csCount').textContent = '共 ' + CU.total + ' 人';
 }
+function cuRenderList(storeEnabled) {
+  var sel = CS.sel && CS.sel.kind === 'user' ? CS.sel.user_id : '';
+  $('#cuTable').innerHTML = CU.items.length ? CU.items.map(function(it, i) {
+    var bad = it.limited + it.ruled;
+    return '<div class="split-item' + (it.user_id === sel ? ' on' : '') + '" data-cu-open="' + i + '">' +
+      '<div class="si-main"><div class="si-title">' + esc(it.user_name || it.user_id) + (it.user_name ? ' <span class="mn-hint">' + esc(it.user_id) + '</span>' : '') + '</div>' +
+      '<div class="si-sub">' + it.codes + ' 个码 · ' + it.total + ' 次' + (bad ? ' · <span style="color:var(--danger)">撤回 ' + bad + '</span>' : '') + ' · ' + it.groups + ' 群 · 最近 ' + esc(mnTime(it.last_ts)) + '</div></div></div>';
+  }).join('') : '<div class="split-empty">' + (storeEnabled === false ? '码记录已关闭，不累计' : '还没有记录') + '</div>';
+}
+function csSetView(v) {
+  CS.view = v === 'user' ? 'user' : 'code';
+  $$('[data-cs-view]').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-cs-view') === CS.view); });
+  $('#csViewCode').style.display = CS.view === 'code' ? '' : 'none';
+  $('#csViewUser').style.display = CS.view === 'user' ? '' : 'none';
+  $('#csCount').textContent = CS.view === 'user' ? (CU.total != null ? '共 ' + CU.total + ' 人' : '') : (CS.total != null ? '共 ' + CS.total + ' 条' : '');
+  try { localStorage.setItem('gg_cs_view', CS.view); } catch (e) { /* 忽略 */ }
+}
+function csTagHtml(state) {
+  return state === 'allow' ? '<span class="cb-tag allowed">白名单</span> ' : (state === 'block' ? '<span class="cb-tag blocked">已拉黑</span> ' : '');
+}
+function csThumb(src, alt) { return src ? '<img class="si-thumb" alt="' + escAttr(alt || '码') + '" src="' + escAttr(src) + '" />' : '<span class="si-noimg">无图</span>'; }
+// 码详情：显示在「码管理」右栏；从别的页面（大屏、看板、成员档案）点进来会先跳到「码管理」
+async function csShowDetail(it) {
+  if (!it || !(it.code_hash || it.text)) return;
+  CS.sel = { kind: 'code', code_hash: it.code_hash || '', text: it.text || '', user_id: it.user_id || '' };
+  if (!$('#tab-codes').classList.contains('active')) { switchTab('codes'); csScrollToSplit(); }
+  csMarkSel();
+  var box = $('#csDetail');
+  box.innerHTML = '<div class="split-empty">加载中...</div>';
+  var ep = beginLoad('codes-detail');
+  var res = await safeGet('minimal/codes/detail', { code_hash: CS.sel.code_hash, text: CS.sel.code_hash ? '' : CS.sel.text, user_id: CS.sel.user_id });
+  if (!isCurrentLoad('codes-detail', ep)) return;
+  if (isApiError(res)) { box.innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res) || {};
+  CS.sel.code_hash = d.code_hash; CS.sel.text = d.text || CS.sel.text; CS.detail = d;
+  csMarkSel();
+  var text = d.text || CS.sel.text;
+  var imgs = (d.images || []).map(function(m) {
+    return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;min-width:0">' +
+      (m.orig ? '<a href="' + escAttr(m.orig) + '" target="_blank" rel="noopener" title="新窗口看原图"><img alt="原图" src="' + escAttr(m.orig) + '" style="max-width:140px;max-height:140px;display:block" /></a>' : '<span class="mn-hint">原图已清理</span>') +
+      (m.crop ? '<img alt="裁剪图" src="' + escAttr(m.crop) + '" style="max-width:80px;max-height:80px;background:#fff" />' : '') +
+      '<div class="mn-hint">' + esc(mnTime(m.ts)) + '<br>' + esc(cuGroupName(m.group_id) || m.group_id) + '<br>' + mbrLink(m.user_id) + '</div></div>';
+  }).join('');
+  var people = {};
+  var sends = (d.sends || []).map(function(r) {
+    people[r.user_id] = true;
+    var bad = r.outcome === 'limit' || r.outcome === 'rule';
+    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td>' +
+      '<td style="white-space:nowrap"><a href="javascript:void(0)" data-cs-group="' + escAttr(r.group_id) + '" title="只看这个群的码">' + esc(cuGroupName(r.group_id) || r.group_id) + '</a></td>' +
+      '<td>' + mbrLink(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') +
+      (CS.sel.user_id ? '' : ' <a href="javascript:void(0)" class="mn-hint" data-csd-user="' + escAttr(r.user_id) + '" title="只看这个人发的">只看他</a>') + '</td>' +
+      '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.outcome_label) + '</td></tr>';
+  }).join('');
+  var acts = '<button class="btn btn-ghost btn-sm" data-csd-act="copy">复制</button>' +
+    (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-csd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-csd-act="allow">加白名单</button>') +
+    (d.state === 'block' ? '<button class="btn btn-outline btn-sm" data-csd-act="unblock">解除拉黑</button>' : '<button class="btn btn-danger btn-sm" data-csd-act="block">拉黑</button>');
+  box.innerHTML = '<div class="card-header"><h2>码详情</h2><div class="header-actions">' + acts + '</div></div>' +
+    '<div class="mn-body split-detail-body">' +
+    '<div style="word-break:break-all;margin-bottom:6px;font-weight:600">' + csTagHtml(d.state) + esc(text || '（内容未知）') + '</div>' +
+    (CS.sel.user_id ? '<p class="mn-hint" style="margin-bottom:6px">只看 ' + mbrLink(CS.sel.user_id) + ' 发的 · <a href="javascript:void(0)" data-csd-user="">看所有人</a></p>' : '') +
+    '<p class="mn-hint" style="margin:6px 0">最近的发送记录（' + (d.sends || []).length + ' 条，' + Object.keys(people).length + ' 人；点群名只看这个群，点 QQ 号看群成员档案）</p>' +
+    (sends ? '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>' : '<p class="mn-hint">发送记录已过期（保留 ' + d.ttl_hours + ' 小时）</p>') +
+    '<p class="mn-hint" style="margin:10px 0 6px">图片（同一张图只显示一次，最多 8 组；保留 ' + d.ttl_hours + ' 小时）</p>' +
+    (imgs ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px">' + imgs + '</div>' : '<p class="mn-hint">没有保存的图片</p>') +
+    '</div>';
+}
+// 某人发过的全部码：同样显示在右栏
 async function cuShowUser(userId) {
+  CS.sel = { kind: 'user', user_id: String(userId) };
+  if (!$('#tab-codes').classList.contains('active')) { switchTab('codes'); csScrollToSplit(); }
+  if (CS.view !== 'user') csSetView('user');
+  csMarkSel();
+  var box = $('#csDetail');
+  box.innerHTML = '<div class="split-empty">加载中...</div>';
+  var ep = beginLoad('codes-detail');
   var res = await safeGet('minimal/codes/user', { user_id: userId });
-  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  if (!isCurrentLoad('codes-detail', ep)) return;
+  if (isApiError(res)) { box.innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res);
   CU.detail = d;
   var groups = (d.groups || []).map(function(g) {
-    return '<span class="mn-chip">' + esc(cuGroupName(g.group_id) || g.group_id) + '：' + g.total + ' 次 / ' + g.codes + ' 个码</span>';
+    return '<a href="javascript:void(0)" class="mn-chip" data-cs-group="' + escAttr(g.group_id) + '" title="只看这个群的码">' + esc(cuGroupName(g.group_id) || g.group_id) + '：' + g.total + ' 次 / ' + g.codes + ' 个码</a>';
   }).join('');
   var rows = (d.codes || []).map(function(c, i) {
-    var tag = c.state === 'allow' ? '<span class="cb-tag allowed">白名单</span>' : (c.state === 'block' ? '<span class="cb-tag blocked">已拉黑</span>' : '');
     var parts = ['放行 ' + c.passed];
     if (c.limited) parts.push('<span style="color:var(--danger)">超限 ' + c.limited + '</span>');
     if (c.ruled) parts.push('<span style="color:var(--danger)">规则 ' + c.ruled + '</span>');
     if (c.allowed) parts.push('白名单 ' + c.allowed);
     var short = c.text.length > 120 ? c.text.slice(0, 120) + '…' : c.text;
     var gs = c.group_ids.map(function(gid) { return esc(cuGroupName(gid) || gid); }).join('、');
-    return '<tr><td style="width:56px">' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" style="width:48px;height:48px;object-fit:contain" />' : '<span class="mn-hint">无图</span>') + '</td>' +
-      '<td style="max-width:300px;word-break:break-all">' + esc(short) + ' ' + tag + '</td>' +
+    return '<tr><td style="width:56px">' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" style="width:48px;height:48px;object-fit:contain;cursor:pointer" data-cud-act="detail" data-i="' + i + '" />' : '<span class="mn-hint">无图</span>') + '</td>' +
+      '<td style="word-break:break-all"><a href="javascript:void(0)" data-cud-act="detail" data-i="' + i + '" title="看这个码的发送记录和图片">' + esc(short) + '</a> ' + csTagHtml(c.state) + '</td>' +
       '<td style="white-space:nowrap"><strong>' + c.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
-      '<td style="max-width:180px">' + gs + '</td>' +
+      '<td style="max-width:160px">' + gs + '</td>' +
       '<td style="white-space:nowrap"><span class="mn-hint">' + esc(mnTime(c.first_ts)) + '</span><br>' + esc(mnTime(c.last_ts)) + '</td>' +
-      '<td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-cu-act="copy" data-i="' + i + '">复制</button>' +
-      (c.state === 'block' ? '<button class="btn btn-outline btn-sm" data-cu-act="unblock" data-i="' + i + '">解除拉黑</button>'
-        : '<button class="btn btn-danger btn-sm" data-cu-act="block" data-i="' + i + '">拉黑</button>') + '</div></td></tr>';
+      '<td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" data-cud-act="copy" data-i="' + i + '">复制</button>' +
+      (c.state === 'block' ? '<button class="btn btn-outline btn-sm" data-cud-act="unblock" data-i="' + i + '">解除拉黑</button>'
+        : '<button class="btn btn-danger btn-sm" data-cud-act="block" data-i="' + i + '">拉黑</button>') + '</div></td></tr>';
   }).join('');
-  showModal('发过的码：' + d.user_id + (d.user_name ? '（' + d.user_name + '）' : ''),
-    '<div class="mn-row" style="margin-bottom:6px"><span>共 <b>' + d.code_count + '</b> 个不同的码，发了 <b>' + d.total + '</b> 次</span></div>' +
-    (groups ? '<div style="margin-bottom:8px">' + groups + '</div>' : '') +
-    '<p class="mn-hint" style="margin-bottom:6px">全部历史累计。缩略图长期保留，原图按「记录和图片保留」时长清理。</p>' +
-    (rows ? '<div id="cuDetailBox" style="max-height:60vh;overflow:auto"><table class="mn-table"><thead><tr><th>码</th><th>内容</th><th>次数</th><th>群</th><th>首次 / 最近</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p class="empty">没有记录</p>'),
-    '<button class="btn btn-primary btn-sm" id="cuDetailClose">关闭</button>');
-  $('#cuDetailClose').addEventListener('click', closeModal);
-  var box = document.getElementById('cuDetailBox');
-  if (box) box.addEventListener('click', function(e) {
-    var b = e.target.closest('[data-cu-act]');
-    if (!b) return;
-    var c = (CU.detail.codes || [])[Number(b.getAttribute('data-i'))];
-    if (!c) return;
-    var act = b.getAttribute('data-cu-act');
-    if (act === 'copy') { cbCopy(c.text); return; }
-    codeListSet('block', c.text, act === 'block').then(function(ok) { if (ok) { csAfterListChange(); cuShowUser(d.user_id); } });
+  box.innerHTML = '<div class="card-header"><h2>' + esc(d.user_name || d.user_id) + ' 发过的码</h2><div class="header-actions">' +
+    '<button class="btn btn-outline btn-sm" data-member="' + escAttr(d.user_id) + '">群成员档案</button></div></div>' +
+    '<div class="mn-body split-detail-body">' +
+    '<div class="mn-row" style="margin-bottom:6px"><span>' + mbrLink(d.user_id) + (d.user_name ? '（' + esc(d.user_name) + '）' : '') + ' · 共 <b>' + d.code_count + '</b> 个不同的码，发了 <b>' + d.total + '</b> 次（全部历史）</span></div>' +
+    (groups ? '<div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">' + groups + '</div>' : '') +
+    (rows ? '<table class="mn-table"><thead><tr><th>码</th><th>内容</th><th>次数</th><th>群</th><th>首次 / 最近</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="empty">没有记录</p>') +
+    '</div>';
+}
+function csScrollToSplit() {
+  var el = document.getElementById('csSplit');
+  if (el) setTimeout(function() { mainScrollTo(el); }, 0);
+}
+// 只滚动右侧内容区：scrollIntoView 会连外层 .app 一起滚，把侧边栏顶上去
+function mainScrollTo(el, smooth) {
+  var mc = el && el.closest('.main-content');
+  if (!mc) return;
+  var app = mc.closest('.app'); if (app) app.scrollTop = 0;
+  var top = mc.scrollTop + el.getBoundingClientRect().top - mc.getBoundingClientRect().top - 8;
+  mc.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+}
+function csMarkSel() {
+  var s = CS.sel || {};
+  $$('#csTable [data-cs-open]').forEach(function(el) {
+    var it = CS.items[Number(el.getAttribute('data-cs-open'))];
+    el.classList.toggle('on', !!(it && s.kind === 'code' && it.code_hash === s.code_hash && (!s.user_id || it.user_id === s.user_id)));
   });
+  $$('#cuTable [data-cu-open]').forEach(function(el) {
+    var it = CU.items[Number(el.getAttribute('data-cu-open'))];
+    el.classList.toggle('on', !!(it && s.kind === 'user' && it.user_id === s.user_id));
+  });
+}
+function csRefreshDetail() {
+  var s = CS.sel;
+  if (!s) return;
+  if (s.kind === 'user') cuShowUser(s.user_id); else csShowDetail(s);
+}
+function csFilterGroup(gid) {
+  var sel = CS.view === 'user' ? $('#cuGroup') : $('#csGroup');
+  sel.value = gid;
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  toast('左边只显示「' + (cuGroupName(gid) || gid) + '」的记录', 'info');
+}
+// 从大屏点群：跳到「码管理」并按群筛选
+function csGoGroup(gid) {
+  CS.pendingGroup = String(gid);
+  if (CS.view !== 'code') csSetView('code');
+  if ($('#tab-codes').classList.contains('active')) { var g = CS.pendingGroup; CS.pendingGroup = null; csFilterGroup(g); }
+  else switchTab('codes');
+  csScrollToSplit();
 }
 async function csLoadStats() {
   var loadEp = beginLoad('codes-stats');
@@ -4841,28 +5439,17 @@ async function csLoadStats() {
   hoursSel.value = pick && Number(pick) === d.ttl_hours ? String(d.ttl_hours) : String(d.window_hours);
   $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留 ' + d.ttl_hours + ' 小时' + (Number(d.ttl_custom) > 0 ? (Number(d.ttl_custom) < d.window_hours ? '（填的 ' + d.ttl_custom + ' 小时短于统计窗口，按统计窗口算）' : '') : '（自动：统计窗口 ' + d.window_hours + ' 小时 × 2）') + '后自动删除。' + (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
   var byUser = d.by === 'user';
-  $('#csTable').innerHTML = CS.items.length ? '<table class="mn-table"><thead><tr><th>码</th><th>内容</th>' + (byUser ? '<th>发送者</th>' : '') +
-    '<th>次数</th><th>群 / 人</th><th>最近</th><th>操作</th></tr></thead><tbody>' + CS.items.map(function(it, i) {
-      var tag = it.state === 'allow' ? '<span class="cb-tag allowed">白名单</span>' : (it.state === 'block' ? '<span class="cb-tag blocked">已拉黑</span>' : '');
-      var parts = ['放行 ' + it.passed];
-      if (it.limited) parts.push('<span style="color:var(--danger)">超限 ' + it.limited + '</span>');
-      if (it.ruled) parts.push('<span style="color:var(--danger)">规则 ' + it.ruled + '</span>');
-      if (it.allowed) parts.push('白名单 ' + it.allowed);
-      var short = it.text.length > 90 ? it.text.slice(0, 90) + '…' : it.text;
-      var acts = '<button class="btn btn-ghost btn-sm" data-cs-act="detail" data-i="' + i + '">详情</button>' +
-        '<button class="btn btn-ghost btn-sm" data-cs-act="copy" data-i="' + i + '">复制</button>' +
-        (it.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-cs-act="unallow" data-i="' + i + '">移出白名单</button>'
-          : '<button class="btn btn-outline btn-sm" data-cs-act="allow" data-i="' + i + '">加白名单</button>') +
-        (it.state === 'block' ? '<button class="btn btn-outline btn-sm" data-cs-act="unblock" data-i="' + i + '">解除拉黑</button>'
-          : '<button class="btn btn-danger btn-sm" data-cs-act="block" data-i="' + i + '">拉黑</button>');
-      return '<tr><td style="width:60px">' + (it.thumb ? '<img alt="码" src="' + escAttr(it.thumb) + '" style="width:48px;height:48px;object-fit:contain;cursor:pointer" data-cs-act="detail" data-i="' + i + '" />' : '<span class="mn-hint">无图</span>') + '</td>' +
-        '<td style="max-width:320px;word-break:break-all">' + esc(short) + ' ' + tag + '</td>' +
-        (byUser ? '<td><a href="javascript:void(0)" title="查看此人发过的全部码" data-cu-uid="' + escAttr(it.user_id) + '">' + esc(it.user_id) + '</a>' + (it.user_name ? '<br><span class="mn-hint">' + esc(it.user_name) + '</span>' : '') + '</td>' : '') +
-        '<td style="white-space:nowrap"><strong>' + it.total + '</strong><br><span class="mn-hint">' + parts.join(' · ') + '</span></td>' +
-        '<td style="white-space:nowrap">' + it.groups + ' 群 / ' + it.users + ' 人</td>' +
-        '<td style="white-space:nowrap">' + esc(mnTime(it.last_ts)) + '</td>' +
-        '<td><div style="display:flex;gap:4px;flex-wrap:wrap">' + acts + '</div></td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="empty">' + (d.store_enabled ? '这段时间没有识别到码' : '码记录已关闭') + '</p>';
+  CS.total = d.total || 0;
+  if (CS.view === 'code') $('#csCount').textContent = '共 ' + CS.total + ' 条';
+  $('#csTable').innerHTML = CS.items.length ? CS.items.map(function(it, i) {
+    var bad = it.limited + it.ruled;
+    var short = it.text.length > 80 ? it.text.slice(0, 80) + '…' : it.text;
+    return '<div class="split-item" data-cs-open="' + i + '">' + csThumb(it.thumb) +
+      '<div class="si-main"><div class="si-title" title="' + escAttr(it.text) + '">' + csTagHtml(it.state) + esc(short) + '</div>' +
+      '<div class="si-sub">' + (byUser ? esc(it.user_name || it.user_id) + ' · ' : '') + '<b>' + it.total + '</b> 次' + (bad ? ' · <span style="color:var(--danger)">撤回 ' + bad + '</span>' : '') +
+      ' · ' + it.groups + ' 群 / ' + it.users + ' 人 · ' + esc(mnTime(it.last_ts)) + '</div></div></div>';
+  }).join('') : '<div class="split-empty">' + (d.store_enabled ? '这段时间没有识别到码' : '码记录已关闭') + '</div>';
+  csMarkSel();
   $('#csPager').innerHTML = renderPager(CS.page, CS.pageSize, d.total || 0, 'cs');
   bindPager($('#csPager'));
 }
@@ -4884,43 +5471,34 @@ function csRenderLists() {
   render('allow', CB.allowed, '#csAllowList', '#csAllowCount');
   render('block', CB.blocked, '#csBlockList', '#csBlockCount');
 }
-async function csAfterListChange() { csRenderLists(); csLoadStats(); }
-async function csShowDetail(it) {
-  var res = await safeGet('minimal/codes/detail', { code_hash: it.code_hash, user_id: it.user_id || '' });
-  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
-  var d = mnData(res);
-  var names = {}; mnGroups().forEach(function(g) { names[g.group_id] = g.group_name; });
-  var imgs = (d.images || []).map(function(m) {
-    return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">' +
-      (m.orig ? '<a href="' + escAttr(m.orig) + '" target="_blank" rel="noopener"><img alt="原图" src="' + escAttr(m.orig) + '" style="max-width:260px;max-height:260px" /></a>' : '<span class="mn-hint">原图已清理</span>') +
-      (m.crop ? '<img alt="裁剪图" src="' + escAttr(m.crop) + '" style="max-width:160px;max-height:160px;background:#fff" />' : '') +
-      '<div class="mn-hint">' + esc(mnTime(m.ts)) + '<br>' + esc(names[m.group_id] || m.group_id) + '<br>' + esc(m.user_id) + '</div></div>';
-  }).join('');
-  var sends = (d.sends || []).map(function(r) {
-    var bad = r.outcome === 'limit' || r.outcome === 'rule';
-    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(names[r.group_id] || '') + '<span class="mn-hint">（' + esc(r.group_id) + '）</span></td>' +
-      '<td>' + esc(r.user_id) + (r.user_name ? '<span class="mn-hint"> ' + esc(r.user_name) + '</span>' : '') + '</td>' +
-      '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.outcome_label) + '</td></tr>';
-  }).join('');
-  showModal('码详情',
-    '<div style="word-break:break-all;margin-bottom:8px"><strong>' + esc(d.text) + '</strong></div>' +
-    '<p class="mn-hint" style="margin-bottom:6px">图片（同一张图只显示一次，最多 8 组；保留 ' + d.ttl_hours + ' 小时）</p>' +
-    (imgs ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">' + imgs + '</div>' : '<p class="mn-hint">没有保存的图片</p>') +
-    '<p class="mn-hint" style="margin:6px 0">最近的发送记录</p><table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>',
-    '<button class="btn btn-primary btn-sm" id="csDetailClose">关闭</button>');
-  $('#csDetailClose').addEventListener('click', closeModal);
-}
+async function csAfterListChange() { csRenderLists(); csLoadStats(); csRefreshDetail(); }
 function csOnClick(e) {
-  var uidLink = e.target.closest('[data-cu-uid]');
-  if (uidLink) { cuShowUser(uidLink.getAttribute('data-cu-uid')); return; }
-  var btn = e.target.closest('[data-cs-act]');
-  if (btn) {
-    var it = CS.items[Number(btn.getAttribute('data-i'))];
-    if (!it) return;
-    var act = btn.getAttribute('data-cs-act');
-    if (act === 'detail') csShowDetail(it);
-    else if (act === 'copy') cbCopy(it.text);
-    else codeListSet(act.indexOf('allow') >= 0 ? 'allow' : 'block', it.text, act.indexOf('un') !== 0).then(function(ok) { if (ok) csAfterListChange(); });
+  var v = e.target.closest('[data-cs-view]');
+  if (v) { csSetView(v.getAttribute('data-cs-view')); return; }
+  var o = e.target.closest('[data-cs-open]');
+  if (o) { var it = CS.items[Number(o.getAttribute('data-cs-open'))]; if (it) csShowDetail(it); return; }
+  var u = e.target.closest('[data-cu-open]');
+  if (u) { var ui = CU.items[Number(u.getAttribute('data-cu-open'))]; if (ui) cuShowUser(ui.user_id); return; }
+  var g = e.target.closest('[data-cs-group]');
+  if (g) { csFilterGroup(g.getAttribute('data-cs-group')); return; }
+  var du = e.target.closest('[data-csd-user]');
+  if (du && CS.sel) { csShowDetail({ code_hash: CS.sel.code_hash, text: CS.sel.text, user_id: du.getAttribute('data-csd-user') }); return; }
+  var da = e.target.closest('[data-csd-act]');
+  if (da && CS.detail) {
+    var act = da.getAttribute('data-csd-act'), text = CS.detail.text || (CS.sel || {}).text;
+    if (!text) return;
+    if (act === 'copy') cbCopy(text);
+    else codeListSet(act.indexOf('allow') >= 0 ? 'allow' : 'block', text, act.indexOf('un') !== 0).then(function(ok) { if (ok) csAfterListChange(); });
+    return;
+  }
+  var ca = e.target.closest('[data-cud-act]');
+  if (ca && CU.detail) {
+    var c = (CU.detail.codes || [])[Number(ca.getAttribute('data-i'))];
+    if (!c) return;
+    var a2 = ca.getAttribute('data-cud-act');
+    if (a2 === 'detail') { csSetView('code'); csShowDetail({ code_hash: c.code_hash, text: c.text }); }
+    else if (a2 === 'copy') cbCopy(c.text);
+    else codeListSet('block', c.text, a2 === 'block').then(function(ok) { if (ok) csAfterListChange(); });
     return;
   }
   var lb = e.target.closest('[data-cs-list]');
@@ -5251,7 +5829,7 @@ function mnRenderBlacklist() {
   $('#ubList').innerHTML = '<table class="mn-table"><thead><tr><th>QQ 号</th><th>拉黑原因</th><th>来源</th><th>时间</th><th></th></tr></thead><tbody>' +
     list.map(function(e) {
       var src = (e.source || '') + (e.operator ? '（' + e.operator + '）' : '') + (e.group_id ? ' · 群 ' + e.group_id : '');
-      return '<tr><td>' + esc(e.user_id) + '</td><td>' + (esc(e.reason) || '<span class="mn-hint">未记录（早于原因记录功能加入）</span>') + '</td>' +
+      return '<tr><td>' + mbrLink(e.user_id) + '</td><td>' + (esc(e.reason) || '<span class="mn-hint">未记录（早于原因记录功能加入）</span>') + '</td>' +
         '<td>' + (esc(src) || '<span class="mn-hint">—</span>') + '</td><td>' + (esc(mnTime(e.created_at)) || '<span class="mn-hint">—</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm" data-ub-del="' + escAttr(e.user_id) + '">移出黑名单</button></td></tr>';
     }).join('') + '</tbody></table>';
@@ -5444,7 +6022,7 @@ function dupRenderTable() {
         (it.ignored ? ' <button class="btn btn-ghost btn-sm" data-dup-unignore="' + escAttr(it.user_id) + '">取消忽略</button>'
                     : ' <button class="btn btn-ghost btn-sm" data-dup-ignore-one="' + escAttr(it.user_id) + '">忽略</button>');
       return '<tr>' + (bulk ? '<td><input type="checkbox" class="dup-check" value="' + escAttr(it.user_id) + '" /></td>' : '') +
-        '<td><div style="display:flex;gap:8px;align-items:flex-start">' + dupAvatar(it) + '<div>' + esc(it.user_id) + '<br><span class="mn-hint">' + esc(it.name) + '</span>' +
+        '<td><div style="display:flex;gap:8px;align-items:flex-start">' + dupAvatar(it) + '<div>' + mbrLink(it.user_id) + '<br><span class="mn-hint">' + esc(it.name) + '</span>' +
         (tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">' + tags.join('') + '</div>' : '') + '</div></div></td>' +
         '<td><strong>' + it.count + '</strong></td><td>' + groups + '</td><td style="white-space:nowrap">' + ops + '</td></tr>';
     }).join('') + '</tbody></table>' + renderPager(DUP.page, DUP.pageSize, DUP.total, 'dup');
@@ -5500,7 +6078,7 @@ function dupHandleOne(it) {
     return '<label style="display:flex;gap:6px;align-items:center;padding:3px 0"><input type="radio" name="dupOneKeep" value="' + escAttr(g.group_id) + '"' +
       (g.group_id === it.keep_default ? ' checked' : '') + ' />' + dupGroupText(g) + '</label>';
   }).join('');
-  var body = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">' + dupAvatar(it, 48) + '<div><strong>' + esc(it.user_id) + '</strong><br><span class="mn-hint">' + esc(it.name) + ' · 在 ' + it.count + ' 个群</span></div></div>' +
+  var body = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">' + dupAvatar(it, 48) + '<div><strong>' + mbrLink(it.user_id) + '</strong><br><span class="mn-hint">' + esc(it.name) + ' · 在 ' + it.count + ' 个群</span></div></div>' +
     '<div class="mn-row" style="margin-bottom:6px"><label><input type="radio" name="dupOneMode" value="keep_one" checked /> 只保留一个群</label><label><input type="radio" name="dupOneMode" value="kick_all" /> 全部踢出</label></div>' +
     '<div id="dupOneKeepBox"><div class="mn-hint" style="margin-bottom:4px">保留哪个群（默认最早加入的）：</div>' + radios + '</div>' +
     '<div class="mn-row" style="margin-top:8px"><label><input type="checkbox" id="dupOneBlock" /> 同时拉黑</label><span class="mn-hint" id="dupOneBlockHint">在被踢的群里 QQ 拉黑，不能再申请加入</span></div>' +
@@ -5601,8 +6179,8 @@ async function loadOplog(page) {
   $('#opTable').innerHTML = items.length ? '<table class="mn-table"><thead><tr><th>时间</th><th>来源</th><th>操作</th><th>群</th><th>对象</th><th>原因</th><th>结果</th><th>详情</th></tr></thead><tbody>' +
     items.map(function(r) {
       var bad = String(r.result || '').indexOf('失败') === 0;
-      return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(r.source) + (r.operator ? '<br><span class="mn-hint">' + esc(r.operator) + '</span>' : '') + '</td>' +
-        '<td>' + esc(r.action) + '</td><td>' + esc(r.group_id) + '</td><td>' + esc(r.target) + '</td><td>' + esc(r.reason) + '</td>' +
+      return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td>' + esc(r.source) + (r.operator ? '<br><span class="mn-hint">' + mbrLink(r.operator) + '</span>' : '') + '</td>' +
+        '<td>' + esc(r.action) + '</td><td>' + esc(cuGroupName(r.group_id) || r.group_id) + (cuGroupName(r.group_id) ? '<br><span class="mn-hint">' + esc(r.group_id) + '</span>' : '') + '</td><td>' + mbrLink(r.target) + '</td><td>' + esc(r.reason) + '</td>' +
         '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.result) + '</td><td style="max-width:320px;word-break:break-all">' + esc(r.detail) + '</td></tr>';
     }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
   $('#opPager').innerHTML = renderPager(OP_STATE.page, OP_STATE.pageSize, d.total || 0, 'op');
@@ -5630,67 +6208,85 @@ async function loadLeaveLog(page) {
   if (isApiError(res)) { $('#llTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   var items = LL_STATE.items = d.items || [];
-  $('#llTable').innerHTML = items.length ? '<table class="mn-table"><thead><tr><th>时间</th><th>成员</th><th>群</th><th>方式</th><th>累计</th><th>退群前的消息</th></tr></thead><tbody>' +
-    items.map(function(r, i) {
-      var msgs = r.messages || [];
-      var last = msgs.length ? msgs[msgs.length - 1].text : '';
-      var imgCount = msgs.reduce(function(n, m) { return n + (m.images || []).length; }, 0);
-      return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td>' +
-        '<td><a href="javascript:void(0)" data-ll-user="' + escAttr(r.user_id) + '">' + esc(r.user_id) + '</a>' + (r.nickname ? '<br><span class="mn-hint">' + esc(r.nickname) + '</span>' : '') + '</td>' +
-        '<td>' + esc(llGroupName(r.group_id, r.group_name)) + '<br><span class="mn-hint">' + esc(r.group_id) + '</span></td>' +
-        '<td>' + esc(r.kind_label) + (r.operator_id ? '<br><span class="mn-hint">操作人 ' + esc(r.operator_id) + '</span>' : '') + '</td>' +
-        '<td style="white-space:nowrap">退 ' + (r.user_leaves || 0) + ' 次' + (r.user_kicks ? '<br><span class="mn-hint">被踢 ' + r.user_kicks + ' 次</span>' : '') + '</td>' +
-        '<td style="max-width:360px">' + (msgs.length ? '<a href="javascript:void(0)" data-ll-msgs="' + i + '">' + msgs.length + ' 条</a>' + (r.msg_source ? ' <span class="mn-hint">（' + esc(r.msg_source) + '）</span>' : '') + (imgCount ? ' <span class="mn-chip">' + imgCount + ' 张图</span>' : '') +
-          '<div class="mn-hint" style="word-break:break-all">最后一条：' + esc(last) + '</div>' : '<span class="mn-hint">没有记录到</span>') + '</td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="empty">没有符合条件的记录</p>';
+  $('#llCount').textContent = '共 ' + (d.total || 0) + ' 条';
+  $('#llTable').innerHTML = items.length ? items.map(function(r, i) {
+    var msgs = r.messages || [];
+    var imgCount = msgs.reduce(function(n, m) { return n + (m.images || []).length; }, 0);
+    var kindCls = r.kind === 'kick' ? ' style="color:var(--danger);border-color:var(--danger)"' : '';
+    return '<div class="split-item' + (llSelKey(r) === LL_STATE.sel ? ' on' : '') + '" data-ll-open="' + i + '">' +
+      '<div class="si-main"><div class="si-title">' + esc(r.nickname || r.user_id) + (r.nickname ? ' <span class="mn-hint">' + esc(r.user_id) + '</span>' : '') +
+      ' <span class="mn-chip"' + kindCls + '>' + esc(r.kind_label) + '</span>' + ((r.user_leaves || 0) + (r.user_kicks || 0) > 1 ? ' <span class="mn-chip" title="这个人一共退过 / 被踢过的次数">第 ' + ((r.user_leaves || 0) + (r.user_kicks || 0)) + ' 次</span>' : '') + '</div>' +
+      '<div class="si-sub">' + esc(mnTime(r.ts)) + ' · ' + esc(llGroupName(r.group_id, r.group_name) || r.group_id) + ' · ' +
+      (msgs.length ? msgs.length + ' 条消息' + (imgCount ? ' / ' + imgCount + ' 张图' : '') : '没有消息') + '</div></div></div>';
+  }).join('') : '<div class="split-empty">没有符合条件的记录</div>';
   $('#llPager').innerHTML = renderPager(LL_STATE.page, LL_STATE.pageSize, d.total || 0, 'll');
   bindPager($('#llPager'));
-  $$('[data-ll-user]', $('#llTable')).forEach(function(a) { a.addEventListener('click', function() { llShowUser(a.getAttribute('data-ll-user')); }); });
-  $$('[data-ll-msgs]', $('#llTable')).forEach(function(a) { a.addEventListener('click', function() { llShowMessages(LL_STATE.items[Number(a.getAttribute('data-ll-msgs'))]); }); });
+  if (LL_STATE.openFirst && items.length) { LL_STATE.openFirst = false; llOpen(0); }
 }
-function llShowMessages(r) {
-  if (!r) return;
-  var body = '<p class="mn-hint" style="margin-bottom:8px">' + esc(r.user_id) + (r.nickname ? '（' + esc(r.nickname) + '）' : '') + ' 于 ' + esc(mnTime(r.ts)) + ' ' + esc(r.kind_label) +
-    '：' + esc(llGroupName(r.group_id, r.group_name)) + '（' + esc(r.group_id) + '）</p>' +
-    (r.messages || []).map(function(m) {
-      var pics = (m.thumbs || []).map(function(t) {
-        if (t.expired || !t.thumb) return '<span class="mn-hint" style="display:inline-block;width:80px;height:80px;line-height:80px;text-align:center;border:1px dashed var(--border);border-radius:4px;margin:4px 4px 0 0">图片已清理</span>';
-        return '<img alt="图片" src="' + escAttr(t.thumb) + '" data-ll-img="' + escAttr(t.hash) + '" title="点击看大图" style="max-width:120px;max-height:120px;border-radius:4px;margin:4px 4px 0 0;cursor:zoom-in;border:1px solid var(--border)" />';
-      }).join('');
-      var failed = m.img_failed ? '<div class="mn-hint">' + m.img_failed + ' 张图片未能保存（链接已失效或下载失败）</div>' : '';
-      return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="mn-hint">' + esc(mnTime(m.ts)) + '</span><div style="word-break:break-all">' + esc(m.text) + '</div>' +
-        (pics ? '<div>' + pics + '</div>' : '') + failed + '</div>';
+function llSelKey(r) { return r ? [r.ts, r.group_id, r.user_id].join('|') : ''; }
+function llMsgsHtml(r) {
+  return (r.messages || []).map(function(m) {
+    var pics = (m.thumbs || []).map(function(t) {
+      if (t.expired || !t.thumb) return '<span class="mn-hint" style="display:inline-block;width:80px;height:80px;line-height:80px;text-align:center;border:1px dashed var(--border);border-radius:4px;margin:4px 4px 0 0">图片已清理</span>';
+      return '<img alt="图片" src="' + escAttr(t.thumb) + '" data-ll-img="' + escAttr(t.hash) + '" title="点击看大图" style="max-width:120px;max-height:120px;border-radius:4px;margin:4px 4px 0 0;cursor:zoom-in;border:1px solid var(--border)" />';
     }).join('');
-  showModal('退群前的消息', '<div id="llMsgBox">' + body + '</div>', '<button class="btn btn-ghost btn-sm" id="btnLlMsgClose">关闭</button>');
-  $('#btnLlMsgClose').addEventListener('click', closeModal);
-  $('#llMsgBox').addEventListener('click', function(e) {
-    var img = e.target.closest('[data-ll-img]');
-    if (img) llShowImage(img.getAttribute('data-ll-img'), r);
-  });
+    var failed = m.img_failed ? '<div class="mn-hint">' + m.img_failed + ' 张图片未能保存（链接已失效或下载失败）</div>' : '';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="mn-hint">' + esc(mnTime(m.ts)) + '</span><div style="word-break:break-all">' + esc(m.text) + '</div>' +
+      (pics ? '<div>' + pics + '</div>' : '') + failed + '</div>';
+  }).join('');
 }
-async function llShowImage(hash, r) {
+async function llOpen(i) {
+  var r = LL_STATE.items[i];
+  if (!r) return;
+  LL_STATE.sel = llSelKey(r); LL_STATE.cur = r;
+  $$('#llTable [data-ll-open]').forEach(function(el) { el.classList.toggle('on', Number(el.getAttribute('data-ll-open')) === i); });
+  var msgs = r.messages || [];
+  var box = $('#llDetail');
+  box.innerHTML = '<div class="card-header"><h2>' + esc(r.nickname || r.user_id) + ' ' + esc(r.kind_label) + '</h2><div class="header-actions">' +
+    '<button class="btn btn-ghost btn-sm" data-ll-only="' + escAttr(r.user_id) + '" title="左边只显示这个人的退群记录">只看他</button>' +
+    '<button class="btn btn-outline btn-sm" data-member="' + escAttr(r.user_id) + '">群成员档案</button></div></div>' +
+    '<div class="mn-body split-detail-body">' +
+    '<p style="margin-bottom:6px">' + mbrLink(r.user_id) + (r.nickname ? '（' + esc(r.nickname) + '）' : '') + ' 于 ' + esc(mnTime(r.ts)) + ' ' + esc(r.kind_label) + '：' +
+    esc(llGroupName(r.group_id, r.group_name) || '') + '（' + esc(r.group_id) + '）' + (r.operator_id ? '，操作人 ' + mbrLink(r.operator_id) : '') + '</p>' +
+    '<div id="llUserSum" class="mn-hint" style="margin-bottom:8px">正在统计他一共退过几次群...</div>' +
+    '<p class="mn-hint" style="margin:6px 0">退群前的消息' + (r.msg_source ? '（' + esc(r.msg_source) + '）' : '') + '</p>' +
+    (msgs.length ? '<div>' + llMsgsHtml(r) + '</div>' : '<p class="mn-hint">没有记录到（「设置」里可以调保存几条）</p>') +
+    '</div>';
+  var ep = beginLoad('ll-user');
+  var res = await safeGet('minimal/leavelog/user', { user_id: r.user_id });
+  if (!isCurrentLoad('ll-user', ep)) return;
+  var sum = document.getElementById('llUserSum');
+  if (!sum) return;
+  if (isApiError(res)) { sum.textContent = mnErr(res); return; }
+  var d = mnData(res);
+  sum.innerHTML = '<span>一共 <b>' + d.total + '</b> 次：主动退群 ' + d.leaves + ' 次，被踢 ' + d.kicks + ' 次' +
+    (d.total ? '；第一次 ' + esc(mnTime(d.first_ts)) + '，最近 ' + esc(mnTime(d.last_ts)) : '') + '</span>' +
+    ((d.groups || []).length > 1 ? '<table class="mn-table" style="margin-top:6px"><thead><tr><th>群</th><th>主动退群</th><th>被踢</th><th>最近一次</th></tr></thead><tbody>' +
+      d.groups.map(function(g) {
+        return '<tr><td>' + esc(llGroupName(g.group_id, g.group_name)) + '（' + esc(g.group_id) + '）</td><td>' + g.leaves + '</td><td>' + g.kicks + '</td><td>' + esc(mnTime(g.last_ts)) + '</td></tr>';
+      }).join('') + '</tbody></table>' : '');
+}
+async function llShowImage(hash) {
   var res = await safeGet('minimal/leavelog/image', { hash: hash });
   if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
   var d = mnData(res);
   showModal('图片', '<div style="text-align:center"><img alt="图片" src="' + escAttr(d.image) + '" style="max-width:100%;max-height:75vh" /></div>',
-    '<button class="btn btn-ghost btn-sm" id="btnLlImgBack">返回消息</button><button class="btn btn-primary btn-sm" id="btnLlImgClose">关闭</button>');
-  $('#btnLlImgBack').addEventListener('click', function() { llShowMessages(r); });
+    '<button class="btn btn-primary btn-sm" id="btnLlImgClose">关闭</button>');
   $('#btnLlImgClose').addEventListener('click', closeModal);
 }
-async function llShowUser(uid) {
-  var res = await safeGet('minimal/leavelog/user', { user_id: uid });
-  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
-  var d = mnData(res);
-  $('#llUserTitle').textContent = '退群汇总：' + d.user_id + (d.nickname ? '（' + d.nickname + '）' : '');
-  $('#llUserBody').innerHTML = '<div class="mn-row"><span>共 <b>' + d.total + '</b> 次：主动退群 ' + d.leaves + ' 次，被踢 ' + d.kicks + ' 次</span>' +
-    (d.total ? '<span class="mn-hint">第一次 ' + esc(mnTime(d.first_ts)) + '，最近 ' + esc(mnTime(d.last_ts)) + '</span>' : '') + '</div>' +
-    ((d.groups || []).length ? '<table class="mn-table"><thead><tr><th>群</th><th>主动退群</th><th>被踢</th><th>最近一次</th></tr></thead><tbody>' +
-      d.groups.map(function(g) {
-        return '<tr><td>' + esc(llGroupName(g.group_id, g.group_name)) + '（' + esc(g.group_id) + '）</td><td>' + g.leaves + '</td><td>' + g.kicks + '</td><td>' + esc(mnTime(g.last_ts)) + '</td></tr>';
-      }).join('') + '</tbody></table>' : '');
-  $('#llUserCard').style.display = '';
-  $('#llKeyword').value = d.user_id;
+// 只看某个人：筛选后自动打开第一条
+function llShowUser(uid) {
+  $('#llKeyword').value = uid;
+  LL_STATE.openFirst = true;
   loadLeaveLog(1);
+}
+function llOnClick(e) {
+  var o = e.target.closest('[data-ll-open]');
+  if (o) { llOpen(Number(o.getAttribute('data-ll-open'))); return; }
+  var only = e.target.closest('[data-ll-only]');
+  if (only) { llShowUser(only.getAttribute('data-ll-only')); return; }
+  var img = e.target.closest('[data-ll-img]');
+  if (img) llShowImage(img.getAttribute('data-ll-img'));
 }
 
 /* ---- 批量任务 ---- */
@@ -5824,7 +6420,7 @@ function bqLocateNow() {
   if (!items || !BQ.details[id]) return;  // 明细还没加载完，等下一次重绘
   BQ.locateOnce = 0;
   var card = items.closest('.bq-job');
-  if (card) card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (card) mainScrollTo(card, true);
   bqScrollItemsToCurrent(card || items.parentNode);
 }
 function bqSetFollow(on) {
@@ -6141,7 +6737,7 @@ async function bsLoadStats() {
   if (!bsActive() || BS.inflight) return;
   BS.inflight = true;
   try {
-    var res = await safeGet('minimal/codes/screen', { hours: $('#bsHours').value, top: 10 });
+    var res = await safeGet('minimal/codes/screen', { hours: $('#bsHours').value, top: $('#bsTop').value || 10 });
     if (isApiError(res)) { $('#bsUpdated').textContent = '获取失败：' + mnErr(res); return; }
     bsRender(mnData(res) || {});
     var d = new Date();
@@ -6159,13 +6755,14 @@ function bsRender(d) {
   if (Number($('#bsHours').value) > d.hours) notes.push('码记录只保留 ' + d.ttl_hours + ' 小时，按最近 ' + d.hours + ' 小时统计（可在「码管理 → 记录和图片保留」调长）。');
   $('#bsNotice').style.display = notes.length ? '' : 'none';
   $('#bsNotice').textContent = notes.join(' ');
-  var kpi = function(k, v, s, cls) { return '<div class="bs-kpi' + (cls ? ' ' + cls : '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + bsNum(v) + '</div><div class="s">' + s + '</div></div>'; };
+  BS.data = d;
+  var kpi = function(k, v, s, cls, go, tip) { return '<button type="button" class="bs-kpi' + (cls ? ' ' + cls : '') + '" data-bs-go="' + go + '" title="' + escAttr(tip) + '"><div class="k">' + esc(k) + '</div><div class="v">' + bsNum(v) + '</div><div class="s">' + s + '</div></button>'; };
   $('#bsKpis').innerHTML =
-    kpi('发码次数', t.sends, '最近 ' + d.hours + ' 小时') +
-    kpi('撤回次数', t.bad, t.sends ? '占 ' + Math.round(t.bad * 100 / t.sends) + '%' : '规则 + 超限', 'bad') +
-    kpi('不同的码', t.codes, '白名单放行 ' + bsNum(t.allowed) + ' 次') +
-    kpi('发码人数', t.users, '涉及 ' + bsNum(t.groups) + ' 个群') +
-    kpi('累计发码人', life.users, '全部历史，共 ' + bsNum(life.codes) + ' 个码 / ' + bsNum(life.sends) + ' 次');
+    kpi('发码次数', t.sends, '最近 ' + d.hours + ' 小时', '', 'codes', '到「码管理」看每个码') +
+    kpi('撤回次数', t.bad, t.sends ? '占 ' + Math.round(t.bad * 100 / t.sends) + '%' : '规则 + 超限', 'bad', 'hits', '下面的实时识别只看已撤回') +
+    kpi('不同的码', t.codes, '白名单放行 ' + bsNum(t.allowed) + ' 次', '', 'codes', '到「码管理」看每个码') +
+    kpi('发码人数', t.users, '涉及 ' + bsNum(t.groups) + ' 个群', '', 'users', '到「码管理 → 按人」') +
+    kpi('累计发码人', life.users, '全部历史，共 ' + bsNum(life.codes) + ' 个码 / ' + bsNum(life.sends) + ' 次', '', 'users', '到「码管理 → 按人」');
   bsRenderChart(d.series || []);
   var topCodes = d.top_codes || [], topUsers = d.top_users || [], topGroups = d.top_groups || [];
   var maxOf = function(list) { return list.reduce(function(m, x) { return Math.max(m, x.total); }, 1); };
@@ -6173,12 +6770,12 @@ function bsRender(d) {
   var mc = maxOf(topCodes), mu = maxOf(topUsers), mg = maxOf(topGroups);
   $('#bsTopCodes').innerHTML = topCodes.length ? topCodes.map(function(c, i) {
     var tag = c.state === 'block' ? '<span class="bs-tag block">已拉黑</span>' : (c.state === 'allow' ? '<span class="bs-tag allow">白名单</span>' : '');
-    return '<li><span class="n">' + (i + 1) + '</span>' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" />' : '<span class="noimg"></span>') +
-      '<div class="main"><div class="name" title="' + escAttr(c.text) + '">' + esc(c.text) + tag + '</div><div class="sub">' + c.users + ' 人 · ' + c.groups + ' 群' + (c.bad ? ' · 撤回 ' + c.bad : '') + '</div>' + meter(c.total, mc) + '</div>' +
+    return '<li data-bs-go="code" data-i="' + i + '" title="' + escAttr(c.text) + '\n点击看详情"><span class="n">' + (i + 1) + '</span>' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" />' : '<span class="noimg"></span>') +
+      '<div class="main"><div class="name">' + esc(c.text) + tag + '</div><div class="sub">' + c.users + ' 人 · ' + c.groups + ' 群' + (c.bad ? ' · 撤回 ' + c.bad : '') + '</div>' + meter(c.total, mc) + '</div>' +
       '<span class="cnt">' + bsNum(c.total) + '</span></li>';
   }).join('') : '<li class="bs-empty">这段时间没有码</li>';
   $('#bsTopUsers').innerHTML = topUsers.length ? topUsers.map(function(u, i) {
-    return '<li><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(u.user_name || u.user_id) + (u.user_name ? ' <span class="sub">' + esc(u.user_id) + '</span>' : '') + '</div>' +
+    return '<li data-bs-go="user" data-i="' + i + '" title="点击看群成员档案"><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(u.user_name || u.user_id) + (u.user_name ? ' <span class="sub">' + esc(u.user_id) + '</span>' : '') + '</div>' +
       '<div class="sub">' + u.codes + ' 个码 · ' + u.groups + ' 群' + (u.bad ? ' · 撤回 ' + u.bad : '') + '</div>' + meter(u.total, mu) + '</div><span class="cnt">' + bsNum(u.total) + '</span></li>';
   }).join('') : '<li class="bs-empty">这段时间没有人发码</li>';
   var mp = d.miniapps;
@@ -6186,14 +6783,14 @@ function bsRender(d) {
     var mm = maxOf(mp.top || []);
     $('#bsMpNote').textContent = '最近 ' + mp.hours + ' 小时共 ' + bsNum(mp.total) + ' 次、' + bsNum(mp.apps) + ' 个小程序' + (mp.ruled ? '，撤回 ' + bsNum(mp.ruled) + ' 次' : '');
     $('#bsTopMp').innerHTML = (mp.top || []).length ? mp.top.map(function(a, i) {
-      return '<li><span class="n">' + (i + 1) + '</span>' + (a.thumb ? '<img alt="图标" src="' + escAttr(a.thumb) + '" />' : '<span class="noimg"></span>') +
+      return '<li data-bs-go="mp" data-i="' + i + '" title="点击看小程序详情"><span class="n">' + (i + 1) + '</span>' + (a.thumb ? '<img alt="图标" src="' + escAttr(a.thumb) + '" />' : '<span class="noimg"></span>') +
         '<div class="main"><div class="name">' + esc(a.name) + '</div><div class="sub">' + a.users + ' 人 · ' + a.groups + ' 群' + (a.ruled ? ' · 撤回 ' + a.ruled : '') + '</div>' + meter(a.total, mm) + '</div>' +
         '<span class="cnt">' + bsNum(a.total) + '</span></li>';
     }).join('') : '<li class="bs-empty">这段时间没有小程序</li>';
   }
   $('#bsTopGroups').innerHTML = topGroups.length ? topGroups.map(function(g, i) {
     if (g.group_name) BS.names[g.group_id] = g.group_name;
-    return '<li><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(g.group_name || g.group_id) + '</div>' +
+    return '<li data-bs-go="group" data-i="' + i + '" title="到「码管理」只看这个群"><span class="n">' + (i + 1) + '</span><div class="main"><div class="name">' + esc(g.group_name || g.group_id) + ' <span class="sub">' + esc(g.group_id) + '</span></div>' +
       '<div class="sub">' + g.users + ' 人 · ' + g.codes + ' 个码' + (g.bad ? ' · 撤回 ' + g.bad : '') + '</div>' + meter(g.total, mg) + '</div><span class="cnt">' + bsNum(g.total) + '</span></li>';
   }).join('') : '<li class="bs-empty">这段时间没有群出现码</li>';
 }
@@ -6252,7 +6849,11 @@ async function bsPollFeed() {
   }
 }
 function bsRenderFeed() {
-  var all = BS.ids.slice().reverse().map(function(id) { return BS.map[id]; }).filter(function(e) { return e && (e.codes || []).length; }).slice(0, 24);
+  var ff = ($('#bsFeedFilter') || {}).value || '';
+  var all = BS.ids.slice().reverse().map(function(id) { return BS.map[id]; }).filter(function(e) {
+    return e && (e.codes || []).length && (!ff || (ff === 'hit' ? e.outcome === 'hit' : e.outcome !== 'hit'));
+  }).slice(0, 24);
+  if (!all.length && ff) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">最近没有' + (ff === 'hit' ? '被撤回' : '放行') + '的码</div>'; BS.first = false; return; }
   if (!all.length) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">还没有识别到码。二维码看板需要开启（「实时日志 → 二维码看板」设置）。</div>'; BS.first = false; return; }
   $('#bsFeed').innerHTML = all.map(function(e) {
     var c = (e.codes || []).filter(function(x) { return x.decoded; })[0] || e.codes[0];
@@ -6261,14 +6862,35 @@ function bsRenderFeed() {
     var img = c.crop || e.orig;
     var res = e.outcome === 'hit' ? ('已撤回' + (e.reason ? '：' + e.reason : '')) : '放行';
     var more = e.codes.length > 1 ? ' 等 ' + e.codes.length + ' 个码' : '';
-    return '<div class="bs-card' + (e.outcome === 'hit' ? ' hit' : '') + (isNew ? ' new' : '') + '">' +
+    return '<div class="bs-card' + (e.outcome === 'hit' ? ' hit' : '') + (isNew ? ' new' : '') + '"' + (c.decoded ? ' data-bs-card="' + escAttr(e.id) + '" title="点击看这个码的详情"' : '') + '>' +
       (img ? '<img alt="码" src="' + escAttr(img) + '" />' : '') +
       '<div class="info"><div class="who">' + esc(liveTime(e.ts)) + ' · ' + esc(BS.names[e.group_id] || e.group_id) + '</div>' +
-      '<div class="who">' + esc(e.user_name || e.user_id) + (e.user_name ? '（' + esc(e.user_id) + '）' : '') + '</div>' +
+      '<div class="who">' + mbrLink(e.user_id, e.user_name ? e.user_name + '（' + e.user_id + '）' : e.user_id) + '</div>' +
       '<div class="txt">' + esc(c.decoded ? c.text : (c.error || '未能解出')) + esc(more) + '</div>' +
       '<div class="res">' + esc(res) + '</div></div></div>';
   }).join('');
   BS.first = false;
+}
+function bsOnClick(e) {
+  var card = e.target.closest('[data-bs-card]');
+  if (card) {
+    var ent = BS.map[card.getAttribute('data-bs-card')];
+    var c = ent && ((ent.codes || []).filter(function(x) { return x.decoded; })[0]);
+    if (c) { bsSetFull(false); csSetView('code'); csShowDetail({ text: c.text }); }
+    return;
+  }
+  var go = e.target.closest('[data-bs-go]');
+  if (!go) return;
+  var kind = go.getAttribute('data-bs-go'), i = Number(go.getAttribute('data-i')), d = BS.data || {};
+  if (kind === 'hits') { $('#bsFeedFilter').value = 'hit'; bsRenderFeed(); mainScrollTo($('#bsFeed').parentNode, true); return; }
+  bsSetFull(false);
+  if (kind === 'codes') { csSetView('code'); switchTab('codes'); }
+  else if (kind === 'users') { csSetView('user'); switchTab('codes'); }
+  else if (kind === 'miniapps') switchTab('miniapps');
+  else if (kind === 'code') { var c2 = (d.top_codes || [])[i]; if (c2) { csSetView('code'); csShowDetail({ code_hash: c2.code_hash, text: c2.text }); } }
+  else if (kind === 'user') { var u = (d.top_users || [])[i]; if (u) mbrGo(u.user_id); }
+  else if (kind === 'group') { var g = (d.top_groups || [])[i]; if (g) csGoGroup(g.group_id); }
+  else if (kind === 'mp') { var a = ((d.miniapps || {}).top || [])[i]; if (a) mpShowDetail(a); }
 }
 function bsSetFull(on) {
   document.body.classList.toggle('bs-full', !!on);
@@ -6353,7 +6975,7 @@ function cbCardHtml(e) {
   var outcome = e.outcome === 'hit'
     ? '<span class="lv-badge hit">命中处理</span>' : '<span class="lv-badge pass">放行</span>';
   var head = '<span>' + esc(liveTime(e.ts)) + '</span><b>' + esc(gname || e.group_id) + '</b>' +
-    '<span>' + esc(e.user_name || e.user_id) + (e.user_name ? '（' + esc(e.user_id) + '）' : '') + '</span>' +
+    '<span>' + mbrLink(e.user_id, e.user_name ? e.user_name + '（' + e.user_id + '）' : e.user_id) + '</span>' +
     (e.image_count > 1 ? '<span>图 ' + e.image_index + '/' + e.image_count + '</span>' : '') +
     (e.cached ? '<span title="同一张图 10 分钟内只识别一次">缓存结果</span>' : '') +
     '<span style="margin-left:auto">' + outcome + '</span>';
@@ -6371,6 +6993,7 @@ function cbCardHtml(e) {
       ? '<div class="cb-text" data-cb-text="' + e.id + '-' + i + '">' + esc(c.text) + (c.is_base64 ? ' <span class="mn-hint">（无法转成文字，显示的是 base64）</span>' : '') + '</div>'
       : '<div class="cb-text err">' + esc(c.error || '未能解出') + '</div>';
     var acts = c.decoded ? '<div class="cb-acts">' +
+      '<button class="btn btn-outline btn-sm" data-cb-act="detail" data-id="' + e.id + '" data-i="' + i + '" title="码管理里看这个码：所有发送记录、谁发过、原图">详情</button>' +
       '<button class="btn btn-ghost btn-sm" data-cb-act="copy" data-id="' + e.id + '" data-i="' + i + '">复制</button>' +
       (allowed ? '<button class="btn btn-outline btn-sm" data-cb-act="unallow" data-id="' + e.id + '" data-i="' + i + '">移出白名单</button>'
         : '<button class="btn btn-outline btn-sm" data-cb-act="allow" data-id="' + e.id + '" data-i="' + i + '">加白名单</button>') +
@@ -6470,6 +7093,7 @@ function cbOnClick(e) {
   if (!c) return;
   var act = btn.getAttribute('data-cb-act');
   if (act === 'copy') cbCopy(c.text);
+  else if (act === 'detail') { csSetView('code'); csShowDetail({ text: c.text }); }
   else if (act === 'block') cbSetBlocked(c.text, true);
   else if (act === 'unblock') cbSetBlocked(c.text, false);
   else if (act === 'allow' || act === 'unallow') codeListSet('allow', c.text, act === 'allow').then(function(ok) { if (ok) cbRender(); });
@@ -6568,7 +7192,7 @@ function liveRender() {
       var gname = LIVE.names[e.group_id];
       var html = '<tr class="lv-row" data-lv="' + e.id + '"><td style="white-space:nowrap">' + esc(liveTime(e.ts)) + '</td>' +
         '<td>' + esc(gname || e.group_id) + (gname ? '<div class="mn-hint">' + esc(e.group_id) + '</div>' : '') + '</td>' +
-        '<td>' + esc(e.user_name || e.user_id) + (e.user_name ? '<div class="mn-hint">' + esc(e.user_id) + '</div>' : '') + '</td>' +
+        '<td>' + esc(e.user_name || e.user_id) + (e.user_name ? '<div class="mn-hint">' + mbrLink(e.user_id) + '</div>' : '') + '</td>' +
         '<td class="lv-text">' + (content || '<span class="mn-hint">（无文字）</span>') + '</td>' +
         '<td>' + badge + reason + '</td>' +
         '<td class="lv-ms' + (ms >= 10000 ? ' lv-slow' : '') + '">' + liveFmtMs(ms) + '</td></tr>';
@@ -6647,10 +7271,11 @@ function initMinimalPages() {
   bindIfExists('btnGuardRefresh', loadGuard);
   bindIfExists('wxDriver', mnToggleDriverRows, 'change');
   bindIfExists('ocrDriver', mnToggleDriverRows, 'change');
-  bindIfExists('btnRgNew', function() { rgEdit(null); });
+  bindIfExists('btnRgNew', function() { rgSelect('new'); });
   bindIfExists('btnRgTest', rgTest);
-  var rgList = document.getElementById('rgList');
-  if (rgList) rgList.addEventListener('click', rgOnClick);
+  var rgSplit = document.getElementById('rgSplit');
+  if (rgSplit) { rgSplit.addEventListener('click', rgOnClick); rgSplit.addEventListener('input', rgOnInput); rgSplit.addEventListener('change', rgOnInput); }
+  window.addEventListener('beforeunload', function(e) { if (RG.dirty) { e.preventDefault(); e.returnValue = ''; } });
   bindIfExists('btnGuardSave', function() {
     mnSaveConfig({ backup_group_id: $('#guardBackupGroup').value }, '已保存').then(function(ok) { if (ok) loadGuard(); });
   });
@@ -6817,6 +7442,9 @@ function initMinimalPages() {
   bindAutoFilter(['llKeyword', 'llKind'], function() { loadLeaveLog(1); });
   bindAutoFilter(['opKeyword'], function() { loadOplog(1); });
   GSEL_IDS.forEach(function(id) { gselEnhance(document.getElementById(id)); });
+  bindAutoFilter(['mbrQuery'], mbrSearch);
+  var mbrTab = document.getElementById('tab-member');
+  if (mbrTab) mbrTab.addEventListener('click', mbrOnClick);
   bindIfExists('btnGfAll', function() { mnSetGroupChecks('#gfGroups', true); });
   bindIfExists('btnGfNone', function() { mnSetGroupChecks('#gfGroups', false); });
   bindIfExists('btnGfScan', gfScan);
@@ -6859,17 +7487,23 @@ function initMinimalPages() {
   bindIfExists('btnBsFull', function() { bsSetFull(!document.body.classList.contains('bs-full')); });
   var bsHours = document.getElementById('bsHours');
   if (bsHours) bsHours.addEventListener('change', function() { bsLoadStats(); });
+  bindIfExists('bsTop', function() { bsLoadStats(); }, 'change');
+  bindIfExists('bsFeedFilter', function() { bsRenderFeed(); }, 'change');
+  bindIfExists('btnBsRefresh', function() { bsLoadStats(); });
+  var bsTab = document.getElementById('tab-bigscreen');
+  if (bsTab) bsTab.addEventListener('click', bsOnClick);
   var bsChart = document.getElementById('bsChart');
   if (bsChart) { bsChart.addEventListener('mousemove', bsTipMove); bsChart.addEventListener('mouseleave', function() { $('#bsTip').style.display = 'none'; }); }
   document.addEventListener('keydown', function(ev) { if (ev.key === 'Escape' && document.body.classList.contains('bs-full')) bsSetFull(false); });
   document.addEventListener('visibilitychange', function() { if (bsActive()) { bsLoadStats(); bsPollFeed(); } });
-  var cuTable = document.getElementById('cuTable');
-  if (cuTable) cuTable.addEventListener('click', function(e) {
-    var b = e.target.closest('[data-cu-user]');
-    if (b) { var it = CU.items[Number(b.getAttribute('data-cu-user'))]; if (it) cuShowUser(it.user_id); }
-  });
+  (function() { var v = 'code'; try { v = localStorage.getItem('gg_cs_view') || 'code'; } catch (e) { /* 忽略 */ } if (document.getElementById('csViewCode')) csSetView(v); })();
   bindIfExists('btnLlRefresh', function() { loadLeaveLog(1); });
-  bindIfExists('btnLlUserClose', function() { $('#llUserCard').style.display = 'none'; });
+  var llTab = document.getElementById('tab-leavelog');
+  if (llTab) llTab.addEventListener('click', llOnClick);
+  var vrSplit = document.getElementById('vrSplit');
+  if (vrSplit) vrSplit.addEventListener('click', vrOnClick);
+  bindAutoFilter(['vrKeyword'], vrRenderList);
+  bindIfExists('vrCheckAll', function(e) { $$('#userContainer .ck').forEach(function(ck) { ck.checked = e.target.checked; }); }, 'change');
   bindIfExists('btnLlSave', function() {
     var n = Number($('#llMsgCount').value);
     var days = Number($('#llImgDays').value);

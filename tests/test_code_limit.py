@@ -381,5 +381,21 @@ class ImageStoreTests(unittest.IsolatedAsyncioTestCase):
         tmp.cleanup()
 
 
+class DetailTests(unittest.TestCase):
+    def test_detail_state_and_text_after_sends_expire(self):
+        """码详情带白 / 黑名单状态；发送记录过期后仍能从长期累计里拿到码内容（大屏、成员档案跳转用）。"""
+        h = _Harness()
+        h._cl_process("1", "a", ["https://x"], now=T0)
+        h._code_block_set = lambda: {"https://x"}
+        d = h._cs_detail(h._cl_hash("https://x"))
+        self.assertEqual((d["text"], d["state"], len(d["sends"])), ("https://x", "block", 1))
+        with h._storage._connect() as conn:
+            conn.execute("DELETE FROM code_sends")
+            conn.commit()
+        d = h._cs_detail(h._cl_hash(" https://x "))  # 按内容算哈希：去掉首尾空白
+        self.assertEqual((d["text"], d["state"], d["sends"]), ("https://x", "block", []))
+        self.assertEqual(h._cs_detail("nope")["state"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

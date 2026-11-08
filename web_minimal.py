@@ -565,6 +565,9 @@ class MinimalWebMixin:
     async def _web_minimal_codes_detail(self):
         args = quart_request.args
         code_hash = str(args.get("code_hash", "") or "").strip()
+        text = str(args.get("text", "") or "").strip()
+        if not code_hash and text:
+            code_hash = self._cl_hash(text)  # 看板里只有码内容
         if not code_hash:
             return self._minimal_error("缺少 code_hash")
         return jsonify({"status": "success", "data": self._cs_detail(
@@ -793,6 +796,23 @@ class MinimalWebMixin:
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"job": job, "denied": denied}})
+
+    # ------------------------------------------------------------------
+    # 群成员查找（member_lookup.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_member_search(self):
+        q = str(quart_request.args.get("q", "") or "").strip()
+        if len(q) < 2 and not q.isdigit():
+            return self._minimal_error("至少输入 2 个字，或输入 QQ 号")
+        data = self._mbr_search(q)
+        data["coverage"] = {"groups_total": len(self._dir()["groups"]), "groups_cached": len(self._dir()["members"])}
+        return jsonify({"status": "success", "data": data})
+
+    async def _web_minimal_member_profile(self):
+        uid = str(quart_request.args.get("user_id", "") or "").strip()
+        if not uid.isdigit():
+            return self._minimal_error("QQ 号不对")
+        return jsonify({"status": "success", "data": self._mbr_profile(uid)})
 
     async def _web_minimal_codes_lists(self):
         return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})

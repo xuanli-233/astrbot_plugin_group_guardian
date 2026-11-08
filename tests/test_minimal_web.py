@@ -759,7 +759,7 @@ class DashboardWiringTests(unittest.TestCase):
         self.assertEqual(sections, ["消息审核", "成员管理", "群运营", "系统"])
         nav = html[html.index('<nav class="sidebar-nav">'):html.index("</nav>")]
         tabs = re.findall(r'data-tab="([\w-]+)"', nav)
-        self.assertEqual(tabs, ["overview", "guard", "codes", "miniapps", "livelog", "bigscreen", "records", "kick", "dup", "leavelog", "join",
+        self.assertEqual(tabs, ["overview", "guard", "codes", "miniapps", "livelog", "bigscreen", "records", "member", "kick", "dup", "leavelog", "join",
                                 "tasks", "broadcast", "files", "names", "batch", "directory", "oplog", "perms", "commands", "groupcfg",
                                 "settings"])
         mobile = html[html.index('<nav class="mobile-nav"'):]

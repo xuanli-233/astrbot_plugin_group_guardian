@@ -411,6 +411,32 @@ class MiniAppMixin:
                        "reason": r["reason"]} for r in sends],
         }
 
+    def _mp_user(self, user_id: str, limit: int = 30) -> dict:
+        """某个人发过的小程序（保留期内）：按小程序汇总 + 最近的记录。群成员查找用。"""
+        self._mp_init_db()
+        uid = str(user_id or "")
+        with self._storage._connect() as conn:
+            apps = conn.execute(
+                "SELECT s.app_key, MAX(a.name) AS name, MAX(a.appid) AS appid, MAX(a.thumb) AS thumb, COUNT(*) AS total, "
+                "SUM(s.outcome='rule') AS ruled, COUNT(DISTINCT s.group_id) AS groups, MAX(s.ts) AS last_ts "
+                "FROM mp_sends s LEFT JOIN mp_apps a ON a.app_key = s.app_key WHERE s.user_id=? "
+                "GROUP BY s.app_key ORDER BY total DESC, last_ts DESC", (uid,)).fetchall()
+            recent = conn.execute(
+                "SELECT s.ts, s.group_id, s.form, s.outcome, s.app_key, a.name, c.content, c.title FROM mp_sends s "
+                "LEFT JOIN mp_apps a ON a.app_key = s.app_key LEFT JOIN mp_contents c ON c.content_hash = s.content_hash "
+                "WHERE s.user_id=? ORDER BY s.ts DESC, s.id DESC LIMIT ?", (uid, min(max(int(limit), 1), 200))).fetchall()
+        return {
+            "store_days": self._mp_store_days(),
+            "apps": [{"app_key": r["app_key"], "name": r["name"] or r["app_key"], "appid": r["appid"] or "",
+                      "thumb": r["thumb"] or "", "total": int(r["total"] or 0), "ruled": int(r["ruled"] or 0),
+                      "groups": int(r["groups"] or 0), "last_ts": int(r["last_ts"] or 0),
+                      "state": self._mp_state(r["app_key"], r["appid"] or "", r["name"] or "")} for r in apps],
+            "recent": [{"ts": r["ts"], "group_id": r["group_id"], "form": r["form"], "app_key": r["app_key"],
+                        "name": r["name"] or r["app_key"], "content": r["content"] or "", "title": r["title"] or "",
+                        "outcome": r["outcome"], "outcome_label": OUTCOME_LABEL.get(r["outcome"], r["outcome"])}
+                       for r in recent],
+        }
+
     def _mp_rules(self, item: Dict) -> List[dict]:
         fn = getattr(self, "_rg_app_entries", None)
         return fn(item) if callable(fn) else []
