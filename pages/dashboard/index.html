@@ -5842,7 +5842,12 @@ async function loadNames(opts) {
   }
   MN.nameMax = d.max_length || 30;
   $('#nmUpdateTime').textContent = '每天 ' + d.update_time + ' 自动更新 · 群名最长 ' + d.max_length + ' 字 · 群名被别人改过时自动终止并删除倒计时';
-  if (!$('#nmTarget').value) { var t = new Date(); t.setDate(t.getDate() + 30); $('#nmTarget').value = t.getFullYear() + '-' + mnPad(t.getMonth() + 1) + '-' + mnPad(t.getDate()); }
+  if (!$('#nmTarget').value) {
+    // 默认目标日期：最近的 12 月 19 日（今年已过就用明年的）
+    var now = new Date(), y = now.getFullYear();
+    if (now.getMonth() === 11 && now.getDate() > 19) y += 1;
+    $('#nmTarget').value = y + '-12-19';
+  }
   mnUpdateCountdownPreview();
   var checked = {}; $$('#namesTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
   var backups = {}; mnGroups().forEach(function(g) { if (g.backup) backups[g.group_id] = true; });
