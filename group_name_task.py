@@ -13,7 +13,7 @@
 倒计时：到期当天 {days}天 显示为「今天」，过期后自动去掉后缀并停止。
 倒计时更新时如果当前群名 ≠ 插件上次改出的群名（这期间被别人改过），不再改名，终止并删除该群的倒计时
 （_countdown_tampered）。WebUI「改名」（_name_manual_rename）会同步记下新群名，不算被别人改过。
-每天在 countdown_update_time（默认 00:05，服务器本地时间）之后刷新一次；重启后会补上当天的更新。
+每天在 countdown_update_time（默认 00:01，服务器本地时间）之后刷新一次；重启后会补上当天的更新。
 任务存在 SQLite meta 表（键 GROUP_NAME_META_KEY，JSON）。
 注意：每次改群名 QQ 都会在群里显示一条系统提示，这是 QQ 的行为，插件无法屏蔽。
 """
@@ -561,8 +561,8 @@ class GroupNameTaskMixin:
     # 定时执行
     # ------------------------------------------------------------------
     def _countdown_update_time(self) -> str:
-        value = self._cfg_str("countdown_update_time", "00:05").strip()
-        return value if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) else "00:05"
+        value = self._cfg_str("countdown_update_time", "00:01").strip()
+        return value if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) else "00:01"
 
     async def _run_countdowns(self, client, tasks: Dict[str, dict], groups: List[str],
                               force: bool = False, today: Optional[date] = None,

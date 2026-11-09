@@ -676,7 +676,7 @@
     "countdown_update_time": {
         "description": "群名倒计时每日更新时间",
         "type": "string",
-        "default": "00:05",
+        "default": "00:01",
         "hint": "HH:MM，按服务器本地时间；每天到点后刷新一次倒计时天数"
     },
     "directory_group_ttl": {
