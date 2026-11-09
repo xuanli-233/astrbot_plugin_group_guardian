@@ -1526,6 +1526,13 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><h2>退群删文件</h2></div>
+          <div class="settings-list" id="leaveFilesSwitches"></div>
+          <div class="mn-body">
+            <p class="mn-hint">有人退群 / 被踢后，扫描这个群的群文件（根目录 + 一级文件夹），删除上传者是他的文件，单次最多 200 个。同一个群 2 分钟内只扫一次（批量踢人时不会每人扫一遍）。机器人需要是群管理员，结果写入操作记录「退群删文件」。删除后不能恢复。</p>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
           <div class="mn-body">
             <div class="mn-row">
@@ -3155,6 +3162,9 @@ var MANUAL_SETTING_KEYS = {
   leave_recall_count: true,
   leave_recall_minutes: true,
   leave_recall_use_history: true,
+  leave_files_enabled: true,
+  leave_files_on_leave: true,
+  leave_files_on_kick: true,
   leave_log_enabled: true,
   leave_log_msg_count: true,
   leave_log_use_history: true,
@@ -3985,6 +3995,11 @@ var MN_SWITCHES = {
     { key: 'leave_recall_on_leave', label: '主动退群时', desc: '成员自己退群' },
     { key: 'leave_recall_on_kick', label: '被踢出时', desc: '被管理员或本插件踢出（含批量踢人、黑名单入群即踢）' },
     { key: 'leave_recall_use_history', label: '用群历史兜底', desc: '本地记录不全时（如插件刚重启）额外拉一次最近 100 条群消息' }
+  ],
+  leaveFilesSwitches: [
+    { key: 'leave_files_enabled', label: '启用退群删文件', desc: '成员离开群后自动删除他上传的群文件（总开关）' },
+    { key: 'leave_files_on_leave', label: '主动退群时', desc: '成员自己退群' },
+    { key: 'leave_files_on_kick', label: '被踢出时', desc: '被管理员或本插件踢出（含批量踢人、黑名单入群即踢）' }
   ]
 };
 var MN_TYPES = {
@@ -5974,6 +5989,7 @@ async function loadKick() {
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('kickSwitches');
   mnRenderSwitches('leaveRecallSwitches');
+  mnRenderSwitches('leaveFilesSwitches');
   mnRenderSwitches('acceptSwitches');
   mnRenderSwitches('mmSwitches');
   $('#mmValue').value = String(mnCfg('auto_msg_mask_value') || 4);

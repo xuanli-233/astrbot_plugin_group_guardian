@@ -12,8 +12,9 @@ LuckyLilliaBot 的 send_group_forward_msg 支持 {"type":"node","data":{"id": �
 同一类内容发到所有勾选了它的群，各发一份。转发群本身不参与审核（_is_backup_group），避免备份内容被再次撤回。
 
 其他撤回（/撤回最新消息、/批量撤回、/回复撤回、退群撤回）在撤回前调用 _backup_msg_ids：
-只有消息 ID 时按 ID 引用；一次撤回多条时合并成一条转发（每 BACKUP_NODES_PER_MSG 条一条），
-引用失败时用已知的消息段回退为自定义节点。同样受 backup_enabled 控制；指令撤回的类别是 manual_recall，
+只有消息 ID 时按 ID 引用；一次撤回多条时合并成一条转发（每 BACKUP_NODES_PER_MSG 条一条）。
+引用失败时（例如发送者已经退群 / 被踢，或抄送第二个群时协议端不再认这个 ID）改用消息内容拼自定义节点：
+已知的消息段直接用，不知道内容的先用 get_msg 取一次（此时还没撤回），取到的内容给后面的群共用。同样受 backup_enabled 控制；指令撤回的类别是 manual_recall，
 退群撤回是 leave_recall。
 """
 import time
@@ -167,6 +168,8 @@ class MessageBackupMixin:
         size = self.BACKUP_NODES_PER_MSG
         chunks = [norm[i:i + size] for i in range(0, len(norm), size)]
         all_ok = True
+        # 多个群共用：某个群按 ID 引用失败后，后面的群直接用消息内容拼节点
+        state = {"by_id": True}
         for idx, chunk in enumerate(chunks):
             lines = [f"[{label}]", f"来源群：{group_id}"]
             if users:
@@ -181,28 +184,68 @@ class MessageBackupMixin:
                 "content": [{"type": "text", "data": {"text": "\n".join(lines)[: self.BACKUP_HEADER_MAX]}}],
             }}
             for target in targets:
-                if not await self._backup_send_chunk(client, target, header_node, chunk, bot_uin):
+                if not await self._backup_send_chunk(client, target, header_node, chunk, bot_uin, state):
                     all_ok = False
         return all_ok
 
-    async def _backup_send_chunk(self, client, target: int, header_node: dict, chunk: list, bot_uin) -> bool:
-        """一部分消息发到一个群：先按 ID 引用，失败时用已知的消息段拼自定义节点（不知道内容的只写 ID）。"""
-        ok, err = await self._call_group_api(
-            client, "send_group_forward_msg", "备份消息", group_id=target,
-            messages=[header_node] + [{"type": "node", "data": {"id": it["message_id"]}} for it in chunk],
-        )
-        if ok:
-            return True
+    async def _backup_fill_segments(self, client, chunk: list) -> None:
+        """不知道内容的消息用 get_msg 取一次（必须在撤回之前）。结果写回 item，后面的群直接用。"""
+        getter = getattr(self, "_call_group_api_result", None)
+        if not callable(getter):
+            return
+        for it in chunk:
+            if it["segments"] or it.get("fetched"):
+                continue
+            it["fetched"] = True
+            mid = self._safe_int(it["message_id"], 0) or it["message_id"]
+            try:
+                ok, data, _err = await getter(client, "get_msg", "获取消息", message_id=mid)
+            except Exception as e:  # 取不到就按未知处理，不影响撤回
+                logger.debug(f"[GroupMgr] 备份时获取消息 {it['message_id']} 失败: {e}")
+                continue
+            if not ok or not isinstance(data, dict):
+                continue
+            filled = self._history_backup_item(data)
+            it["segments"] = filled["segments"]
+            if not it["user_id"]:
+                it["user_id"] = str(filled["user_id"] or "")
+            if not it["user_name"]:
+                it["user_name"] = filled["user_name"]
+
+    @staticmethod
+    def _backup_content_segments(segments: list) -> list:
+        """自定义节点里的原消息段：去掉引用回复（引用的消息可能已经撤回，会让整条转发失败）。"""
+        out = [s for s in segments if isinstance(s, dict) and s.get("type") and s.get("type") != "reply"]
+        return out
+
+    async def _backup_send_chunk(self, client, target: int, header_node: dict, chunk: list, bot_uin,
+                                 state: Optional[dict] = None) -> bool:
+        """一部分消息发到一个群：先按 ID 引用，失败时用消息内容拼自定义节点（内容先用 get_msg 补齐）。
+
+        state["by_id"]：同一批备份里按 ID 引用失败过一次后，后面的群不再尝试引用。
+        """
+        state = state if state is not None else {"by_id": True}
+        err = ""
+        if state.get("by_id", True):
+            ok, err = await self._call_group_api(
+                client, "send_group_forward_msg", "备份消息", group_id=target,
+                messages=[header_node] + [{"type": "node", "data": {"id": it["message_id"]}} for it in chunk],
+            )
+            if ok:
+                return True
+            state["by_id"] = False
+        await self._backup_fill_segments(client, chunk)
         nodes = [header_node]
         for it in chunk:
-            segs = it["segments"] or [{"type": "text", "data": {"text": f"（消息 {it['message_id']}，内容未知）"}}]
+            segs = self._backup_content_segments(it["segments"]) or [
+                {"type": "text", "data": {"text": f"（没取到这条消息的内容，消息 ID：{it['message_id']}）"}}]
             nodes.append({"type": "node", "data": {"name": it["user_name"] or it["user_id"] or "群成员",
                                                    "uin": it["user_id"] or str(bot_uin or "10000"), "content": segs}})
         ok, err2 = await self._call_group_api(
             client, "send_group_forward_msg", "备份消息", group_id=target, messages=nodes,
         )
         if not ok:
-            logger.warning(f"[GroupMgr] 撤回前备份到群 {target} 失败: {err or err2}")
+            logger.warning(f"[GroupMgr] 撤回前备份到群 {target} 失败: {err2 or err}")
         return bool(ok)
 
     @staticmethod
@@ -214,5 +257,5 @@ class MessageBackupMixin:
             segs = [{"type": "text", "data": {"text": message}}] if message else []
         else:
             segs = [s for s in (message or []) if isinstance(s, dict)]
-        return {"message_id": msg.get("message_id"), "user_id": sender.get("user_id", msg.get("user_id", "")),
+        return {"message_id": msg.get("message_id"), "user_id": str(sender.get("user_id", msg.get("user_id", "")) or ""),
                 "user_name": sender.get("card") or sender.get("nickname") or "", "segments": segs}

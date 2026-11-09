@@ -21,7 +21,7 @@
 import asyncio
 import time
 from collections import OrderedDict, deque
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
@@ -166,8 +166,11 @@ class LeaveRecallMixin:
         msgs = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         return [m for m in (msgs or []) if isinstance(m, dict)]
 
-    async def _lr_history(self, client, group_id: str, user_id: str) -> List[Tuple[str, float]]:
+    async def _lr_history(self, client, group_id: str, user_id: str,
+                          info: Optional[Dict[str, dict]] = None) -> List[Tuple[str, float]]:
+        """群历史里该成员的消息 [(消息ID, 时间)]。传入 info 时顺带记下每条的内容（备份用）。"""
         msgs = await self._recent_group_history(client, group_id)
+        to_item = getattr(self, "_history_backup_item", None)
         found = []
         for msg in msgs or []:
             if not isinstance(msg, dict):
@@ -183,6 +186,9 @@ class LeaveRecallMixin:
             except (TypeError, ValueError):
                 ts = 0.0
             found.append((str(mid), ts))
+            if info is not None and callable(to_item):
+                item = to_item(msg)
+                info[str(mid)] = {"segments": item.get("segments") or [], "user_name": item.get("user_name") or ""}
         return found
 
     # ------------------------------------------------------------------
@@ -204,7 +210,8 @@ class LeaveRecallMixin:
         if opts["count"] <= 0 and opts["minutes"] <= 0:
             return result
         # 群历史在前、本地记录在后：两者都是从旧到新，本地记录通常更新
-        candidates = await self._lr_history(client, gid, uid) if opts["history"] else []
+        info: Dict[str, dict] = {}
+        candidates = await self._lr_history(client, gid, uid, info) if opts["history"] else []
         candidates += list(self._lr_store().get((gid, uid)) or [])
         done = self._lr_recalled()
         candidates = [(m, t) for m, t in candidates if m not in done]
@@ -217,9 +224,10 @@ class LeaveRecallMixin:
         async with lock:
             backup = getattr(self, "_backup_msg_ids", None)
             if targets and callable(backup):
-                # 撤回前先备份到备份群（backup_enabled），一个人的消息合并成一条转发
+                # 撤回前先备份到转发群（backup_enabled），一个人的消息合并成一条转发。
+                # 群历史里有内容的带上内容：发送者已经不在群里时按 ID 引用常常失败，靠内容拼节点
                 result["backup"] = await backup(
-                    client, gid, [{"message_id": m, "user_id": uid} for m in targets],
+                    client, gid, [dict(info.get(m) or {}, message_id=m, user_id=uid) for m in targets],
                     f"退群撤回：{trigger}", operator=operator if operator != uid else "", kind="leave_recall")
             await self._lr_delete_all(client, targets, result)
         self._lr_store().pop((gid, uid), None)

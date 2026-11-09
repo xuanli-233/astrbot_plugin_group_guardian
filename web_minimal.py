@@ -59,6 +59,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_auto_blacklist_enabled", "blacklist_reject_join_enabled",
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
+    "leave_files_enabled", "leave_files_on_leave", "leave_files_on_kick",
     "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history", "leave_log_save_images", "leave_log_image_days",
     "miniapp_store_enabled", "miniapp_store_days",
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",

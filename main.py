@@ -22,6 +22,7 @@ from .group_name_task import GroupNameTaskMixin
 from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
 from .leave_recall import LeaveRecallMixin
+from .leave_files import LeaveFilesMixin
 from .leave_log import LeaveLogMixin
 from .code_limit import CodeLimitMixin
 from .card_parse import CardParseMixin
@@ -51,7 +52,7 @@ from .web_identity import WebIdentityMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -422,6 +423,15 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             await LeaveRecallMixin._handle_leave_recall(self, event)
         except Exception as e:
             logger.warning(f"[GroupMgr] 退群撤回处理出错: {e}")
+
+    # 退群删文件：成员主动退群 / 被踢后，后台删除他上传的群文件。广播型通知，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_member_leave_files(self, event: AiocqhttpMessageEvent):
+        try:
+            await LeaveFilesMixin._handle_leave_files(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 退群删文件处理出错: {e}")
     # 黑名单用户被邀请等方式绕过加群申请入群时，立即踢出并原生拉黑。
     @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)

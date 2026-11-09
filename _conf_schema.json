@@ -440,6 +440,23 @@
         "default": 30,
         "hint": "范围 1–3650；到期只删图片，退群记录和文字保留"
     },
+    "leave_files_enabled": {
+        "description": "退群删文件：成员离开后删除他上传的群文件",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后成员主动退群 / 被踢出时，后台扫描这个群的群文件（根目录 + 一级文件夹），删除上传者是他的文件（单次最多 200 个），结果写入操作记录。机器人需要是群管理员；可在多群配置中按群开关"
+    },
+    "leave_files_on_leave": {
+        "description": "退群删文件：主动退群时触发",
+        "type": "bool",
+        "default": true
+    },
+    "leave_files_on_kick": {
+        "description": "退群删文件：被踢出时触发",
+        "type": "bool",
+        "default": true,
+        "hint": "包括管理员手动踢人和本插件踢人（批量踢人、黑名单入群即踢等）"
+    },
     "leave_recall_use_history": {
         "description": "退群撤回：用群历史兜底",
         "type": "bool",

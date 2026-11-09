@@ -1828,6 +1828,7 @@ class WebMixin:
         "leave_recall_enabled": "退群撤回", "leave_recall_on_leave": "退群撤回",
         "leave_recall_on_kick": "退群撤回", "leave_recall_count": "退群撤回",
         "leave_recall_minutes": "退群撤回",
+        "leave_files_enabled": "退群删文件", "leave_files_on_leave": "退群删文件", "leave_files_on_kick": "退群删文件",
         "leave_log_enabled": "退群记录", "leave_log_msg_count": "退群记录", "leave_log_use_history": "退群记录",
         "leave_log_save_images": "退群记录", "leave_log_image_days": "退群记录",
         "log_image_save_enabled": "审核规则", "log_image_days": "审核规则",
