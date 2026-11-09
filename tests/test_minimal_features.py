@@ -536,6 +536,41 @@ class GroupNameTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(items[0]["status"], "skipped")
         self.assertIn("已终止并删除", items[0]["result"])
 
+    async def test_countdown_continues_when_name_already_upcoming(self):
+        # 别人已经手动把天数改对（= 将要改成的名字）：不算被改过，倒计时继续
+        client = _Client(groups={"10001": {"name": "交流群|16天", "bot": "admin"}})
+        h = _Harness(client, cfg={"countdown_update_time": "00:05"})
+        ops = []
+        h._record_op = lambda action, **kw: ops.append((action, kw))
+        h._save_name_tasks({"10001": {"base": "交流群", "suffix": "|17天", "applied": "交流群|17天",
+                                      "countdown": {"target": "2026-11-20", "template": "|{days}天",
+                                                    "last_date": "2026-11-03"}}})
+        await h._group_name_tick(datetime(2026, 11, 4, 0, 6))
+        await h._bq_drain()
+        self.assertEqual(client.groups["10001"]["name"], "交流群|16天")
+        self.assertEqual(client.actions("set_group_name"), [])            # 已经对了，不再调接口
+        self.assertFalse([a for a, _ in ops if a == "群名倒计时终止"])
+        record = h._load_name_tasks()["10001"]
+        self.assertEqual(record["applied"], "交流群|16天")
+        self.assertEqual(record["countdown"]["last_date"], "2026-11-04")
+        await h._group_name_tick(datetime(2026, 11, 5, 0, 6))             # 第二天照常更新
+        await h._bq_drain()
+        self.assertEqual(client.groups["10001"]["name"], "交流群|15天")
+
+    async def test_countdown_continues_when_expired_name_already_base(self):
+        # 过期那天别人已经去掉了后缀（= 将要改成的基础名）：照常结束，不算被改过
+        client = _Client(groups={"10001": {"name": "交流群", "bot": "admin"}})
+        h = _Harness(client)
+        ops = []
+        h._record_op = lambda action, **kw: ops.append((action, kw))
+        h._save_name_tasks({"10001": {"base": "交流群", "suffix": "|今天", "applied": "交流群|今天",
+                                      "countdown": {"target": "2026-11-06", "template": "|{days}天",
+                                                    "last_date": "2026-11-06"}}})
+        done, failed = await h._run_countdowns(client, h._load_name_tasks(), ["10001"], today=date(2026, 11, 7))
+        self.assertEqual(failed, {})
+        self.assertFalse([a for a, _ in ops if a == "群名倒计时终止"])
+        self.assertTrue([a for a, _ in ops if a == "群名倒计时结束"])
+
     async def test_manual_refresh_also_stops_tampered_countdown(self):
         client = _Client(groups={"10001": {"name": "别人改的", "bot": "admin"}})
         h = _Harness(client)

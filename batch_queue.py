@@ -743,7 +743,7 @@ class BatchQueueMixin:
                     if not params.get("force") and cd.get("last_date") == today.isoformat():
                         return ITEM_SKIPPED, "今天已经更新过"
                     # 这期间群名被别人改过：终止并删除倒计时，不再改名
-                    current, stopped = await self._countdown_tampered(client, gid, tasks, log=log)
+                    current, stopped = await self._countdown_tampered(client, gid, tasks, log=log, today=today)
                     if stopped:
                         return ITEM_SKIPPED, stopped
                     target = datetime.strptime(cd["target"], "%Y-%m-%d").date()

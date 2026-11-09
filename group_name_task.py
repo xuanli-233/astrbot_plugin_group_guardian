@@ -11,7 +11,7 @@
   /群名倒计时 <YYYY-MM-DD> <模板> [群号,群号]      每天自动更新，模板里用 {days} 表示剩余天数、{date} 表示目标日期
   /群名倒计时 列表 | 停止 [群号,群号] | 立即更新
 倒计时：到期当天 {days}天 显示为「今天」，过期后自动去掉后缀并停止。
-倒计时更新时如果当前群名 ≠ 插件上次改出的群名（这期间被别人改过），不再改名，终止并删除该群的倒计时
+倒计时更新时如果当前群名既不是插件上次改出的群名，也不是这次将要改成的群名（这期间被别人改过），不再改名，终止并删除该群的倒计时
 （_countdown_tampered）。WebUI「改名」（_name_manual_rename）会同步记下新群名，不算被别人改过。
 每天在 countdown_update_time（默认 00:01，服务器本地时间）之后刷新一次；重启后会补上当天的更新。
 任务存在 SQLite meta 表（键 GROUP_NAME_META_KEY，JSON）。
@@ -119,12 +119,28 @@ class GroupNameTaskMixin:
             return None
         return str(data.get("group_name") or "")
 
+    def _countdown_upcoming_name(self, record: dict, today: date) -> Optional[str]:
+        """倒计时这次更新将要改成的群名；算不出来（没有基础名 / 数据不对）返回 None。"""
+        cd = record.get("countdown") or {}
+        base = record.get("base")
+        if base is None or not cd.get("target"):
+            return None
+        try:
+            target = datetime.strptime(cd["target"], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+        suffix = self._render_countdown(cd.get("template") or "", target, today) or ""
+        return self._compose_group_name(base, suffix, self._cfg_int("group_name_max_length", 30))
+
     async def _countdown_tampered(self, client, gid: str, tasks: Dict[str, dict],
-                                  log: Optional[dict] = None) -> Tuple[Optional[str], Optional[str]]:
+                                  log: Optional[dict] = None,
+                                  today: Optional[date] = None) -> Tuple[Optional[str], Optional[str]]:
         """倒计时更新前检查群名有没有被别人改过。返回 (当前群名, 终止说明)。
 
-        当前群名 ≠ 插件上次改出的群名（record["applied"]）= 这期间有人改过群名：不再改名，
-        终止并删除该群的倒计时，写操作记录。终止说明为 None 表示没被改过（或读不到群名 / 没有记录，照常处理）。
+        当前群名和下面两个都不一样 = 这期间有人改过群名：不再改名，终止并删除该群的倒计时，写操作记录。
+          - 插件上次改出的群名（record["applied"]）
+          - 这次将要改成的群名（基础名 + 今天的倒计时后缀；已过期则是基础名），比如别人已经手动把天数改对了
+        终止说明为 None 表示没被改过（或读不到群名 / 没有记录，照常处理）。
         """
         current = await self._get_group_name(client, gid)
         record = tasks.get(gid) or {}
@@ -132,6 +148,11 @@ class GroupNameTaskMixin:
         if current is None or not expected or current == expected or not record.get("countdown"):
             return current, None
         cd = record["countdown"]
+        upcoming = self._countdown_upcoming_name(record, today or date.today())
+        if upcoming is not None and current == upcoming:
+            # 已经是将要改成的名字：记成插件改出的，照常更新（不会再调接口改名）
+            record["applied"] = current
+            return current, None
         record["countdown"] = None
         # 后缀记录也作废：下次改后缀时以别人改的新群名为基础名
         for key in ("base", "suffix", "applied"):
@@ -582,7 +603,7 @@ class GroupNameTaskMixin:
         # 群名被别人改过的群：终止并删除倒计时，不再改名
         stopped: Dict[str, str] = {}
         for gid in list(due):
-            _cur, why = await self._countdown_tampered(client, gid, tasks, log=log)
+            _cur, why = await self._countdown_tampered(client, gid, tasks, log=log, today=today)
             if why:
                 stopped[gid] = why
                 due.remove(gid)
