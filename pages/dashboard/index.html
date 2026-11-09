@@ -1322,7 +1322,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               </div>
               <textarea class="input-md" id="bcContent" rows="6" placeholder="公告内容"></textarea>
               <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">上传配图<input type="file" id="bcImageFile" accept="image/*" style="display:none" /></label>
-                <input class="input-sm" id="bcImage" style="flex:1" placeholder="或填配图地址（图片链接，可选）" /></div>
+                <input class="input-sm" id="bcImage" style="flex:1" placeholder="或填配图地址（图片链接，可选）；也可以 Ctrl+V 粘贴截图" /></div>
               <div class="mn-row" id="bcImageInfoRow" style="display:none"><span class="mn-hint" id="bcImageInfo"></span></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBcSend">发布</button><span class="mn-hint" id="bcTargetsHint"></span></div>
               <div id="bcResult"></div>
@@ -1339,7 +1339,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="card-header"><h2>群消息</h2><span class="rules-subtle">发到「发到哪些群」里勾选的群</span></div>
             <div class="mn-body">
               <textarea class="input-md" id="bmText" rows="5" placeholder="要发到群里的消息"></textarea>
-              <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">选择图片（可选）<input type="file" id="bmImage" accept="image/*" style="display:none" /></label><span class="mn-hint" id="bmImageInfo">不带图片</span></div>
+              <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">选择图片（可选）<input type="file" id="bmImage" accept="image/*" style="display:none" /></label><span class="mn-hint" id="bmImageInfo">不带图片（也可以 Ctrl+V 粘贴截图）</span></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBmSend">发送</button><span class="mn-hint">每个群之间按「批量任务」的间隔发送，可在批量任务栏暂停 / 取消</span></div>
               <div id="bmResult"></div>
             </div>
@@ -5066,8 +5066,10 @@ function gfOnChange(e) {
 /* ---- 批量发言 / 批量传群文件 ---- */
 var BULK = { image: null, file: null, noticeImage: null };
 function bulkReadFile(input) {
+  return bulkReadFileObj(input.files && input.files[0]);
+}
+function bulkReadFileObj(f) {
   return new Promise(function(resolve, reject) {
-    var f = input.files && input.files[0];
     if (!f) { resolve(null); return; }
     var r = new FileReader();
     r.onload = function() { resolve({ name: f.name, size: f.size, data: String(r.result || '') }); };
@@ -5080,12 +5082,46 @@ async function bulkOutbox(file) {
   if (isApiError(res)) throw new Error(mnErr(res));
   return mnData(res);
 }
-async function bulkPickImage() {
-  var f = await bulkReadFile($('#bmImage'));
-  if (!f) { BULK.image = null; $('#bmImageInfo').textContent = '不带图片'; return; }
+var BULK_NO_IMAGE_HINT = '不带图片（也可以 Ctrl+V 粘贴截图）';
+function bulkImageThumb(dataUrl) {
+  return '<img alt="图片" src="' + escAttr(dataUrl) + '" style="max-width:120px;max-height:80px;border-radius:4px;vertical-align:middle;margin-right:6px;border:1px solid var(--border)" />';
+}
+// 剪贴板里的图片：只有纯图片时才接管（同时有文字的，比如从 Word / 表格复制，照常粘贴文字）
+function bulkClipboardImage(e) {
+  var cd = e.clipboardData;
+  if (!cd || !cd.items) return null;
+  var img = null, hasText = false;
+  for (var i = 0; i < cd.items.length; i++) {
+    var it = cd.items[i];
+    if (it.kind === 'file' && /^image\//.test(it.type) && !img) img = it.getAsFile();
+    else if (it.kind === 'string' && it.type === 'text/plain') hasText = true;
+  }
+  if (!img || hasText) return null;
+  var ext = (img.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'png';
+  var d = new Date(), pad = function(n) { return (n < 10 ? '0' : '') + n; };
+  var name = '粘贴的图片-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + '.' + ext;
+  try { return new File([img], name, { type: img.type }); } catch (err) { img.displayName = name; return img; }
+}
+function bulkBindPaste(anchorId, handler) {
+  var anchor = document.getElementById(anchorId), box = anchor && anchor.closest('.mn-body');
+  if (!box) return;
+  box.addEventListener('paste', function(e) {
+    var f = bulkClipboardImage(e);
+    if (!f) return;
+    e.preventDefault();
+    handler(f);
+  });
+}
+function bulkClearMsgImage() { BULK.image = null; $('#bmImage').value = ''; $('#bmImageInfo').textContent = BULK_NO_IMAGE_HINT; }
+async function bulkPickImage(pasted) {
+  var src = pasted instanceof Blob ? pasted : null;
+  var f = await (src ? bulkReadFileObj(src) : bulkReadFile($('#bmImage')));
+  if (f && src && src.displayName) f.name = src.displayName;
+  if (!f) { bulkClearMsgImage(); return; }
   if (f.size > 20 * 1048576) { toast('图片不能超过 20 MB', 'warning'); $('#bmImage').value = ''; return; }
+  if (src) $('#bmImage').value = '';
   $('#bmImageInfo').textContent = '正在上传 ' + f.name + '……';
-  try { BULK.image = await bulkOutbox(f); $('#bmImageInfo').innerHTML = esc(f.name + '（' + gfSize(f.size) + '）') + ' <a href="javascript:void(0)" id="bmImageClear">去掉</a>'; bindIfExists('bmImageClear', function() { BULK.image = null; $('#bmImage').value = ''; $('#bmImageInfo').textContent = '不带图片'; }); }
+  try { BULK.image = await bulkOutbox(f); $('#bmImageInfo').innerHTML = bulkImageThumb(f.data) + esc(f.name + '（' + gfSize(f.size) + '）') + ' <a href="javascript:void(0)" id="bmImageClear">去掉</a>'; bindIfExists('bmImageClear', bulkClearMsgImage); }
   catch (e) { BULK.image = null; $('#bmImageInfo').textContent = '上传失败：' + e.message; }
 }
 async function bulkPickFile() {
@@ -5107,16 +5143,19 @@ function bcClearImage() {
   BULK.noticeImage = null; $('#bcImageFile').value = ''; $('#bcImage').disabled = false;
   $('#bcImageInfoRow').style.display = 'none';
 }
-async function bcPickImage() {
-  var f = await bulkReadFile($('#bcImageFile'));
+async function bcPickImage(pasted) {
+  var src = pasted instanceof Blob ? pasted : null;
+  var f = await (src ? bulkReadFileObj(src) : bulkReadFile($('#bcImageFile')));
+  if (f && src && src.displayName) f.name = src.displayName;
   if (!f) { bcClearImage(); return; }
   if (f.size > 20 * 1048576) { toast('配图不能超过 20 MB', 'warning'); $('#bcImageFile').value = ''; return; }
+  if (src) $('#bcImageFile').value = '';
   $('#bcImageInfoRow').style.display = '';
   $('#bcImageInfo').textContent = '正在上传 ' + f.name + '……';
   try {
     BULK.noticeImage = await bulkOutbox(f);
     $('#bcImage').disabled = true;
-    $('#bcImageInfo').innerHTML = '<img alt="配图" src="' + escAttr(f.data) + '" style="max-width:120px;max-height:80px;border-radius:4px;vertical-align:middle;margin-right:6px;border:1px solid var(--border)" />' +
+    $('#bcImageInfo').innerHTML = bulkImageThumb(f.data) +
       esc(f.name + '（' + gfSize(f.size) + '），作为配图（旁边填的图片地址不再使用）') + ' <a href="javascript:void(0)" id="bcImageClear">去掉</a>';
     bindIfExists('bcImageClear', bcClearImage);
   } catch (e) { BULK.noticeImage = null; $('#bcImageInfo').textContent = '上传失败：' + e.message; }
@@ -7602,8 +7641,10 @@ function initMinimalPages() {
   ['gfUploader', 'gfKeyword'].forEach(function(id) { bindIfExists(id, gfRender, 'input'); });
   var gfTable = document.getElementById('gfTable');
   if (gfTable) { gfTable.addEventListener('click', gfOnClick); gfTable.addEventListener('change', gfOnChange); }
-  bindIfExists('bmImage', bulkPickImage, 'change');
-  bindIfExists('bcImageFile', bcPickImage, 'change');
+  bindIfExists('bmImage', function() { bulkPickImage(); }, 'change');
+  bindIfExists('bcImageFile', function() { bcPickImage(); }, 'change');
+  bulkBindPaste('bmText', bulkPickImage);
+  bulkBindPaste('bcContent', bcPickImage);
   bindIfExists('bfFile', bulkPickFile, 'change');
   bindIfExists('btnBmSend', bulkSendMsg);
   bindIfExists('btnBfSend', bulkSendFile);
