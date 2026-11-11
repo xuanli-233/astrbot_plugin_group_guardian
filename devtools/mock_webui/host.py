@@ -529,6 +529,8 @@ class FakeOneBot:
             LOOP.create_task(_drain(PLUGIN._on_member_leave_log(_notice_event(dict(kick_raw)))))
         if PLUGIN is not None and hasattr(PLUGIN, "_on_member_leave_recall"):
             LOOP.create_task(_drain(PLUGIN._on_member_leave_recall(_notice_event(dict(kick_raw)))))
+        if PLUGIN is not None and hasattr(PLUGIN, "_on_member_kick_join_lock"):
+            LOOP.create_task(_drain(PLUGIN._on_member_kick_join_lock(_notice_event(dict(kick_raw)))))
         return _ok(None)
 
     def act_batch_delete_group_member(self, group_id, user_ids, **_):
@@ -582,6 +584,15 @@ class FakeOneBot:
                              "settings": settings, "time": int(time.time())})
         flags = "、".join(k for k, v in {"置顶": pinned, "需确认": confirm_required, "弹窗": tip_window}.items() if v)
         self.system(group_id, f"发布了群公告{f'（{flags}）' if flags else ''}：{content[:40]}")
+        return _ok(None)
+
+    def act_set_group_add_option(self, group_id, add_type, **_):
+        err = self._need_admin(group_id)
+        if err:
+            return err
+        self.groups[int(group_id)]["add_type"] = int(add_type)
+        text = {0: "允许任何人", 1: "需要验证", 2: "禁止加群"}.get(int(add_type), str(add_type))
+        self.system(int(group_id), f"加群方式改为：{text}")
         return _ok(None)
 
     def act_set_group_msg_mask(self, group_id, mask, **_):

@@ -207,6 +207,14 @@ class LeaveLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h._ll_list(keyword="二群")[1], 1)
         self.assertEqual(h._ll_list(keyword="张")[1], 1)
         self.assertEqual(h._ll_list(kind="kick")[1], 1)
+        # 按群、按顺序、按时间范围
+        self.assertEqual(h._ll_list(group_id="1")[1], 3)
+        self.assertEqual(h._ll_list(group_id="2", keyword="555")[1], 1)
+        self.assertEqual([i["ts"] for i in h._ll_list(order="asc")[0]], [100, 200, 300, 400])
+        self.assertEqual(h._ll_list(days=7)[1], 0)   # 这些记录的时间都是很久以前
+        h._ll_insert(group_id="3", group_name="三群", user_id="777", kind="leave", ts=int(time.time()) - 3600)
+        self.assertEqual([i["user_id"] for i in h._ll_list(days=7)[0]], ["777"])
+        self.assertEqual(h._ll_list(days=7, kind="kick")[1], 0)
         items, _ = h._ll_list(keyword="555")
         self.assertEqual([i["ts"] for i in items], [300, 200, 100])
         self.assertEqual((items[0]["user_leaves"], items[0]["user_kicks"]), (2, 1))

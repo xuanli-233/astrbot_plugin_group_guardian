@@ -5,6 +5,7 @@
 - 群名定时改名 / 倒计时（group_name_task.py），每分钟检查一次
 - 群成员缓存后台补齐（group_directory.py）
 - 批量任务执行器（batch_queue.py）
+- 踢人后暂停加群的到点恢复（join_lock.py），每分钟检查一次
 后台任务没有 event，OneBot client 通过 _get_client(None) 的 platform_manager 回退获取；
 插件 terminate 时取消全部任务，避免热重载后残留协程。
 原版的申诉超时、名片周期同步、词库自学习、AI 误判复盘任务已删除。
@@ -24,6 +25,7 @@ _TASK_ATTRS = (
     ("_dir_task", "群成员缓存任务"),
     ("_dir_refresh_task", "群成员缓存刷新"),
     ("_bq_task", "批量任务执行器"),
+    ("_jl_task", "恢复加群方式任务"),
 )
 
 
@@ -47,6 +49,8 @@ class SchedulerMixin:
                 self._dir_task = asyncio.create_task(self._dir_background_loop())
             if callable(getattr(self, "_bq_loop", None)):
                 self._bq_task = asyncio.create_task(self._bq_loop())
+            if callable(getattr(self, "_jl_loop", None)):
+                self._jl_task = asyncio.create_task(self._jl_loop())
         except RuntimeError:
             # 无运行中的事件循环（极少见），放弃后台任务，不影响其它功能
             logger.debug("[GroupMgr] 无事件循环，跳过调度器启动")

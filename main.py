@@ -23,6 +23,7 @@ from .image_recognizer import ImageRecognizerMixin
 from .keyword_guard import KeywordGuardMixin
 from .leave_recall import LeaveRecallMixin
 from .leave_files import LeaveFilesMixin
+from .join_lock import JoinLockMixin
 from .leave_log import LeaveLogMixin
 from .code_limit import CodeLimitMixin
 from .card_parse import CardParseMixin
@@ -37,6 +38,7 @@ from .message_backup import MessageBackupMixin
 from .media_store import MediaStoreMixin
 from .rule_groups import RuleGroupMixin
 from .miniapp import MiniAppMixin
+from .link_guard import LinkGuardMixin
 from .command_center import CommandCenterMixin
 from .group_files import GroupFilesMixin
 from .member_lookup import MemberLookupMixin
@@ -52,7 +54,7 @@ from .web_identity import WebIdentityMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -106,7 +108,7 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         await self._stop_scheduler()
         # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks", "_jl_tasks", "_lk_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):
@@ -117,6 +119,7 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         if adhoc:
             await asyncio.gather(*adhoc, return_exceptions=True)
         await self._close_image_audit_resources()
+        await self._lk_close()
         logger.info("[GroupMgr] 插件卸载，SQLite 存储已自动持久化")
 
     async def _search_keyword_in_messages(self, event: AstrMessageEvent, group_id: str, keyword: str, days: int, search_type: str = "all") -> Tuple[int, list]:
@@ -432,6 +435,16 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             await LeaveFilesMixin._handle_leave_files(self, event)
         except Exception as e:
             logger.warning(f"[GroupMgr] 退群删文件处理出错: {e}")
+
+    # 踢人后暂停加群：成员被踢后把群改成禁止加群几小时，到点恢复（join_lock.py，默认关）。广播型通知，不 stop_event。
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_member_kick_join_lock(self, event: AiocqhttpMessageEvent):
+        try:
+            await JoinLockMixin._handle_kick_join_lock(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 踢人后暂停加群处理出错: {e}")
+
     # 黑名单用户被邀请等方式绕过加群申请入群时，立即踢出并原生拉黑。
     @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)

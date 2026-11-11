@@ -211,7 +211,7 @@ function render() {
   $('blacklist').innerHTML = STATE.user_blacklist.length ? STATE.user_blacklist.map(function (u) { return '<div>' + esc(u) + '</div>'; }).join('') : '<div class="hint">空</div>';
   $('rules').innerHTML = '<p>关键词：' + STATE.keyword_rules.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join(' ') + '</p>' +
     '<p>葵花码正则：' + STATE.wxcode_rules.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join(' ') + '</p>' +
-    '<p>转发群：<code>' + esc((STATE.backup_groups || []).join('、') || '无') + '</code>（在管理页面 → 关键词与识别 → 转发群里修改）</p>';
+    '<p>转发群：<code>' + esc((STATE.backup_groups || []).join('、') || '无') + '</code>（在管理页面 → 识别服务与转发群 → 转发群里修改）</p>';
   $('actions').innerHTML = STATE.actions.slice().reverse().filter(function (a) { return !/^get_|ocr_image/.test(a.action); })
     .map(function (a) { return '<div>' + esc(a.time) + ' <b>' + esc(a.action) + '</b> ' + esc(JSON.stringify(a.params)) + '</div>'; }).join('') || '<div class="hint">暂无</div>';
   $('logs').innerHTML = STATE.logs.slice().reverse().map(function (l) { return '<div class="lv-' + l.level + '">' + esc(l.time) + ' ' + esc(l.text) + '</div>'; }).join('') || '<div class="hint">暂无</div>';

@@ -213,6 +213,21 @@ class ModerationMixin(ImageAuditMixin):
                              + (f" · {i['content'][:80]}" if i.get("content") else "")
                              + ("；白名单，放行" if i.get("_allowed") else "") for i in mp_items])
 
+        # 链接（link_guard.py）：文字里的链接 + 非小程序卡片带的链接（小程序卡片的不算），在卡片文字并入之前识别
+        lk_items = []
+        lk_extract = getattr(self, "_lk_items", None)
+        if callable(lk_extract) and self._cfg("link_guard_enabled", True, group_id=group_id):
+            try:
+                mp_cards = {id(i["card"]) for i in mp_items if i.get("card") is not None}
+                lk_items = lk_extract(text, [c for c in cards if id(c) not in mp_cards])
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 识别链接失败: {e}")
+                lk_items = []
+            if lk_items:
+                live_detail([f"链接：{i['url'][:120]}（{i['domain']}）"
+                             + {"allow": "；白名单域名", "block": f"；已拉黑（{i['entry']}）"}.get(i["state"], "")
+                             for i in lk_items])
+
         if cards:
             card_lines = "\n".join(self._card_text(c) for c in cards)
             text = (text + "\n" + card_lines) if text else card_lines
@@ -228,11 +243,25 @@ class ModerationMixin(ImageAuditMixin):
         hit_guards = getattr(self, "_run_hit_guards", None)
         if callable(hit_guards):
             self._last_hit_reason = ""
-            if mp_items:
+            lk_hit = next((i for i in lk_items if i.get("state") == "block"), None)
+            if lk_hit is not None:
+                # 已拉黑的域名 / 链接：按默认规则组的处理方式撤回，不再做后面的检查
+                live_stage("检查链接")
+                hit_notice = await self._execute_hit_action(
+                    event, group_id, user_id, user_name, text,
+                    f"已拉黑的链接: {lk_hit['url'][:120]}（名单 {lk_hit['entry']}）", kind="link", image_urls=image_urls)
+                handled = True
+            elif mp_items:
                 handled, hit_notice = await hit_guards(event, group_id, user_id, user_name, text, image_urls,
                                                        mp_items=mp_items)
             else:
                 handled, hit_notice = await hit_guards(event, group_id, user_id, user_name, text, image_urls)
+            if lk_items:
+                try:
+                    self._lk_record(group_id, user_id, user_name, lk_items, "rule" if handled else "pass",
+                                    reason=getattr(self, "_last_hit_reason", "") if handled else "")
+                except Exception as e:
+                    logger.debug(f"[GroupMgr] 记录链接失败: {e}")
             if mp_items:
                 try:
                     self._mp_record(group_id, user_id, user_name, mp_items, "rule" if handled else "pass",

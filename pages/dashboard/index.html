@@ -402,8 +402,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 [data-theme="dark"] .bar-col:hover::after,[data-theme="dark"] .bar-hrow:hover::after{background:rgba(240,240,240,.9);color:#333}
 
     /* ===== 最小化插件新增页面 ===== */
-    .nav-section{font-size:11px;color:var(--text-muted);padding:12px 12px 4px;letter-spacing:.2px}
-    @media(max-width:900px){.nav-section{display:none}}
+    .nav-section{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--text-muted);padding:8px 12px 4px;margin-top:8px;border-top:1px solid var(--border);letter-spacing:.5px;cursor:pointer;user-select:none}
+    .nav-section:hover{color:var(--sidebar-active)}
+    .nav-caret{width:14px;height:14px;fill:currentColor;transition:transform .15s}
+    .nav-section.folded .nav-caret{transform:rotate(-90deg)}
+    .nav-item.nav-folded:not(.active){display:none}
+    @media(max-width:900px){.nav-section{display:none}.nav-item.nav-folded:not(.active){display:flex}}
     .mn-intro{font-size:12px;color:var(--text-secondary);line-height:1.7;margin:-8px 0 16px}
     .mn-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     @media(max-width:1100px){.mn-grid{grid-template-columns:1fr}}
@@ -450,6 +454,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .bq-items .mn-table thead th{position:sticky;top:0;z-index:1}
     /* 可搜索的选群下拉（gselEnhance） */
     .gsel{position:relative;display:inline-block}
+    .flt{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .flt-l{font-size:12px;color:var(--text-muted)}
     .gsel-btn{text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:22px;position:relative}
     .gsel-btn::after{content:'';position:absolute;right:9px;top:50%;margin-top:-2px;border:4px solid transparent;border-top-color:var(--text-muted)}
     .gsel-pop{position:absolute;z-index:50;top:calc(100% + 4px);left:0;min-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:6px}
@@ -704,13 +710,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
           <span>总览</span>
         </a>
-        <div class="nav-section">消息审核</div>
+        <div class="nav-section" data-sec="消息拦截"><span>消息拦截</span><svg class="nav-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></div>
         <a class="nav-item" data-tab="guard">
-
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-
-          <span>关键词与识别</span>
-
+          <span>拦截规则</span>
         </a>
         <a class="nav-item" data-tab="codes">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
@@ -720,6 +723,15 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>
           <span>小程序</span>
         </a>
+        <a class="nav-item" data-tab="links">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5zm-6 8H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-2zm-3-4h8v2H8v-2z"/></svg>
+          <span>链接管理</span>
+        </a>
+        <a class="nav-item" data-tab="services">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+          <span>识别服务与转发群</span>
+        </a>
+        <div class="nav-section" data-sec="监控与记录"><span>监控与记录</span><svg class="nav-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></div>
         <a class="nav-item" data-tab="livelog">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
           <span>实时日志</span>
@@ -732,25 +744,30 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           <span>违规记录</span>
         </a>
-        <div class="nav-section">成员管理</div>
+        <a class="nav-item" data-tab="leavelog">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+          <span>退群记录</span>
+        </a>
+        <a class="nav-item" data-tab="oplog">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          <span>操作记录</span>
+        </a>
+        <div class="nav-section" data-sec="成员管理"><span>成员管理</span><svg class="nav-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></div>
         <a class="nav-item" data-tab="member">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
           <span>群成员查找</span>
         </a>
         <a class="nav-item" data-tab="kick">
-
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 8c0-2.21-1.79-4-4-4S6 5.79 6 8s1.79 4 4 4 4-1.79 4-4zm3 2v2h6v-2h-6zM2 18v2h16v-2c0-2.66-5.33-4-8-4s-8 1.34-8 4z"/></svg>
-
           <span>踢人与黑名单</span>
-
+        </a>
+        <a class="nav-item" data-tab="afterleave">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/></svg>
+          <span>退群后处理</span>
         </a>
         <a class="nav-item" data-tab="dup">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
           <span>重复成员</span>
-        </a>
-        <a class="nav-item" data-tab="leavelog">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
-          <span>退群记录</span>
         </a>
         <a class="nav-item" data-tab="join">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z"/></svg>
@@ -760,37 +777,27 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/></svg>
           <span>定时解禁</span>
         </a>
-        <div class="nav-section">群运营</div>
+        <div class="nav-section" data-sec="群运营"><span>群运营</span><svg class="nav-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></div>
         <a class="nav-item" data-tab="broadcast">
-
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
-
           <span>批量发布</span>
-
         </a>
         <a class="nav-item" data-tab="files">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm4 13h-4v-2h4v2zm3-4H7v-2h10v2z"/></svg>
           <span>群文件</span>
         </a>
         <a class="nav-item" data-tab="names">
-
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-
           <span>群名任务</span>
-
         </a>
         <a class="nav-item" data-tab="batch">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 5h2v2H3V5zm4 0h14v2H7V5zM3 11h2v2H3v-2zm4 0h14v2H7v-2zm-4 6h2v2H3v-2zm4 0h14v2H7v-2z"/></svg>
           <span>批量任务</span><span class="nav-badge" id="bqNavBadge" style="display:none"></span>
         </a>
-        <div class="nav-section">系统</div>
-        <a class="nav-item" data-tab="directory">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
-          <span>群成员缓存</span>
-        </a>
-        <a class="nav-item" data-tab="oplog">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-          <span>操作记录</span>
+        <div class="nav-section" data-sec="系统"><span>系统</span><svg class="nav-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></div>
+        <a class="nav-item" data-tab="botacct">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+          <span>机器人账号</span>
         </a>
         <a class="nav-item" data-tab="perms">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
@@ -803,6 +810,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         <a class="nav-item" data-tab="groupcfg">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm13 0h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
           <span>多群配置</span>
+        </a>
+        <a class="nav-item" data-tab="directory">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
+          <span>群成员缓存</span>
         </a>
         <a class="nav-item" data-tab="settings">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -1061,8 +1072,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <!-- ===== 最小化插件新增页面（数据来自 /minimal/* 接口） ===== -->
       <div class="tab-panel" id="tab-guard">
-        <div class="page-header"><h1>关键词与识别</h1><button class="btn btn-ghost btn-sm" id="btnGuardRefresh">刷新</button></div>
-        <p class="mn-intro">群消息命中下面<strong>你自己的规则组</strong>时：先把原消息备份到备份群，再撤回，按组的设置禁言、提示。原版插件自带的词库与 AI 审核已删除。</p>
+        <div class="page-header"><h1>拦截规则</h1><button class="btn btn-ghost btn-sm" id="btnGuardRefresh">刷新</button></div>
+        <p class="mn-intro">群消息命中下面<strong>你自己的规则组</strong>时：先把原消息备份到转发群，再撤回，按组的设置禁言、提示。原版插件自带的词库与 AI 审核已删除。</p>
         <div class="split" id="rgSplit">
           <div class="card">
             <div class="card-header"><h2>撤回 / 禁言规则组</h2><button class="btn btn-primary btn-sm" id="btnRgNew">新建</button></div>
@@ -1087,9 +1098,71 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <div class="card">
             <div class="card-header"><h2>开关</h2></div>
             <div class="settings-list" id="guardSwitches"></div>
-            <div class="mn-body"><p class="mn-hint">禁言时长、群内提示在各规则组里设置；备份发到哪些群在下面的「转发群」里设置。</p></div>
+            <div class="mn-body"><p class="mn-hint">禁言时长、群内提示在各规则组里设置；备份发到哪些群、二维码 / 葵花码和 OCR 怎么接入，在「识别服务与转发群」页设置。</p></div>
           </div>
         </div>
+      </div>
+
+      <div class="tab-panel" id="tab-links">
+        <div class="page-header"><h1>链接管理</h1><button class="btn btn-ghost btn-sm" id="btnLkRefresh">刷新</button></div>
+        <p class="mn-intro">群消息里出现过的链接都在这里，按域名汇总：每个域名出现了多少次、谁发的、在哪些群、具体是哪些链接。可以拉黑整个域名（连同它的子域名），也可以只拉黑某一个链接；拉黑后再出现就按默认规则组撤回。小程序卡片里的链接不算（在「小程序」页）。<strong>这里的链接只显示成文字，不能点击打开</strong>，需要时用「复制」。</p>
+        <div class="split" id="lkSplit">
+          <div class="card">
+            <div class="card-header"><h2>域名统计</h2><span class="rules-subtle" id="lkCount"></span></div>
+            <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
+              <select class="input-sm" id="lkBy" style="width:170px"><option value="domain">每个域名一行</option><option value="user">每个域名每个人一行</option></select>
+              <select class="input-sm" id="lkDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
+              <select class="input-sm" id="lkGroup" style="width:180px"><option value="">所有群</option></select>
+              <select class="input-sm" id="lkSort" style="width:160px"><option value="count">出现次数多的在前</option><option value="users">发送人数多的在前</option><option value="urls">不同链接多的在前</option><option value="recent">最近出现的在前</option></select>
+              <input class="input-sm" id="lkKeyword" placeholder="域名 / 链接 / 标题 / QQ号 / 昵称" style="flex:1;min-width:150px" />
+            </div></div>
+            <div class="split-list" id="lkTable"><div class="split-empty">加载中...</div></div>
+            <div class="mn-body" style="padding-top:6px" id="lkPager"></div>
+          </div>
+          <div class="split-right"><div class="card" id="lkDetail"><div class="split-empty">在左边点一个域名：看它下面有哪些链接、网页标题、谁发的、在哪些群，可以拉黑整个域名或某一个链接</div></div></div>
+        </div>
+        <div class="mn-grid">
+          <div class="card">
+            <div class="card-header"><h2>黑名单</h2><span class="rules-subtle" id="lkBlockCount"></span></div>
+            <div class="mn-body">
+              <div class="mn-row">
+                <input class="input-sm" id="lkAddValue" style="flex:1;min-width:180px" placeholder="域名（evil.com）或完整链接（evil.com/promo/1）" />
+                <input class="input-sm" id="lkAddReason" style="width:150px" placeholder="原因（可不填）" />
+                <button class="btn btn-danger btn-sm" id="btnLkAdd">拉黑</button>
+              </div>
+              <p class="mn-hint">只填域名 = 拉黑整个域名和它的所有子域名；带路径 = 只拉黑这一个链接（不看 http / https、www、# 后面的部分和末尾的 /）；链接末尾写 * = 以它开头的都拉黑，例如 <code>evil.com/promo/*</code>。</p>
+              <div class="mn-rule-list" id="lkBlockList"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>白名单域名</h2><span class="rules-subtle" id="lkAllowCount"></span></div>
+            <div class="mn-body">
+              <div class="mn-row"><input class="input-sm" id="lkAllowValue" style="flex:1;min-width:180px" placeholder="域名，例如 qq.com" /><button class="btn btn-outline btn-sm" id="btnLkAllow">加白名单</button></div>
+              <p class="mn-hint">白名单里的域名（含子域名）不按上面的黑名单撤回；关键词规则照常检查。同一个域名加白名单时会从黑名单里拿掉。</p>
+              <div class="mn-rule-list" id="lkAllowList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>设置</h2></div>
+          <div class="settings-list" id="lkSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:110px">记录保留</label><input type="number" min="1" max="3650" class="input-sm" id="lkDays" style="width:100px" /><span>天</span></div>
+            <div class="mn-row"><label style="width:110px">读取网页标题</label>
+              <select class="input-sm" id="lkTitleMode" style="width:300px">
+                <option value="manual">手动：点「读取标题」时才读（推荐）</option>
+                <option value="auto">自动：新链接第一次出现时后台读一次</option>
+                <option value="off">关闭</option>
+              </select><button class="btn btn-primary btn-sm" id="btnLkSave">保存</button></div>
+            <p class="mn-hint">读标题 = 由 AstrBot 所在的服务器去访问一次这个网页。做了这些限制：只读网页开头 128KB、只取 &lt;title&gt; 里的文字，不执行脚本、不加载图片、不下载文件；只访问公网地址的 80 / 443 端口，不会被引到内网；最多跟 3 次跳转，每一跳都重新检查；不带 Cookie；标题只当普通文字保存和显示。已拉黑的链接不读。</p>
+            <p class="mn-hint" style="color:var(--warning)">仍然要知道：对方网站会看到服务器的 IP 地址；「打开就生效」的一次性链接（确认、退订、签到之类）会被这次访问触发。所以默认是手动，不放心的链接不要读。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-services">
+        <div class="page-header"><h1>识别服务与转发群</h1><button class="btn btn-ghost btn-sm" id="btnServicesRefresh">刷新</button></div>
+        <p class="mn-intro">拦截规则背后的两样配置：<strong>转发群</strong>（违规消息备份、撤回备份和机器人通知发到哪些群）和<strong>识别服务</strong>（二维码 / 葵花码、图片文字识别怎么接入）。一般配置一次就不用再动；规则本身在「拦截规则」页。</p>
         <div class="card">
           <div class="card-header"><h2>转发群</h2><span class="rules-subtle">违规消息备份、撤回备份和机器人通知发到哪些群；每个群单独勾选收哪些内容</span></div>
           <div class="log-container" id="brTable"><p class="empty">加载中...</p></div>
@@ -1128,10 +1201,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               </div>
               <div class="mn-row" id="wxUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="wxUrl" style="flex:1" placeholder="http://127.0.0.1:8090/recognize" /></div>
               <div class="mn-row" id="wxModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="wxModule" style="flex:1" placeholder="wxcode.py（放在插件数据目录 extensions/ 下）" /></div>
-              <p class="mn-hint">命中后转发到哪些群：在「关键词与识别」页的「转发群」里勾选「二维码 / 葵花码命中」。</p>
+              <p class="mn-hint">命中后转发到哪些群：在本页上面的「转发群」里勾选「二维码 / 葵花码命中」。</p>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnWxSave">保存</button><span class="mn-hint">接入方法见插件目录 examples/wxcode_recognizer_example.py</span></div>
               <p class="mn-hint">码的白名单 / 黑名单、发送次数限制、码记录和保存的图片在「码管理」页。</p>
-              <p class="mn-hint">码内容正则写在上面的规则组里（「码内容规则」）。</p>
+              <p class="mn-hint">码内容正则写在「拦截规则」页的规则组里（「码内容规则」）。</p>
             </div>
           </div>
           <div class="card">
@@ -1154,15 +1227,15 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <div class="tab-panel" id="tab-codes">
         <div class="page-header"><h1>码管理</h1><button class="btn btn-ghost btn-sm" id="btnCodesRefresh">刷新</button></div>
-        <p class="mn-intro">群图片里解出的二维码 / 小程序码 / 葵花码都在这里：每个码发了多少次、在哪些群、谁发的、怎么处理的，以及保存下来的原图和裁剪图。可以一键加白名单（一律放行）或拉黑（一律撤回）。识别本身在「关键词与识别」里配置。</p>
+        <p class="mn-intro">群图片里解出的二维码 / 小程序码 / 葵花码都在这里：每个码发了多少次、在哪些群、谁发的、怎么处理的，以及保存下来的原图和裁剪图。可以一键加白名单（一律放行）或拉黑（一律撤回）。识别本身在「识别服务与转发群」里配置。</p>
         <div class="split" id="csSplit">
           <div class="card">
             <div class="card-header"><h2>码统计</h2><span class="rules-subtle" id="csCount"></span></div>
             <div class="subtabs"><button type="button" class="subtab on" data-cs-view="code">按码</button><button type="button" class="subtab" data-cs-view="user">按人（长期累计）</button></div>
             <div id="csViewCode">
               <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
-                <select class="input-sm" id="csBy" style="width:110px"><option value="code">按码汇总</option><option value="user">按码 + 人</option></select>
-                <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
+                <select class="input-sm" id="csBy" style="width:150px"><option value="code">每个码一行</option><option value="user">每个码每个人一行</option></select>
+                <select class="input-sm" id="csSort" style="width:150px" title="排列顺序"><option value="count">出现次数多的在前</option><option value="users">发送人数多的在前</option><option value="recent">最近出现的在前</option></select>
                 <select class="input-sm" id="csHours" style="width:180px"></select>
                 <select class="input-sm" id="csGroup" style="width:180px"><option value="">所有群</option></select>
                 <input class="input-sm" id="csKeyword" placeholder="码内容 / QQ号 / 昵称" style="flex:1;min-width:150px" />
@@ -1172,7 +1245,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             </div>
             <div id="csViewUser" style="display:none">
               <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
-                <select class="input-sm" id="cuSort" style="width:170px" title="排列顺序"><option value="codes">按发过的码数（多→少）</option><option value="total">按发码总次数（多→少）</option><option value="bad">按被撤回次数（多→少）</option><option value="recent">按最近发码</option></select>
+                <select class="input-sm" id="cuSort" style="width:170px" title="排列顺序"><option value="codes">发过的码多的在前</option><option value="total">发码次数多的在前</option><option value="bad">被撤回次数多的在前</option><option value="recent">最近发码的在前</option></select>
                 <select class="input-sm" id="cuGroup" style="width:180px"><option value="">所有群</option></select>
                 <input class="input-sm" id="cuKeyword" placeholder="QQ号 / 昵称 / 码内容" style="flex:1;min-width:150px" />
               </div></div>
@@ -1264,13 +1337,13 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <div class="tab-panel" id="tab-miniapps">
         <div class="page-header"><h1>小程序</h1><button class="btn btn-ghost btn-sm" id="btnMpRefresh">刷新</button></div>
-        <p class="mn-intro">群里出现的小程序都在这里（「微店买买」这类平台小程序里有很多店铺 / 商品，可以在详情里「按这个标题拉黑」只拦部分内容）：卡片（如「[微信小程序]我正在[刺猬云印]…」）和链接（<code>#小程序://刺猬云印/N937Lf7Xrcnhc3r</code>）。看每个小程序出现了多少次、谁发的、在哪些群、发的什么内容。「拉黑」加入默认规则组的小程序列表（命中撤回，可在「关键词与识别 → 规则组」里改到别的组）；「加白名单」一律放行。</p>
+        <p class="mn-intro">群里出现的小程序都在这里（「微店买买」这类平台小程序里有很多店铺 / 商品，可以在详情里「按这个标题拉黑」只拦部分内容）：卡片（如「[微信小程序]我正在[刺猬云印]…」）和链接（<code>#小程序://刺猬云印/N937Lf7Xrcnhc3r</code>）。看每个小程序出现了多少次、谁发的、在哪些群、发的什么内容。「拉黑」加入默认规则组的小程序列表（命中撤回，可在「拦截规则 → 规则组」里改到别的组）；「加白名单」一律放行。</p>
         <div class="split" id="mpSplit">
           <div class="card">
             <div class="card-header"><h2>小程序统计</h2><span class="rules-subtle" id="mpCount"></span></div>
             <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="flex-wrap:wrap;gap:6px">
-              <select class="input-sm" id="mpBy" style="width:120px"><option value="app">按小程序</option><option value="user">按小程序 + 人</option></select>
-              <select class="input-sm" id="mpSort" style="width:150px"><option value="count">按出现次数（多→少）</option><option value="users">按发送人数（多→少）</option><option value="recent">按最近出现</option></select>
+              <select class="input-sm" id="mpBy" style="width:170px"><option value="app">每个小程序一行</option><option value="user">每个小程序每个人一行</option></select>
+              <select class="input-sm" id="mpSort" style="width:150px"><option value="count">出现次数多的在前</option><option value="users">发送人数多的在前</option><option value="recent">最近出现的在前</option></select>
               <select class="input-sm" id="mpDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
               <select class="input-sm" id="mpGroup" style="width:180px"><option value="">所有群</option></select>
               <input class="input-sm" id="mpKeyword" placeholder="小程序名 / appid / QQ号 / 内容" style="flex:1;min-width:150px" />
@@ -1377,6 +1450,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               <select class="input-sm" id="gfGroupSel" style="width:170px"><option value="">所有群</option></select>
               <input class="input-sm" id="gfUploader" placeholder="上传者 QQ" style="width:120px" />
               <input class="input-sm" id="gfKeyword" placeholder="文件名" style="width:140px" />
+              <select class="input-sm" id="gfSort" style="width:150px"><option value="">按扫描顺序</option><option value="new">最近上传的在前</option><option value="old">最早上传的在前</option><option value="size">文件大的在前</option><option value="name">按文件名</option><option value="uploader">按上传者</option></select>
             </div></div>
           <div class="mn-body" style="padding-bottom:0"><div class="mn-row">
             <button class="btn btn-outline btn-sm" id="btnGfSelAll">选中当前列表</button><button class="btn btn-ghost btn-sm" id="btnGfSelNone">清空选择</button>
@@ -1469,6 +1543,64 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
+          <div class="mn-body">
+            <div class="mn-row">
+              <input class="input-sm" id="ubAdd" placeholder="QQ 号（可多个）" />
+              <input class="input-sm" id="ubReason" style="flex:1" placeholder="拉黑原因（必填）" />
+              <button class="btn btn-primary btn-sm" id="btnUbAdd">加入黑名单</button>
+            </div>
+            <p class="mn-hint" style="margin-bottom:8px">只加入插件黑名单（申请自动拒绝、入群即踢），不会立即踢人。要同时从群里踢出，请用上面的「批量踢人」。</p>
+            <div class="mn-row">
+              <input class="input-sm" id="ubKeyword" style="flex:1;min-width:180px" placeholder="在黑名单里找：QQ 号 / 原因 / 来源 / 群号" />
+              <select class="input-sm" id="ubSort" style="width:150px"><option value="new">最近拉黑的在前</option><option value="old">最早拉黑的在前</option><option value="uid">按 QQ 号从小到大</option></select>
+            </div>
+            <div class="log-container" id="ubList" style="padding:0"></div>
+            <div id="ubPager"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-afterleave">
+        <div class="page-header"><h1>退群后处理</h1><button class="btn btn-ghost btn-sm" id="btnAfterLeaveRefresh">刷新</button></div>
+        <p class="mn-intro">成员离开群之后插件自动做的事：撤回他的近期消息、删除他上传的群文件、被踢后暂停加群。三项互相独立，默认都关闭，可以在「多群配置」里按群开关。「退群自动拉黑」在「踢人与黑名单」页，退群前的消息在「退群记录」页。</p>
+        <div class="card">
+          <div class="card-header"><h2>退群撤回</h2></div>
+          <div class="settings-list" id="leaveRecallSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">撤回最近几条</label><input type="number" min="0" max="100" class="input-sm" id="lrCount" style="width:120px" /><span class="mn-hint">0 = 不按条数</span></div>
+            <div class="mn-row"><label style="width:150px">撤回最近几分钟</label><input type="number" min="0" max="10080" class="input-sm" id="lrMinutes" style="width:120px" /><span class="mn-hint">0 = 不按时间</span></div>
+            <p class="mn-hint">两个条件满足任意一个就撤回，单次最多 100 条。例如「10 条 + 30 分钟」= 最近 10 条，以及 30 分钟内发的所有消息。插件只在开启后开始记录消息 ID（不存内容），重启后靠群历史兜底（最近 100 条）。撤回结果写入操作记录。</p>
+            <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnLrSave">保存</button></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>退群删文件</h2></div>
+          <div class="settings-list" id="leaveFilesSwitches"></div>
+          <div class="mn-body">
+            <p class="mn-hint">有人退群 / 被踢后，扫描这个群的群文件（根目录 + 一级文件夹），删除上传者是他的文件，单次最多 200 个。同一个群 2 分钟内只扫一次（批量踢人时不会每人扫一遍）。机器人需要是群管理员，结果写入操作记录「退群删文件」。删除后不能恢复。</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>踢人后暂停加群</h2></div>
+          <div class="settings-list" id="joinLockSwitches"></div>
+          <div class="mn-body">
+            <div class="mn-row"><label style="width:150px">暂停时长</label><input type="number" min="1" max="72" class="input-sm" id="jlMin" style="width:80px" /><span>到</span><input type="number" min="1" max="72" class="input-sm" id="jlMax" style="width:80px" /><span class="mn-hint">小时，在这个范围里随机取</span></div>
+            <div class="mn-row"><label style="width:150px">夜间时间段</label><input type="time" class="input-sm" id="jlNightStart" style="width:120px" /><span>到</span><input type="time" class="input-sm" id="jlNightEnd" style="width:120px" /><span class="mn-hint">恢复加群的时间不会落在这段时间里；两个填一样 = 不限制</span></div>
+            <div class="mn-row"><label style="width:150px">到点恢复为</label>
+              <select class="input-sm" id="jlRestore" style="width:200px"><option value="1">需要验证</option><option value="0">允许任何人</option></select>
+              <button class="btn btn-primary btn-sm" id="btnJlSave">保存</button></div>
+            <p class="mn-hint">管理员手动踢人、本插件踢人（含批量踢人、黑名单入群即踢）都会触发。时长范围里只要有不在夜间的时刻，就从这些时刻里随机；整段都在夜间时，顺延到夜间结束的那一刻（这时会超过最长时长）。暂停期间又有人被踢，恢复时间只会延后、不会提前。LuckyLilliaBot 读不到群原来的加群方式，所以到点统一改成上面选的方式，各群不一样时在「多群配置」里按群设置。机器人需要是群主或管理员，暂停和恢复都写入操作记录。</p>
+            <div class="mn-row"><b>目前暂停加群的群</b><button class="btn btn-outline btn-sm" id="btnJlLoad">刷新</button></div>
+            <div id="jlBox"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-botacct">
+        <div class="page-header"><h1>机器人账号</h1><button class="btn btn-ghost btn-sm" id="btnBotAcctRefresh">刷新</button></div>
+        <p class="mn-intro">机器人自己这个 QQ 号的事：别人加它好友、邀请它进群时怎么处理，以及它进新群后的消息提醒方式。和群成员管理无关。</p>
+        <div class="card">
           <div class="card-header"><h2>好友申请与进群邀请</h2></div>
           <div class="settings-list" id="acceptSwitches"></div>
           <div class="mn-body">
@@ -1515,35 +1647,6 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div id="mmBox"></div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-header"><h2>退群撤回</h2></div>
-          <div class="settings-list" id="leaveRecallSwitches"></div>
-          <div class="mn-body">
-            <div class="mn-row"><label style="width:150px">撤回最近几条</label><input type="number" min="0" max="100" class="input-sm" id="lrCount" style="width:120px" /><span class="mn-hint">0 = 不按条数</span></div>
-            <div class="mn-row"><label style="width:150px">撤回最近几分钟</label><input type="number" min="0" max="10080" class="input-sm" id="lrMinutes" style="width:120px" /><span class="mn-hint">0 = 不按时间</span></div>
-            <p class="mn-hint">两个条件满足任意一个就撤回，单次最多 100 条。例如「10 条 + 30 分钟」= 最近 10 条，以及 30 分钟内发的所有消息。插件只在开启后开始记录消息 ID（不存内容），重启后靠群历史兜底（最近 100 条）。撤回结果写入操作记录。</p>
-            <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnLrSave">保存</button></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h2>退群删文件</h2></div>
-          <div class="settings-list" id="leaveFilesSwitches"></div>
-          <div class="mn-body">
-            <p class="mn-hint">有人退群 / 被踢后，扫描这个群的群文件（根目录 + 一级文件夹），删除上传者是他的文件，单次最多 200 个。同一个群 2 分钟内只扫一次（批量踢人时不会每人扫一遍）。机器人需要是群管理员，结果写入操作记录「退群删文件」。删除后不能恢复。</p>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
-          <div class="mn-body">
-            <div class="mn-row">
-              <input class="input-sm" id="ubAdd" placeholder="QQ 号（可多个）" />
-              <input class="input-sm" id="ubReason" style="flex:1" placeholder="拉黑原因（必填）" />
-              <button class="btn btn-primary btn-sm" id="btnUbAdd">加入黑名单</button>
-            </div>
-            <p class="mn-hint" style="margin-bottom:8px">只加入插件黑名单（申请自动拒绝、入群即踢），不会立即踢人。要同时从群里踢出，请用上面的「批量踢人」。</p>
-            <div class="log-container" id="ubList" style="padding:0"></div>
-          </div>
-        </div>
       </div>
 
       <div class="tab-panel" id="tab-dup">
@@ -1565,8 +1668,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               </select>
               <label class="mn-hint"><input type="checkbox" id="dupExempt" /> 显示管理员 / 白名单</label>
               <label class="mn-hint"><input type="checkbox" id="dupIgnored" /> 显示已忽略</label>
-              <select class="input-sm" id="dupSort" style="width:150px"><option value="count">按所在群数（多→少）</option><option value="recent_join">按最近入群</option><option value="uid">按 QQ 号</option></select>
-              <input class="input-sm" id="dupKeyword" placeholder="QQ号 / 名片（回车搜索）" style="width:170px" />
+              <select class="input-sm" id="dupSort" style="width:150px"><option value="count">所在群多的在前</option><option value="recent_join">最近入群的在前</option><option value="uid">按 QQ 号从小到大</option></select>
+              <input class="input-sm" id="dupKeyword" placeholder="QQ号 / 名片" style="width:170px" />
             </div></div>
           <div class="mn-body" style="padding-bottom:0">
             <div class="mn-row">
@@ -1697,9 +1800,12 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         <div class="split" id="llSplit">
           <div class="card">
             <div class="card-header"><h2>记录</h2><span class="rules-subtle" id="llCount"></span></div>
-            <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="gap:6px">
+            <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="gap:6px;flex-wrap:wrap">
+              <select class="input-sm" id="llDays" style="width:120px"><option value="">全部时间</option><option value="1">最近 1 天</option><option value="3">最近 3 天</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select>
+              <select class="input-sm" id="llGroup" style="width:180px"><option value="">所有群</option></select>
               <select class="input-sm" id="llKind" style="width:110px"><option value="">全部方式</option><option value="leave">主动退群</option><option value="kick">被踢出</option></select>
-              <input class="input-sm" id="llKeyword" placeholder="QQ号 / 群号 / 昵称 / 群名" style="flex:1;min-width:150px" />
+              <input class="input-sm" id="llKeyword" placeholder="QQ号 / 昵称" style="flex:1;min-width:150px" />
+              <select class="input-sm" id="llOrder" style="width:120px"><option value="desc">最新的在前</option><option value="asc">最早的在前</option></select>
             </div></div>
             <div class="split-list" id="llTable"><div class="split-empty">加载中...</div></div>
             <div class="mn-body" style="padding-top:6px" id="llPager"></div>
@@ -1723,10 +1829,12 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         <div class="card">
           <div class="card-header"><h2>记录</h2>
             <div class="header-actions">
-              <select class="input-sm" id="opAction" style="width:150px"><option value="">全部操作</option></select>
+              <select class="input-sm" id="opDays" style="width:120px"><option value="">全部时间</option><option value="1">最近 1 天</option><option value="3">最近 3 天</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select>
+              <select class="input-sm" id="opAction" style="width:170px" data-gsel-ph="搜索操作名称"><option value="">全部操作</option></select>
               <select class="input-sm" id="opOperator" style="width:150px" title="网页操作的登录用户（Cloudflare Zero Trust）"><option value="">全部操作人</option></select>
               <select class="input-sm" id="opSource" style="width:110px"><option value="">全部来源</option><option value="指令">指令</option><option value="WebUI">WebUI</option><option value="自动">自动</option></select>
-              <input class="input-sm" id="opKeyword" placeholder="QQ号 / 群号 / 原因" style="width:160px" />
+              <input class="input-sm" id="opKeyword" placeholder="QQ号 / 群号 / 原因 / 详情" style="width:190px" />
+              <select class="input-sm" id="opOrder" style="width:120px"><option value="desc">最新的在前</option><option value="asc">最早的在前</option></select>
             </div></div>
           <div class="log-container" id="opTable"><p class="empty">加载中...</p></div>
           <div class="mn-body" style="padding-top:0" id="opPager"></div>
@@ -1859,11 +1967,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
       <span>总览</span>
     </a>
     <a class="mobile-nav-item" data-tab="guard">
-
       <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-
-      <span>关键词与识别</span>
-
+      <span>拦截规则</span>
     </a>
     <a class="mobile-nav-item" data-tab="codes">
       <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
@@ -1872,6 +1977,14 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
     <a class="mobile-nav-item" data-tab="miniapps">
       <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>
       <span>小程序</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="links">
+      <svg viewBox="0 0 24 24"><path d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5zm-6 8H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-2zm-3-4h8v2H8v-2z"/></svg>
+      <span>链接管理</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="services">
+      <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+      <span>识别服务与转发群</span>
     </a>
     <a class="mobile-nav-item" data-tab="livelog">
       <svg viewBox="0 0 24 24"><path d="M3 13h2l2.5-6 4 12 3-8 1.5 2H21v2h-6l-.5-.8-3.5 9.3-4-12-1 2.5H3z"/></svg>
@@ -1885,24 +1998,29 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
       <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
       <span>违规</span>
     </a>
+    <a class="mobile-nav-item" data-tab="leavelog">
+      <svg viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+      <span>退群</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="oplog">
+      <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+      <span>操作记录</span>
+    </a>
     <a class="mobile-nav-item" data-tab="member">
       <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       <span>查人</span>
     </a>
     <a class="mobile-nav-item" data-tab="kick">
-
       <svg viewBox="0 0 24 24"><path d="M14 8c0-2.21-1.79-4-4-4S6 5.79 6 8s1.79 4 4 4 4-1.79 4-4zm3 2v2h6v-2h-6zM2 18v2h16v-2c0-2.66-5.33-4-8-4s-8 1.34-8 4z"/></svg>
-
       <span>踢人与黑名单</span>
-
+    </a>
+    <a class="mobile-nav-item" data-tab="afterleave">
+      <svg viewBox="0 0 24 24"><path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/></svg>
+      <span>退群后处理</span>
     </a>
     <a class="mobile-nav-item" data-tab="dup">
       <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
       <span>重复成员</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="leavelog">
-      <svg viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
-      <span>退群</span>
     </a>
     <a class="mobile-nav-item" data-tab="join">
       <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm3 11h-3v3h-2v-3H7v-2h3V8h2v3h3v2z"/></svg>
@@ -1913,34 +2031,24 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
       <span>任务</span>
     </a>
     <a class="mobile-nav-item" data-tab="broadcast">
-
       <svg viewBox="0 0 24 24"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
-
       <span>批量公告</span>
-
     </a>
     <a class="mobile-nav-item" data-tab="files">
       <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm4 13h-4v-2h4v2zm3-4H7v-2h10v2z"/></svg>
       <span>群文件</span>
     </a>
     <a class="mobile-nav-item" data-tab="names">
-
       <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-
       <span>群名任务</span>
-
     </a>
     <a class="mobile-nav-item" data-tab="batch">
       <svg viewBox="0 0 24 24"><path d="M3 5h2v2H3V5zm4 0h14v2H7V5zM3 11h2v2H3v-2zm4 0h14v2H7v-2zm-4 6h2v2H3v-2zm4 0h14v2H7v-2z"/></svg>
       <span>批量任务</span>
     </a>
-    <a class="mobile-nav-item" data-tab="directory">
-      <svg viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
-      <span>群成员缓存</span>
-    </a>
-    <a class="mobile-nav-item" data-tab="oplog">
-      <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-      <span>操作记录</span>
+    <a class="mobile-nav-item" data-tab="botacct">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+      <span>机器人账号</span>
     </a>
     <a class="mobile-nav-item" data-tab="perms">
       <svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.4-8 4v2h16v-2c0-2.6-5.3-4-8-4zm7-5V7h-2V5h2V3h2v2h2v2h-2v2h-2z"/></svg>
@@ -1953,6 +2061,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
     <a class="mobile-nav-item" data-tab="groupcfg">
       <svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4zm0 6h10v4H4v-4zm0 6h16v4H4v-4zm12-6h4v4h-4v-4z"/></svg>
       <span>多群</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="directory">
+      <svg viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
+      <span>群成员缓存</span>
     </a>
     <a class="mobile-nav-item" data-tab="settings">
       <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -2400,6 +2512,7 @@ async function safeGet(path, params) {
   }
 }
 async function safePost(path, body, timeoutMs) {
+  if (window.MN_OV) { MN_OV.at = 0; MN_OV.inflight = null; }  // 有写操作：总览缓存作废
   try {
     if (!apiPost) { mnSetConn(false, 'API 不可用'); return { status: 'error', message: 'API 不可用' }; }
     var r = await withTimeout(apiPost(path, body), 'POST ' + path, timeoutMs || API_TIMEOUT_MS);
@@ -2568,32 +2681,65 @@ function switchTab(tabName) {
   $$('.mobile-nav-item').forEach(function(i) { i.classList.toggle('active', i.dataset.tab === tabName); });
   $$('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
   $('#tab-' + tabName).classList.add('active');
-  if (tabName === 'overview') loadOverview();
-  if (tabName === 'records') { loadUsers(); loadLogs(); }
-  if (tabName === 'join') loadJoinRules();
-  if (tabName === 'perms') { loadAdmins(true); loadSuperAdmins(); loadGrants(); loadBlocks(); }
-  if (tabName === 'groupcfg') loadGroupCfgGroups();
-  if (tabName === 'commands') loadCommands();
-  if (tabName === 'tasks') loadUnbans();
-  if (tabName === 'guard') loadGuard();
-  if (tabName === 'broadcast') loadBroadcast();
-  if (tabName === 'names') loadNames();
-  if (tabName === 'files') loadFiles();
-  if (tabName === 'kick') loadKick();
-  if (tabName === 'member') loadMember();
-  if (tabName === 'oplog') loadOplog(1);
-  if (tabName === 'leavelog') loadLeaveLog(1);
-  if (tabName === 'codes') loadCodes(1);
-  if (tabName === 'miniapps') loadMiniapps(1);
-  if (tabName === 'livelog') loadLive();
-  if (tabName === 'bigscreen') loadBigScreen(); else bsSetFull(false);
-  if (tabName === 'batch') loadBatch();
-  if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
-  if (tabName === 'directory') loadDirectory();
-  if (tabName === 'settings') loadSettings();
+  MN_OV.nav = true;  // 切换页面：总览数据 15 秒内不重复请求
+  try {
+    if (tabName === 'overview') loadOverview();
+    if (tabName === 'records') { loadUsers(); loadLogs(); }
+    if (tabName === 'join') loadJoinRules();
+    if (tabName === 'perms') { loadAdmins(true); loadSuperAdmins(); loadGrants(); loadBlocks(); }
+    if (tabName === 'groupcfg') loadGroupCfgGroups();
+    if (tabName === 'commands') loadCommands();
+    if (tabName === 'tasks') loadUnbans();
+    if (tabName === 'guard' || tabName === 'services') loadGuard();
+    if (tabName === 'broadcast') loadBroadcast();
+    if (tabName === 'names') loadNames();
+    if (tabName === 'files') loadFiles();
+    if (tabName === 'kick' || tabName === 'afterleave' || tabName === 'botacct') loadKick();
+    if (tabName === 'member') loadMember();
+    if (tabName === 'oplog') loadOplog(1);
+    if (tabName === 'leavelog') loadLeaveLog(1);
+    if (tabName === 'codes') loadCodes(1);
+    if (tabName === 'miniapps') loadMiniapps(1);
+    if (tabName === 'links') loadLinks(1);
+    if (tabName === 'livelog') loadLive();
+    if (tabName === 'bigscreen') loadBigScreen(); else bsSetFull(false);
+    if (tabName === 'batch') loadBatch();
+    if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
+    if (tabName === 'directory') loadDirectory();
+    if (tabName === 'settings') loadSettings();
+  } finally { MN_OV.nav = false; }
+}
+
+// 侧边栏分组可折叠：点分组标题收起 / 展开，记在浏览器里；当前页面所在的菜单项始终显示
+var NAV_FOLD_KEY = 'gg_nav_fold';
+function navFolded() {
+  try { var v = JSON.parse(ls.getItem(NAV_FOLD_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; }
+}
+function navApplyFold() {
+  var folded = navFolded(), sec = '';
+  $$('.sidebar-nav > *').forEach(function(el) {
+    if (el.classList.contains('nav-section')) {
+      sec = el.getAttribute('data-sec') || '';
+      el.classList.toggle('folded', !!folded[sec]);
+    } else if (el.classList.contains('nav-item')) {
+      el.classList.toggle('nav-folded', !!(sec && folded[sec]));
+    }
+  });
+}
+function initNavFold() {
+  $$('.nav-section').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var folded = navFolded(), sec = el.getAttribute('data-sec') || '';
+      if (folded[sec]) delete folded[sec]; else folded[sec] = 1;
+      ls.setItem(NAV_FOLD_KEY, JSON.stringify(folded));
+      navApplyFold();
+    });
+  });
+  navApplyFold();
 }
 
 function initTabs() {
+  initNavFold();
   $$('.nav-item').forEach(function(item) {
     item.addEventListener('click', function() { switchTab(item.dataset.tab); });
   });
@@ -3165,12 +3311,22 @@ var MANUAL_SETTING_KEYS = {
   leave_files_enabled: true,
   leave_files_on_leave: true,
   leave_files_on_kick: true,
+  kick_join_lock_enabled: true,
+  kick_join_lock_min_hours: true,
+  kick_join_lock_max_hours: true,
+  kick_join_lock_night_start: true,
+  kick_join_lock_night_end: true,
+  kick_join_lock_restore_type: true,
   leave_log_enabled: true,
   leave_log_msg_count: true,
   leave_log_use_history: true,
   leave_log_save_images: true,
   miniapp_store_enabled: true,
   miniapp_store_days: true,
+  link_guard_enabled: true,
+  link_store_enabled: true,
+  link_store_days: true,
+  link_title_mode: true,
   leave_log_image_days: true,
   leave_auto_blacklist_times: true,
   leave_auto_blacklist_days: true,
@@ -3941,7 +4097,7 @@ function renderGroupCfgItems(items) {
   });
 }
 
-/* ===== 最小化插件新增页面：关键词与识别 / 批量公告 / 群名任务 / 踢人与黑名单 ===== */
+/* ===== 最小化插件新增页面：拦截规则 / 识别服务与转发群 / 批量公告 / 群名任务 / 踢人与黑名单 / 退群后处理 / 机器人账号 ===== */
 var MN = { overview: null, kw: [], wx: [], kwErrors: {}, wxErrors: {}, names: [] };
 var MN_SWITCHES = {
   guardSwitches: [
@@ -3949,6 +4105,10 @@ var MN_SWITCHES = {
     { key: 'backup_enabled', label: '撤回前先备份', desc: '机器人的所有撤回（命中撤回、撤回指令、退群撤回）都先把原消息以合并转发的形式发到备份群' },
     { key: 'card_parse_enabled', label: '解析小程序 / 分享卡片', desc: '小程序名、标题、appid、跳转链接也参与关键词匹配，例如规则写 wx 开头的 appid 可拦某个小程序' },
     { key: 'card_scan_preview', label: '卡片预览图也识别', desc: '卡片封面当作图片，开启葵花码识别 / OCR 时一起识别' }
+  ],
+  lkSwitches: [
+    { key: 'link_guard_enabled', label: '识别消息里的链接', desc: '总开关：关闭后不识别、不记录，黑名单也不生效' },
+    { key: 'link_store_enabled', label: '记录出现过的链接', desc: '关闭后不再记录新的链接（统计为空），黑名单照常生效' }
   ],
   mpSwitches: [
     { key: 'miniapp_store_enabled', label: '记录小程序', desc: '每次出现小程序（卡片或 #小程序:// 链接）都记下来，统计和看板用' }
@@ -4000,6 +4160,9 @@ var MN_SWITCHES = {
     { key: 'leave_files_enabled', label: '启用退群删文件', desc: '成员离开群后自动删除他上传的群文件（总开关）' },
     { key: 'leave_files_on_leave', label: '主动退群时', desc: '成员自己退群' },
     { key: 'leave_files_on_kick', label: '被踢出时', desc: '被管理员或本插件踢出（含批量踢人、黑名单入群即踢）' }
+  ],
+  joinLockSwitches: [
+    { key: 'kick_join_lock_enabled', label: '启用踢人后暂停加群', desc: '有人被踢出群后，把这个群改成「禁止加群」几小时再恢复，防止换号进群（主动退群不触发）' }
   ]
 };
 var MN_TYPES = {
@@ -4114,11 +4277,24 @@ function mnSetGroupChecks(containerSel, on) {
   mnApplyGroupFilter(containerSel);
 }
 
+// 群列表 + 配置 + 黑名单（多数页面都要用）。
+// 切换页面时 15 秒内直接用上次的结果，同时发起的请求合并成一个；点「刷新」和任何保存 / 操作之后都重新取。
+var MN_OV = { at: 0, inflight: null, nav: false };
 async function mnLoadOverview() {
-  var res = await safeGet('minimal/overview');
-  if (isApiError(res)) { toast('加载失败：' + mnErr(res), 'error'); return null; }
-  MN.overview = mnData(res);
-  return MN.overview;
+  if (MN_OV.nav && MN.overview && Date.now() - MN_OV.at < 15000) return MN.overview;
+  if (MN_OV.inflight) return MN_OV.inflight;
+  var job = MN_OV.inflight = (async function() {
+    var res = await safeGet('minimal/overview');
+    if (isApiError(res)) { toast('加载失败：' + mnErr(res), 'error'); return null; }
+    var d = mnData(res);
+    // 群统一排序：管理的群在前，其余按群名
+    (d.groups || []).sort(function(a, b) {
+      return (b.managed ? 1 : 0) - (a.managed ? 1 : 0) || String(a.group_name || '').localeCompare(String(b.group_name || ''), 'zh') || String(a.group_id).localeCompare(String(b.group_id));
+    });
+    MN.overview = d; MN_OV.at = Date.now();
+    return d;
+  })();
+  try { return await job; } finally { if (MN_OV.inflight === job) MN_OV.inflight = null; }
 }
 
 async function mnSaveConfig(values, okText) {
@@ -4658,6 +4834,203 @@ async function loadGuard() {
   mnToggleDriverRows();
 }
 
+/* ---- 链接管理（link_guard.py）。链接和标题来自群消息 / 外部网页，一律 esc 后当文字显示，不生成可点击的 <a href> ---- */
+var LK = { page: 1, pageSize: 50, items: [], lists: {}, detail: null, sel: null, titleMode: 'manual' };
+function lkStateTag(state) {
+  if (state === 'allow') return '<span class="cb-tag allowed">白名单</span>';
+  if (state === 'block') return '<span class="cb-tag blocked">已拉黑</span>';
+  if (state === 'partial') return '<span class="mn-chip" style="color:var(--warning);border-color:var(--warning)" title="只拉黑了它下面的部分链接或子域名，见详情">部分拉黑</span>';
+  return '';
+}
+async function loadLinks(page) {
+  if (page) LK.page = page;
+  if (!await mnLoadOverview()) return;
+  mnRenderSwitches('lkSwitches');
+  $('#lkDays').value = Number(mnCfg('link_store_days')) || 90;
+  $('#lkTitleMode').value = mnCfg('link_title_mode') || 'manual';
+  var g = $('#lkGroup');
+  if (g.options.length !== mnGroups().length + 1) g.innerHTML = mnGroupOptions(g.value, '所有群');
+  await lkLoadStats();
+}
+async function lkLoadStats() {
+  var ep = beginLoad('lk-stats');
+  var res = await safeGet('minimal/links', { by: $('#lkBy').value, sort: $('#lkSort').value, days: $('#lkDaysSel').value,
+    group_id: $('#lkGroup').value, keyword: $('#lkKeyword').value.trim(), page: LK.page, page_size: LK.pageSize });
+  if (!isCurrentLoad('lk-stats', ep)) return;
+  if (isApiError(res)) { $('#lkTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  var d = mnData(res) || {};
+  LK.items = d.items || []; LK.lists = d.lists || {}; LK.titleMode = d.title_mode || 'manual';
+  lkRenderLists();
+  var byUser = d.by === 'user';
+  $('#lkCount').textContent = '共 ' + (d.total || 0) + ' 条';
+  $('#lkTable').innerHTML = LK.items.length ? LK.items.map(function(it, i) {
+    var sub = [];
+    if (byUser) sub.push(esc(it.user_name || it.user_id));
+    sub.push('<b>' + it.total + '</b> 次');
+    if (it.ruled) sub.push('<span style="color:var(--danger)">撤回 ' + it.ruled + '</span>');
+    sub.push(it.urls + ' 个链接 · ' + it.users + ' 人 / ' + it.groups + ' 群');
+    sub.push(esc(mnTime(it.last_ts)));
+    return '<div class="split-item" data-lk-open="' + i + '"><div class="si-main">' +
+      '<div class="si-title" style="word-break:break-all">' + esc(it.domain) + ' ' + lkStateTag(it.state) + '</div>' +
+      (it.title ? '<div class="si-sub" title="读到的网页标题">「' + esc(it.title) + '」</div>' : '') +
+      '<div class="si-sub">' + sub.join(' · ') + '</div></div></div>';
+  }).join('') : '<div class="split-empty">' + (!d.guard_enabled ? '链接识别已关闭（下方「设置」）' : (d.store_enabled ? '这段时间没有出现链接' : '链接记录已关闭（下方「设置」）')) + '</div>';
+  lkMarkSel();
+  $('#lkPager').innerHTML = renderPager(LK.page, LK.pageSize, d.total || 0, 'lk') + '<span class="mn-hint">记录保留 ' + d.store_days + ' 天</span>';
+  bindPager($('#lkPager'));
+}
+function lkMarkSel() {
+  var s = LK.sel || {};
+  $$('#lkTable [data-lk-open]').forEach(function(el) {
+    var it = LK.items[Number(el.getAttribute('data-lk-open'))];
+    el.classList.toggle('on', !!(it && it.domain === s.domain && (it.user_id || '') === (s.user_id || '')));
+  });
+}
+function lkRenderLists() {
+  var lists = LK.lists || {}, rows = [];
+  (lists.block_domain || []).forEach(function(e) { rows.push({ kind: 'block_domain', label: '域名', cls: 'regex', e: e }); });
+  (lists.block_url || []).forEach(function(e) { rows.push({ kind: 'block_url', label: '链接', cls: 'contains', e: e }); });
+  LK.blockRows = rows;
+  $('#lkBlockCount').textContent = rows.length + ' 条';
+  $('#lkBlockList').innerHTML = rows.length ? rows.map(function(r, i) {
+    return '<div class="mn-rule"><span class="mn-type ' + r.cls + '">' + r.label + '</span><span class="mn-val" style="word-break:break-all">' + esc(r.e.value) +
+      (r.e.reason ? ' <span class="mn-hint">（' + esc(r.e.reason) + '）</span>' : '') + ' <span class="mn-hint">' + esc(mnTime(r.e.ts)) + '</span></span>' +
+      '<button class="btn btn-ghost btn-sm" data-lk-unblock="' + i + '">移除</button></div>';
+  }).join('') : '<p class="mn-hint">空</p>';
+  var allow = lists.allow_domain || [];
+  $('#lkAllowCount').textContent = allow.length + ' 个';
+  $('#lkAllowList').innerHTML = allow.length ? allow.map(function(e, i) {
+    return '<div class="mn-rule"><span class="mn-val" style="word-break:break-all">' + esc(e.value) + '</span><button class="btn btn-ghost btn-sm" data-lk-unallow="' + i + '">移出</button></div>';
+  }).join('') : '<p class="mn-hint">空</p>';
+}
+async function lkListSet(kind, value, on, reason) {
+  var res = await safePost('minimal/links/list', { kind: kind, value: value, on: on, reason: reason || '' });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return false; }
+  toast('已更新', 'success');
+  return true;
+}
+function lkReload() { lkLoadStats(); if (LK.detail) lkShowDetail(LK.detail.item); }
+async function lkShowDetail(it) {
+  if (!it || !it.domain) return;
+  LK.sel = { domain: it.domain, user_id: it.user_id || '' };
+  if (!$('#tab-links').classList.contains('active')) {
+    switchTab('links');
+    setTimeout(function() { mainScrollTo(document.getElementById('lkSplit')); }, 0);
+  }
+  lkMarkSel();
+  var box = $('#lkDetail');
+  if (!LK.detail || LK.detail.item.domain !== it.domain) box.innerHTML = '<div class="split-empty">加载中...</div>';
+  var ep = beginLoad('lk-detail');
+  var res = await safeGet('minimal/links/detail', { domain: it.domain, user_id: it.user_id || '' });
+  if (!isCurrentLoad('lk-detail', ep)) return;
+  if (isApiError(res)) { box.innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res) || {};
+  LK.detail = { item: { domain: d.domain, user_id: it.user_id || '' }, data: d };
+  var canRead = d.title_mode !== 'off';
+  var urls = (d.urls || []).map(function(u, ui) {
+    var title = u.title ? '<b>' + esc(u.title) + '</b>'
+      : (u.title_state ? '<span class="mn-hint" title="' + escAttr(u.title_error || '') + '">' + esc(u.title_label) + (u.title_error ? '：' + esc(u.title_error) : '') + '</span>' : '<span class="mn-hint">标题未读取</span>');
+    var acts = '<button class="btn btn-ghost btn-sm" data-lkd-copy="' + ui + '">复制</button>' +
+      (canRead && u.state !== 'block' ? '<button class="btn btn-outline btn-sm" data-lkd-title="' + ui + '">' + (u.title_state ? '重新读取' : '读取标题') + '</button>' : '') +
+      (u.state === 'block' ? (u.entry === u.key ? '<button class="btn btn-outline btn-sm" data-lkd-unurl="' + ui + '">解除拉黑</button>' : '')
+        : '<button class="btn btn-danger btn-sm" data-lkd-url="' + ui + '">拉黑这个链接</button>');
+    return '<tr><td style="word-break:break-all">' + title + ' ' + (u.state === 'block' ? lkStateTag('block') : '') +
+      '<div class="mn-hint" style="font-family:monospace">' + esc(u.url) + '</div>' +
+      (u.final_host ? '<div class="mn-hint" style="color:var(--warning)">会跳转到 ' + esc(u.final_host) + '</div>' : '') +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' + acts + '</div></td>' +
+      '<td style="white-space:nowrap"><strong>' + u.total + '</strong> 次<br><span class="mn-hint">' + u.users + ' 人 / ' + u.groups + ' 群</span>' +
+      (u.ruled ? '<br><span class="mn-hint" style="color:var(--danger)">撤回 ' + u.ruled + '</span>' : '') + '</td>' +
+      '<td style="white-space:nowrap">' + esc(mnTime(u.last_ts)) + '</td></tr>';
+  }).join('');
+  var rules = (d.rules || []).map(function(r, ri) {
+    return '<div class="mn-rule"><span class="mn-type ' + (r.kind === 'block_url' ? 'contains' : 'regex') + '">' + esc(r.kind_label) + '</span>' +
+      '<span class="mn-val" style="word-break:break-all">' + esc(r.value) + (r.reason ? ' <span class="mn-hint">（' + esc(r.reason) + '）</span>' : '') + '</span>' +
+      '<button class="btn btn-ghost btn-sm" data-lkd-unrule="' + ri + '">移除</button></div>';
+  }).join('');
+  var groups = (d.groups || []).map(function(g) { return '<span class="mn-chip">' + esc(cuGroupName(g.group_id) || g.group_id) + '：' + g.total + ' 次 / ' + g.users + ' 人</span>'; }).join('');
+  var sends = (d.sends || []).slice(0, 50).map(function(r) {
+    return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td style="white-space:nowrap">' + esc(cuGroupName(r.group_id) || r.group_id) + '</td>' +
+      '<td style="white-space:nowrap">' + mbrLink(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') + '</td>' +
+      '<td style="word-break:break-all"><span class="mn-hint">' + esc(r.url) + (r.form === 'card' ? '（卡片）' : '') + '</span></td>' +
+      '<td style="white-space:nowrap' + (r.outcome === 'rule' ? ';color:var(--danger)' : '') + '" title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
+  }).join('');
+  var unread = (d.urls || []).filter(function(u) { return !u.title_state && u.state !== 'block'; }).length;
+  var acts = (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-lkd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-lkd-act="allow">加白名单</button>') +
+    (d.state === 'block' ? '<button class="btn btn-outline btn-sm" data-lkd-act="unblock">解除拉黑</button>' : '<button class="btn btn-danger btn-sm" data-lkd-act="block">拉黑整个域名</button>');
+  box.innerHTML = '<div class="card-header"><h2>域名详情</h2><div class="header-actions">' + acts + '</div></div>' +
+    '<div class="mn-body split-detail-body">' +
+    '<div style="margin-bottom:6px;word-break:break-all"><b style="font-size:15px">' + esc(d.domain) + '</b> ' + lkStateTag(d.state) + '</div>' +
+    (it.user_id ? '<p class="mn-hint" style="margin-bottom:6px">只看 ' + mbrLink(it.user_id) + ' 发的 · <a href="javascript:void(0)" data-lkd-all="1">看所有人</a></p>' : '') +
+    (groups ? '<div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">' + groups + '</div>' : '') +
+    (rules ? '<p class="mn-hint" style="margin:6px 0">名单里和这个域名有关的条目</p><div class="mn-rule-list" style="margin-bottom:8px">' + rules + '</div>' : '') +
+    '<div class="mn-row" style="margin:6px 0"><span class="mn-hint">这个域名下出现过的链接（按次数）</span>' +
+    (canRead && unread ? '<button class="btn btn-outline btn-sm" data-lkd-titles="1">读取还没读的标题（' + Math.min(unread, 10) + ' 个）</button>' : '') + '</div>' +
+    '<table class="mn-table"><tbody>' + (urls || '<tr><td>没有记录</td></tr>') + '</tbody></table>' +
+    '<p class="mn-hint" style="margin:10px 0 6px">最近的记录（保留 ' + d.store_days + ' 天；点 QQ 号看群成员档案）</p>' +
+    '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>链接</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table></div>';
+}
+async function lkDetailClick(e) {
+  var det = LK.detail;
+  if (!det) return;
+  var d = det.data, hit = function(sel) { return e.target.closest(sel); }, b;
+  if (hit('[data-lkd-all]')) { lkShowDetail({ domain: d.domain }); return; }
+  if ((b = hit('[data-lkd-act]'))) {
+    var act = b.getAttribute('data-lkd-act'), on = act.indexOf('un') !== 0, kind = act.indexOf('allow') >= 0 ? 'allow_domain' : 'block_domain', reason = '';
+    if (kind === 'block_domain' && on) {
+      reason = await promptModal({ title: '拉黑域名：' + d.domain, label: '之后群里再出现 ' + d.domain + ' 和它的任何子域名的链接，都按默认规则组撤回。可以填写原因（会写进操作记录）', placeholder: '原因（可不填）', okText: '拉黑' });
+      if (reason === null) return;
+    }
+    if (await lkListSet(kind, d.domain, on, reason)) lkReload();
+    return;
+  }
+  if ((b = hit('[data-lkd-copy]'))) { var cu = d.urls[Number(b.getAttribute('data-lkd-copy'))]; if (cu) cbCopy(cu.url); return; }
+  if ((b = hit('[data-lkd-url]'))) {
+    var u = d.urls[Number(b.getAttribute('data-lkd-url'))];
+    if (!u) return;
+    var v = await promptModal({ title: '拉黑这个链接', label: '只有和它完全相同的链接才撤回（不看 http / https、www、# 后面的部分和末尾的 /）。在末尾加 * 可以把以它开头的都拉黑。', value: u.key, okText: '拉黑' });
+    if (!v) return;
+    if (await lkListSet('block_url', v, true, '')) lkReload();
+    return;
+  }
+  if ((b = hit('[data-lkd-unurl]'))) { var uu = d.urls[Number(b.getAttribute('data-lkd-unurl'))]; if (uu && await lkListSet('block_url', uu.entry, false)) lkReload(); return; }
+  if ((b = hit('[data-lkd-unrule]'))) { var r = (d.rules || [])[Number(b.getAttribute('data-lkd-unrule'))]; if (r && await lkListSet(r.kind, r.value, false)) lkReload(); return; }
+  if ((b = hit('[data-lkd-title]'))) {
+    var tu = d.urls[Number(b.getAttribute('data-lkd-title'))];
+    if (!tu) return;
+    b.disabled = true; b.textContent = '读取中...';
+    var res = await safePost('minimal/links/title', { url_hash: tu.url_hash, force: !!tu.title_state }, 60000);
+    if (isApiError(res)) toast(mnErr(res), 'error');
+    else { var t = mnData(res) || {}; toast(t.state === 'ok' ? '标题：' + t.title : '没读到标题：' + (t.error || ''), t.state === 'ok' ? 'success' : 'warning'); }
+    lkReload();
+    return;
+  }
+  if ((b = hit('[data-lkd-titles]'))) {
+    b.disabled = true;
+    var res2 = await safePost('minimal/links/title', { domain: d.domain });
+    if (isApiError(res2)) { toast(mnErr(res2), 'error'); return; }
+    var n = (mnData(res2) || {}).queued || 0;
+    toast(n ? '已在后台读取 ' + n + ' 个，稍后点「刷新」查看' : '没有需要读取的链接', n ? 'success' : 'info');
+    if (n) setTimeout(function() { if (LK.detail && LK.detail.item.domain === d.domain) lkShowDetail(LK.detail.item); }, Math.min(n, 10) * 2500);
+  }
+}
+async function lkOnClick(e) {
+  if (e.target.closest('#lkDetail')) { lkDetailClick(e); return; }
+  var o = e.target.closest('[data-lk-open]');
+  if (o) { var it = LK.items[Number(o.getAttribute('data-lk-open'))]; if (it) lkShowDetail(it); return; }
+  var ub = e.target.closest('[data-lk-unblock]');
+  if (ub) { var r = (LK.blockRows || [])[Number(ub.getAttribute('data-lk-unblock'))]; if (r && await lkListSet(r.kind, r.e.value, false)) lkReload(); return; }
+  var ua = e.target.closest('[data-lk-unallow]');
+  if (ua) { var a = ((LK.lists || {}).allow_domain || [])[Number(ua.getAttribute('data-lk-unallow'))]; if (a && await lkListSet('allow_domain', a.value, false)) lkReload(); }
+}
+async function lkAddBlock() {
+  var v = $('#lkAddValue').value.trim();
+  if (!v) { toast('请填写域名或链接', 'warning'); return; }
+  // 只有域名（没有路径）= 拉黑域名；带路径或 ? = 拉黑链接
+  var body = v.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  var kind = (body.indexOf('/') >= 0 || body.indexOf('?') >= 0 || /\*$/.test(v)) ? 'block_url' : 'block_domain';
+  if (await lkListSet(kind, v, true, $('#lkAddReason').value.trim())) { $('#lkAddValue').value = ''; $('#lkAddReason').value = ''; lkReload(); }
+}
+
 /* ---- 小程序（miniapp.py） ---- */
 var MP = { page: 1, pageSize: 50, items: [], allow: [], feedLast: 0, feed: [], timer: null, inflight: false, detail: null, sel: null };
 function mpActive() { var p = $('#tab-miniapps'); return !!(p && p.classList.contains('active') && !document.hidden); }
@@ -4982,13 +5355,20 @@ async function gfFetch(withFiles) {
 }
 function gfFiltered() {
   var gid = $('#gfGroupSel').value, up = $('#gfUploader').value.trim(), kw = $('#gfKeyword').value.trim().toLowerCase(), view = $('#gfView').value;
-  return GF.files.filter(function(f) {
+  var rows = GF.files.filter(function(f) {
     if (gid && f.group_id !== gid) return false;
     if (up && f.uploader !== up) return false;
     if (kw && f.name.toLowerCase().indexOf(kw) < 0) return false;
     if (view === 'dups') return !!GF.dups[gfKey(f)];
     return true;
   });
+  var sort = ($('#gfSort') || {}).value || '';
+  if (sort === 'new') rows.sort(function(a, b) { return (b.upload_time || 0) - (a.upload_time || 0); });
+  else if (sort === 'old') rows.sort(function(a, b) { return (a.upload_time || 0) - (b.upload_time || 0); });
+  else if (sort === 'size') rows.sort(function(a, b) { return (b.size || 0) - (a.size || 0); });
+  else if (sort === 'name') rows.sort(function(a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'zh'); });
+  else if (sort === 'uploader') rows.sort(function(a, b) { return String(a.uploader || '').localeCompare(String(b.uploader || '')) || (b.upload_time || 0) - (a.upload_time || 0); });
+  return rows;
 }
 function gfUpdateDeleteBtn() {
   var n = Object.keys(GF.sel).length, b = $('#btnGfDelete');
@@ -5209,7 +5589,7 @@ function gselEnhance(sel) {
   sel.style.display = 'none';
   var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'input-sm gsel-btn'; btn.style.width = width;
   var pop = document.createElement('div'); pop.className = 'gsel-pop'; pop.style.display = 'none';
-  pop.innerHTML = '<input class="input-sm" placeholder="搜索群名或群号" /><div class="gsel-list"></div>';
+  pop.innerHTML = '<input class="input-sm" placeholder="' + escAttr(sel.getAttribute('data-gsel-ph') || '搜索群名或群号') + '" /><div class="gsel-list"></div>';
   wrap.appendChild(btn); wrap.appendChild(pop);
   var input = pop.querySelector('input'), list = pop.querySelector('.gsel-list');
   var label = function() { var o = sel.options[sel.selectedIndex]; btn.textContent = o ? o.text : ''; btn.title = btn.textContent; };
@@ -5221,7 +5601,7 @@ function gselEnhance(sel) {
     });
     list.innerHTML = opts.length ? opts.slice(0, 300).map(function(o, i) {
       return '<div class="gsel-opt' + (o.value === sel.value ? ' on' : '') + (i === 0 && q.length ? ' hl' : '') + '" data-v="' + escAttr(o.value) + '">' + esc(o.text) + '</div>';
-    }).join('') : '<div class="mn-hint" style="padding:6px">没有匹配的群</div>';
+    }).join('') : '<div class="mn-hint" style="padding:6px">没有匹配的选项</div>';
   };
   var choose = function(v) {
     pop.style.display = 'none';
@@ -5244,11 +5624,69 @@ function gselEnhance(sel) {
     if (e.key === 'Enter') { var o = list.querySelector('[data-v]'); if (o) choose(o.getAttribute('data-v')); }
   });
   sel.addEventListener('change', label);
+  sel._gselLabel = label;
   new MutationObserver(label).observe(sel, { childList: true });
   label();
 }
 document.addEventListener('click', function() { gselCloseAll(null); });
-var GSEL_IDS = ['csGroup', 'cuGroup', 'mpGroup', 'gfGroupSel', 'rgTestGroup', 'brAddGroup', 'kickScope'];
+var GSEL_IDS = ['csGroup', 'cuGroup', 'mpGroup', 'gfGroupSel', 'rgTestGroup', 'brAddGroup', 'kickScope', 'liveGroup', 'llGroup', 'opAction', 'lkGroup'];
+
+/* ---- 公共：筛选栏。每个下拉前面标明它管什么（时间 / 群 / 排序…），末尾加「重置」 ---- */
+var FLT_LABELS = {
+  csBy: '显示', csHours: '时间', csGroup: '群', csSort: '排序',
+  cuGroup: '群', cuSort: '排序',
+  mpBy: '显示', mpDaysSel: '时间', mpGroup: '群', mpSort: '排序',
+  lkBy: '显示', lkDaysSel: '时间', lkGroup: '群', lkSort: '排序',
+  gfView: '显示', gfGroupSel: '群', gfSort: '排序',
+  dupMin: '范围', dupSort: '排序',
+  cbFilter: '只看', liveGroup: '群', liveFilter: '结果',
+  llDays: '时间', llGroup: '群', llKind: '方式', llOrder: '排序',
+  opDays: '时间', opAction: '操作', opOperator: '操作人', opSource: '来源', opOrder: '排序',
+  cmdCat: '分类', ubSort: '排序'
+};
+function fltAnchor(el) {
+  ['gsel', 'flt'].forEach(function(cls) { if (el.parentNode && el.parentNode.classList.contains(cls)) el = el.parentNode; });
+  return el;
+}
+function fltReset(ids) {
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.tagName === 'SELECT') {
+      el.value = el._fltDefault || '';
+      if (el.selectedIndex < 0) el.selectedIndex = 0;   // 选项是后来才填的（如时间范围）：回到第一项
+      if (el._gselLabel) el._gselLabel();
+    } else if (el.type === 'checkbox') { el.checked = el.defaultChecked; } else { el.value = ''; }
+  });
+}
+function fltInit(resets) {
+  Object.keys(FLT_LABELS).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el || el._fltLabel) return;
+    el._fltLabel = true;
+    var anchor = fltAnchor(el), lab = document.createElement('span');
+    lab.className = 'flt-l'; lab.textContent = FLT_LABELS[id];
+    // 标签和下拉包在一起，换行时不会拆开
+    var box = document.createElement('span'); box.className = 'flt';
+    anchor.parentNode.insertBefore(box, anchor); box.appendChild(lab); box.appendChild(anchor);
+  });
+  (resets || []).forEach(function(r) {
+    var last = document.getElementById(r.ids[r.ids.length - 1]);
+    if (!last || last._fltReset) return;
+    // 记下页面刚打开时的默认选项（此时下拉里还只有写在页面上的选项）
+    r.ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el || el.tagName !== 'SELECT') return;
+      var dft = el.querySelector('option[selected]');
+      el._fltDefault = dft ? dft.value : (el.options[0] ? el.options[0].value : '');
+    });
+    last._fltReset = true;
+    var anchor = fltAnchor(last), btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn btn-ghost btn-sm'; btn.textContent = '重置'; btn.title = '清空筛选条件，恢复默认排序';
+    anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+    btn.addEventListener('click', function() { fltReset(r.ids); r.reload(); });
+  });
+}
 
 /* ---- 群成员查找（member_lookup.py） ---- */
 var MBR = { items: [], uid: '', profile: null, sub: 'groups' };
@@ -5316,8 +5754,8 @@ function mbrRenderProfile() {
   if (p.plugin_admin) tags.push('<span class="cb-tag allowed">插件管理员</span>');
   if (p.whitelisted) tags.push('<span class="cb-tag allowed">白名单</span>');
   if (p.blacklisted) tags.push('<span class="cb-tag blocked" title="' + escAttr(p.blacklist ? (p.blacklist.reason || '') : '') + '">已在黑名单' + (p.blacklist && p.blacklist.reason ? '：' + esc(p.blacklist.reason) : '') + '</span>');
-  var codes = p.codes || {}, mp = p.miniapps || {}, files = p.files || {}, leaves = p.leaves || {}, vio = p.violations || {}, ops = p.ops || {};
-  var subs = [['groups', '所在的群', p.groups.length], ['codes', '码', codes.code_count || 0], ['miniapps', '小程序', (mp.apps || []).length],
+  var codes = p.codes || {}, mp = p.miniapps || {}, lks = p.links || {}, files = p.files || {}, leaves = p.leaves || {}, vio = p.violations || {}, ops = p.ops || {};
+  var subs = [['groups', '所在的群', p.groups.length], ['codes', '码', codes.code_count || 0], ['miniapps', '小程序', (mp.apps || []).length], ['links', '链接', (lks.domains || []).length],
     ['files', '群文件', files.total || 0], ['leaves', '退群', (leaves.summary || {}).total || 0], ['violations', '违规', vio.total || 0], ['ops', '操作记录', (ops.items || []).length]];
   $('#mbrProfile').innerHTML =
     '<div class="card-header"><div style="display:flex;gap:12px;align-items:center;min-width:0">' + dupAvatar({ user_id: p.user_id, avatar: p.avatar }, 48) +
@@ -5356,6 +5794,13 @@ function mbrSubHtml(sub) {
       return '<tr><td><a href="javascript:void(0)" data-mbr-mp="' + i + '">' + esc(a.name) + '</a> ' + mpStateTag(a.state) + (a.appid ? '<div class="mn-hint">' + esc(a.appid) + '</div>' : '') + '</td>' +
         '<td><strong>' + a.total + '</strong>' + (a.ruled ? '<div class="mn-hint" style="color:var(--danger)">撤回 ' + a.ruled + '</div>' : '') + '</td><td>' + a.groups + ' 个</td><td style="white-space:nowrap">' + esc(mnTime(a.last_ts)) + '</td></tr>';
     }), '没有发过小程序（记录保留 ' + (m.store_days || 90) + ' 天）');
+  }
+  if (sub === 'links') {
+    var lk = p.links || {};
+    return t(['域名', '次数', '链接', '群', '最近'], (lk.domains || []).map(function(a, i) {
+      return '<tr><td style="word-break:break-all"><a href="javascript:void(0)" data-mbr-lk="' + i + '">' + esc(a.domain) + '</a> ' + lkStateTag(a.state) + '</td>' +
+        '<td><strong>' + a.total + '</strong>' + (a.ruled ? '<div class="mn-hint" style="color:var(--danger)">撤回 ' + a.ruled + '</div>' : '') + '</td><td>' + a.urls + ' 个</td><td>' + a.groups + ' 个</td><td style="white-space:nowrap">' + esc(mnTime(a.last_ts)) + '</td></tr>';
+    }), '没有发过链接（记录保留 ' + (lk.store_days || 90) + ' 天）');
   }
   if (sub === 'files') {
     var f = p.files || {};
@@ -5397,6 +5842,7 @@ async function mbrOnClick(e) {
   var p = MBR.profile;
   if (!p) return;
   if ((v = t.closest('[data-mbr-code]'))) { var c = (p.codes.codes || [])[Number(v.getAttribute('data-mbr-code'))]; if (c) csShowDetail({ code_hash: c.code_hash, user_id: '' }); return; }
+  if ((v = t.closest('[data-mbr-lk]'))) { var lkd = ((p.links || {}).domains || [])[Number(v.getAttribute('data-mbr-lk'))]; if (lkd) lkShowDetail({ domain: lkd.domain, user_id: p.user_id }); return; }
   if ((v = t.closest('[data-mbr-mp]'))) { var a = (p.miniapps.apps || [])[Number(v.getAttribute('data-mbr-mp'))]; if (a) mpShowDetail({ app_key: a.app_key, user_id: '' }); return; }
   if ((v = t.closest('[data-mbr-act]'))) {
     var act = v.getAttribute('data-mbr-act');
@@ -5438,8 +5884,10 @@ async function loadCodes(page) {
 /* 按人统计（长期累计，code_user_stats） */
 var CU = { page: 1, pageSize: 50, items: [], total: null };
 function cuGroupName(gid) {
-  var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
-  return g && g.group_name ? g.group_name : '';
+  var ov = MN.overview;
+  if (!ov) return '';
+  if (!ov._gmap) { ov._gmap = {}; (ov.groups || []).forEach(function(g) { ov._gmap[String(g.group_id)] = g.group_name || ''; }); }
+  return ov._gmap[String(gid)] || '';
 }
 async function cuLoad() {
   var loadEp = beginLoad('codes-users');
@@ -6006,12 +6454,31 @@ function mnTime(ts) {
   var d = new Date(Number(ts) * 1000);
   return d.getFullYear() + '-' + mnPad(d.getMonth() + 1) + '-' + mnPad(d.getDate()) + ' ' + mnPad(d.getHours()) + ':' + mnPad(d.getMinutes());
 }
+var UB = { page: 1, size: 50 };
+function ubFiltered() {
+  var list = ((MN.overview && MN.overview.blacklist) || []).slice();
+  var kw = (($('#ubKeyword') || {}).value || '').trim().toLowerCase(), sort = (($('#ubSort') || {}).value) || 'new';
+  if (kw) list = list.filter(function(e) { return [e.user_id, e.reason, e.source, e.operator, e.group_id].join(' ').toLowerCase().indexOf(kw) >= 0; });
+  if (sort === 'uid') list.sort(function(a, b) { return Number(a.user_id) - Number(b.user_id); });
+  else if (sort === 'old') list.sort(function(a, b) { return (a.created_at || 0) - (b.created_at || 0); });
+  else list.sort(function(a, b) { return (b.created_at || 0) - (a.created_at || 0); });
+  return list;
+}
+// 黑名单可能有几千人：只画当前这一页（每页 50 人），搜索 / 排序在浏览器里做
 function mnRenderBlacklist() {
-  var list = (MN.overview && MN.overview.blacklist) || [];
-  $('#ubCount').textContent = list.length ? '共 ' + list.length + ' 人' : '';
-  if (!list.length) { $('#ubList').innerHTML = '<div class="mn-empty">黑名单为空</div>'; return; }
+  var all = (MN.overview && MN.overview.blacklist) || [], list = ubFiltered();
+  var pages = Math.max(1, Math.ceil(list.length / UB.size));
+  UB.page = Math.min(Math.max(1, UB.page), pages);
+  $('#ubCount').textContent = all.length ? '共 ' + all.length + ' 人' + (list.length !== all.length ? '，符合条件 ' + list.length + ' 人' : '') : '';
+  $('#ubPager').innerHTML = pages > 1 ? '<div class="mn-row" style="justify-content:space-between;margin-top:8px"><span class="mn-hint">第 ' + UB.page + ' / ' + pages + ' 页</span>' +
+    '<span><button class="btn btn-ghost btn-sm" data-ub-page="-1"' + (UB.page <= 1 ? ' disabled' : '') + '>上一页</button> ' +
+    '<button class="btn btn-ghost btn-sm" data-ub-page="1"' + (UB.page >= pages ? ' disabled' : '') + '>下一页</button></span></div>' : '';
+  $$('[data-ub-page]').forEach(function(btn) {
+    btn.addEventListener('click', function() { UB.page += Number(btn.getAttribute('data-ub-page')); mnRenderBlacklist(); });
+  });
+  if (!list.length) { $('#ubList').innerHTML = '<div class="mn-empty">' + (all.length ? '没有符合条件的人' : '黑名单为空') + '</div>'; return; }
   $('#ubList').innerHTML = '<table class="mn-table"><thead><tr><th>QQ 号</th><th>拉黑原因</th><th>来源</th><th>时间</th><th></th></tr></thead><tbody>' +
-    list.map(function(e) {
+    list.slice((UB.page - 1) * UB.size, UB.page * UB.size).map(function(e) {
       var src = (e.source || '') + (e.operator ? '（' + e.operator + '）' : '') + (e.group_id ? ' · 群 ' + e.group_id : '');
       return '<tr><td>' + mbrLink(e.user_id) + '</td><td>' + (esc(e.reason) || '<span class="mn-hint">未记录（早于原因记录功能加入）</span>') + '</td>' +
         '<td>' + (esc(src) || '<span class="mn-hint">—</span>') + '</td><td>' + (esc(mnTime(e.created_at)) || '<span class="mn-hint">—</span>') + '</td>' +
@@ -6034,6 +6501,14 @@ async function loadKick() {
   mnRenderSwitches('kickSwitches');
   mnRenderSwitches('leaveRecallSwitches');
   mnRenderSwitches('leaveFilesSwitches');
+  mnRenderSwitches('joinLockSwitches');
+  var jlV = function(key, dft) { var v = mnCfg(key); return (v === undefined || v === null || v === '') ? dft : v; };
+  $('#jlMin').value = jlV('kick_join_lock_min_hours', 3);
+  $('#jlMax').value = jlV('kick_join_lock_max_hours', 6);
+  $('#jlNightStart').value = jlV('kick_join_lock_night_start', '23:00');
+  $('#jlNightEnd').value = jlV('kick_join_lock_night_end', '08:00');
+  $('#jlRestore').value = String(jlV('kick_join_lock_restore_type', 1));
+  jlLoad();
   mnRenderSwitches('acceptSwitches');
   mnRenderSwitches('mmSwitches');
   $('#mmValue').value = String(mnCfg('auto_msg_mask_value') || 4);
@@ -6058,6 +6533,31 @@ async function loadKick() {
     .map(function(g) { return '<option value="' + escAttr(g.group_id) + '">仅 ' + esc(mnGroupLabel(g)) + '</option>'; }).join('');
   scope.value = prev;
   mnRenderBlacklist();
+}
+async function jlLoad() {
+  var box = $('#jlBox');
+  if (!box) return;
+  var res = await safeGet('minimal/joinlock');
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var rows = (mnData(res) || {}).items || [];
+  if (!rows.length) { box.innerHTML = '<p class="mn-hint">没有。</p>'; return; }
+  box.innerHTML = '<table class="mn-table"><thead><tr><th>群</th><th>开始暂停</th><th>恢复时间</th><th>期间被踢</th><th>恢复为</th><th></th></tr></thead><tbody>' +
+    rows.map(function(r) {
+      var fail = r.retry_count ? '<div style="color:var(--danger)">恢复失败 ' + esc(r.retry_count) + ' 次：' + esc(r.last_error) + '（会自动重试）</div>' : '';
+      return '<tr><td>' + mnGroupCell(r.group_id, r.group_name) + '</td><td>' + esc(mnTime(r.locked_at)) + '</td>' +
+        '<td>' + esc(mnTime(r.unlock_at)) + fail + '</td><td>' + esc(r.kick_count) + ' 人</td><td>' + esc(r.restore_text) + '</td>' +
+        '<td><button class="btn btn-outline btn-sm" data-jl-restore="' + escAttr(r.group_id) + '">立即恢复</button></td></tr>';
+    }).join('') + '</tbody></table>';
+  $$('[data-jl-restore]', box).forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var gid = btn.getAttribute('data-jl-restore');
+      if (!(await mnConfirm('现在就把群 ' + gid + ' 的加群方式改回去？', { okText: '恢复' }))) return;
+      var r = await safePost('minimal/joinlock/restore', { group_id: gid });
+      if (isApiError(r)) { toast(mnErr(r, '恢复失败'), 'error'); return; }
+      toast('已恢复', 'success');
+      jlLoad();
+    });
+  });
 }
 async function mmLoad() {
   var box = $('#mmBox');
@@ -6353,7 +6853,8 @@ async function loadOplog(page) {
   var loadEp = beginLoad('oplog');
   if (page) OP_STATE.page = page;
   var res = await safeGet('minimal/oplog', { action: $('#opAction').value, source: $('#opSource').value,
-    operator: $('#opOperator').value, keyword: $('#opKeyword').value.trim(), page: OP_STATE.page, page_size: OP_STATE.pageSize });
+    operator: $('#opOperator').value, keyword: $('#opKeyword').value.trim(), days: $('#opDays').value, order: $('#opOrder').value,
+    page: OP_STATE.page, page_size: OP_STATE.pageSize });
   if (!isCurrentLoad('oplog', loadEp)) return;
   if (isApiError(res)) { $('#opTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
@@ -6391,7 +6892,10 @@ async function loadLeaveLog(page) {
   var mc = mnCfg('leave_log_msg_count');
   $('#llMsgCount').value = (mc === undefined || mc === null || mc === '') ? 10 : mc;
   $('#llImgDays').value = Number(mnCfg('leave_log_image_days')) || 30;
+  var llg = $('#llGroup');
+  if (llg.options.length !== mnGroups().length + 1) llg.innerHTML = mnGroupOptions(llg.value, '所有群');
   var res = await safeGet('minimal/leavelog', { keyword: $('#llKeyword').value.trim(), kind: $('#llKind').value,
+    days: $('#llDays').value, group_id: llg.value, order: $('#llOrder').value,
     page: LL_STATE.page, page_size: LL_STATE.pageSize });
   if (!isCurrentLoad('leavelog', loadEp)) return;
   if (isApiError(res)) { $('#llTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
@@ -6939,7 +7443,7 @@ async function bsLoadStats() {
 function bsRender(d) {
   var t = d.totals || {}, life = d.lifetime || {};
   var notes = [];
-  if (!d.wxcode_enabled) notes.push('葵花码 / 二维码识别没有开启（「关键词与识别」页面），不会有新的数据。');
+  if (!d.wxcode_enabled) notes.push('葵花码 / 二维码识别没有开启（「识别服务与转发群」页面），不会有新的数据。');
   if (!d.store_enabled) notes.push('码记录已关闭（「码管理」页面），统计不会增加。');
   if (Number($('#bsHours').value) > d.hours) notes.push('码记录只保留 ' + d.ttl_hours + ' 小时，按最近 ' + d.hours + ' 小时统计（可在「码管理 → 记录和图片保留」调长）。');
   $('#bsNotice').style.display = notes.length ? '' : 'none';
@@ -7139,7 +7643,7 @@ function cbEntryBlocked(e) { return (e.codes || []).some(function(c) { return c.
 function cbRender() {
   var notice = $('#cbNotice');
   var msg = !CB.enabled ? '二维码看板已关闭，新识别的图片不会显示（可在下方「设置」打开）。'
-    : (!CB.wxEnabled ? '葵花码 / 二维码识别还没有开启（「关键词与识别」页面），群图片不会被识别。' : '');
+    : (!CB.wxEnabled ? '葵花码 / 二维码识别还没有开启（「识别服务与转发群」页面），群图片不会被识别。' : '');
   notice.style.display = msg ? '' : 'none'; notice.textContent = msg;
   var all = CB.ids.slice().reverse().map(function(id) { return CB.map[id]; }).filter(Boolean);
   var f = $('#cbFilter').value;
@@ -7523,6 +8027,9 @@ function initMinimalPages() {
   });
 
   bindIfExists('btnKickRefresh', loadKick);
+  bindIfExists('btnAfterLeaveRefresh', loadKick);
+  bindIfExists('btnBotAcctRefresh', loadKick);
+  bindIfExists('btnServicesRefresh', loadGuard);
   bindIfExists('btnKick', mnKick);
   bindIfExists('btnUbAdd', async function() {
     var ids = $('#ubAdd').value.trim(), reason = $('#ubReason').value.trim();
@@ -7624,6 +8131,7 @@ function initMinimalPages() {
   registerPager('cs', CS, function() { csLoadStats(); });
   registerPager('cu', CU, function() { cuLoad(); });
   registerPager('mp', MP, function() { mpLoadStats(); });
+  registerPager('lk', LK, function() { lkLoadStats(); });
   registerPager('op', OP_STATE, function() { loadOplog(OP_STATE.page); });
   registerPager('ll', LL_STATE, function() { loadLeaveLog(LL_STATE.page); });
   bindAutoFilter(['csKeyword'], function() { CS.page = 1; csLoadStats(); });  // 下拉框原来就绑了 change
@@ -7633,6 +8141,19 @@ function initMinimalPages() {
   bindAutoFilter(['llKeyword', 'llKind'], function() { loadLeaveLog(1); });
   bindAutoFilter(['opKeyword', 'opOperator'], function() { loadOplog(1); });
   GSEL_IDS.forEach(function(id) { gselEnhance(document.getElementById(id)); });
+  bindAutoFilter(['ubKeyword', 'ubSort'], function() { UB.page = 1; mnRenderBlacklist(); });
+  bindAutoFilter(['llDays', 'llGroup', 'llOrder'], function() { loadLeaveLog(1); });
+  bindAutoFilter(['opDays', 'opOrder'], function() { loadOplog(1); });
+  fltInit([
+    { ids: ['csBy', 'csHours', 'csGroup', 'csSort', 'csKeyword'], reload: function() { CS.page = 1; csLoadStats(); } },
+    { ids: ['cuGroup', 'cuSort', 'cuKeyword'], reload: function() { CU.page = 1; cuLoad(); } },
+    { ids: ['mpBy', 'mpDaysSel', 'mpGroup', 'mpSort', 'mpKeyword'], reload: function() { MP.page = 1; mpLoadStats(); } },
+    { ids: ['lkBy', 'lkDaysSel', 'lkGroup', 'lkSort', 'lkKeyword'], reload: function() { LK.page = 1; lkLoadStats(); } },
+    { ids: ['gfView', 'gfGroupSel', 'gfUploader', 'gfKeyword', 'gfSort'], reload: gfRender },
+    { ids: ['llDays', 'llGroup', 'llKind', 'llKeyword', 'llOrder'], reload: function() { loadLeaveLog(1); } },
+    { ids: ['opDays', 'opAction', 'opOperator', 'opSource', 'opKeyword', 'opOrder'], reload: function() { loadOplog(1); } },
+    { ids: ['ubKeyword', 'ubSort'], reload: function() { UB.page = 1; mnRenderBlacklist(); } }
+  ]);
   bindAutoFilter(['mbrQuery'], mbrSearch);
   var mbrTab = document.getElementById('tab-member');
   if (mbrTab) mbrTab.addEventListener('click', mbrOnClick);
@@ -7642,8 +8163,7 @@ function initMinimalPages() {
   bindIfExists('btnGfDelete', gfDelete);
   bindIfExists('btnGfSelAll', function() { gfFiltered().forEach(function(f) { GF.sel[gfKey(f)] = true; }); gfRender(); });
   bindIfExists('btnGfSelNone', function() { GF.sel = {}; gfRender(); });
-  ['gfView', 'gfGroupSel'].forEach(function(id) { bindIfExists(id, gfRender, 'change'); });
-  ['gfUploader', 'gfKeyword'].forEach(function(id) { bindIfExists(id, gfRender, 'input'); });
+  bindAutoFilter(['gfView', 'gfGroupSel', 'gfSort', 'gfUploader', 'gfKeyword'], gfRender);  // 输入框停顿后再重画，文件多时不卡
   var gfTable = document.getElementById('gfTable');
   if (gfTable) { gfTable.addEventListener('click', gfOnClick); gfTable.addEventListener('change', gfOnChange); }
   bindIfExists('bmImage', function() { bulkPickImage(); }, 'change');
@@ -7669,6 +8189,21 @@ function initMinimalPages() {
   bindIfExists('cmdCat', cmdRender, 'change');
   bindIfExists('cmdKeyword', cmdRender, 'input');
   bindIfExists('btnMpRefresh', function() { loadMiniapps(); });
+  bindIfExists('btnLkRefresh', function() { loadLinks().then(function() { if (LK.detail) lkShowDetail(LK.detail.item); }); });
+  var lkTab = document.getElementById('tab-links');
+  if (lkTab) lkTab.addEventListener('click', lkOnClick);
+  bindIfExists('btnLkAdd', lkAddBlock);
+  bindIfExists('btnLkAllow', async function() {
+    var v = $('#lkAllowValue').value.trim();
+    if (!v) { toast('请填写域名', 'warning'); return; }
+    if (await lkListSet('allow_domain', v, true)) { $('#lkAllowValue').value = ''; lkReload(); }
+  });
+  bindIfExists('btnLkSave', function() {
+    var n = Number($('#lkDays').value);
+    if (!(n >= 1 && n <= 3650) || Math.floor(n) !== n) { toast('保留天数填 1–3650 的整数', 'warning'); return; }
+    mnSaveConfig({ link_store_days: n, link_title_mode: $('#lkTitleMode').value }, '已保存').then(function(ok) { if (ok) lkReload(); });
+  });
+  bindAutoFilter(['lkBy', 'lkDaysSel', 'lkGroup', 'lkSort', 'lkKeyword'], function() { LK.page = 1; lkLoadStats(); });
   var mpTab = document.getElementById('tab-miniapps');
   if (mpTab) mpTab.addEventListener('click', mpOnClick);
   bindIfExists('btnMpSave', function() {
@@ -7750,6 +8285,16 @@ function initMinimalPages() {
     });
     if (empty.length) toast(empty.map(function(p) { return p[1]; }).join('、') + '的白名单是空的，目前只有插件管理员能通过', 'warning');
     mnSaveConfig(values, '已保存').then(function(ok) { if (ok) { $('#aaFriendWlUsers').value = values.auto_accept_friend_wl_users.join('\n'); $('#aaInviteWlUsers').value = values.auto_accept_invite_wl_users.join('\n'); } });
+  });
+  bindIfExists('btnJlLoad', jlLoad);
+  bindIfExists('btnJlSave', function() {
+    var lo = Number($('#jlMin').value), hi = Number($('#jlMax').value);
+    var ns = $('#jlNightStart').value, ne = $('#jlNightEnd').value;
+    if (!(lo >= 1 && lo <= 72) || !(hi >= 1 && hi <= 72) || Math.floor(lo) !== lo || Math.floor(hi) !== hi) { toast('时长填 1–72 的整数', 'warning'); return; }
+    if (lo > hi) { toast('最短时长不能大于最长时长', 'warning'); return; }
+    if (!/^\d\d:\d\d$/.test(ns) || !/^\d\d:\d\d$/.test(ne)) { toast('请填写夜间时间段', 'warning'); return; }
+    mnSaveConfig({ kick_join_lock_min_hours: lo, kick_join_lock_max_hours: hi, kick_join_lock_night_start: ns,
+      kick_join_lock_night_end: ne, kick_join_lock_restore_type: Number($('#jlRestore').value) }, '已保存');
   });
   bindIfExists('btnLrSave', function() {
     var count = Number($('#lrCount').value), minutes = Number($('#lrMinutes').value);

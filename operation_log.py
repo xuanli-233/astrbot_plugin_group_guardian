@@ -80,9 +80,14 @@ class OperationLogMixin:
             logger.warning(f"[GroupMgr] 写操作记录失败({action}): {e}")
 
     def _op_list(self, action: str = "", keyword: str = "", source: str = "",
-                 page: int = 1, page_size: int = 50, operator: str = "") -> Tuple[List[dict], int]:
+                 page: int = 1, page_size: int = 50, operator: str = "",
+                 days: int = 0, order: str = "desc") -> Tuple[List[dict], int]:
+        """days > 0：只看最近这么多天；order：desc 最新的在前（默认）/ asc 最早的在前。"""
         self._op_init_db()
         where, args = [], []
+        if days and int(days) > 0:
+            where.append("ts >= ?")
+            args.append(int(time.time()) - int(days) * 86400)
         if action:
             where.append("action = ?")
             args.append(action)
@@ -102,7 +107,8 @@ class OperationLogMixin:
         with self._storage._connect() as conn:
             total = conn.execute(f"SELECT COUNT(*) FROM op_logs {clause}", args).fetchone()[0]
             rows = conn.execute(
-                f"SELECT * FROM op_logs {clause} ORDER BY id DESC LIMIT ? OFFSET ?", args + [page_size, offset],
+                f"SELECT * FROM op_logs {clause} ORDER BY id {'ASC' if order == 'asc' else 'DESC'} LIMIT ? OFFSET ?",
+                args + [page_size, offset],
             ).fetchall()
         return [dict(r) for r in rows], int(total)
 

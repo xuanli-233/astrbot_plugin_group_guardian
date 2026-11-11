@@ -376,8 +376,11 @@ class LeaveLogMixin:
             "messages": messages if isinstance(messages, list) else [], "msg_source": row["msg_source"],
         }
 
-    def _ll_list(self, keyword: str = "", kind: str = "", page: int = 1, page_size: int = 50) -> Tuple[List[dict], int]:
-        """keyword：QQ 号 / 群号（精确）或昵称 / 群名（包含）。每条附带该 QQ 的累计退群次数。"""
+    def _ll_list(self, keyword: str = "", kind: str = "", page: int = 1, page_size: int = 50,
+                 days: int = 0, group_id: str = "", order: str = "desc") -> Tuple[List[dict], int]:
+        """keyword：QQ 号 / 群号（精确）或昵称 / 群名（包含）。每条附带该 QQ 的累计退群次数。
+
+        days > 0：只看最近这么多天；group_id：只看这个群；order：desc 最新的在前（默认）/ asc 最早的在前。"""
         self._ll_init_db()
         page = max(1, int(page or 1))
         page_size = min(max(int(page_size or 50), 1), 200)
@@ -393,10 +396,17 @@ class LeaveLogMixin:
         if kind in KIND_LABEL:
             where.append("kind=?")
             args.append(kind)
+        if days and int(days) > 0:
+            where.append("ts>=?")
+            args.append(int(time.time()) - int(days) * 86400)
+        if str(group_id or "").strip():
+            where.append("group_id=?")
+            args.append(str(group_id).strip())
+        direction = "ASC" if order == "asc" else "DESC"
         cond = (" WHERE " + " AND ".join(where)) if where else ""
         with self._storage._connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) AS c FROM leave_logs{cond}", args).fetchone()["c"] or 0)
-            rows = conn.execute(f"SELECT * FROM leave_logs{cond} ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?",
+            rows = conn.execute(f"SELECT * FROM leave_logs{cond} ORDER BY ts {direction}, id {direction} LIMIT ? OFFSET ?",
                                 args + [page_size, (page - 1) * page_size]).fetchall()
             items = [self._ll_row(r) for r in rows]
             self._ll_attach_thumbs(items)

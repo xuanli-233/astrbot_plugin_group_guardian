@@ -92,6 +92,8 @@ class MemberLookupMixin:
         # 小程序
         mp = getattr(self, "_mp_user", None)
         out["miniapps"] = mp(uid) if callable(mp) else None
+        lk = getattr(self, "_lk_user", None)
+        out["links"] = lk(uid) if callable(lk) else None
         # 群文件（最近一次扫描）
         st = getattr(self, "_gf_scan_state", None)
         if st:

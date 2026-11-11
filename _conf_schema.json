@@ -178,7 +178,7 @@
         "description": "好友申请白名单：QQ 号",
         "type": "list",
         "default": [],
-        "hint": "范围选「白名单」时，这些 QQ 的好友申请自动同意。在 WebUI「踢人与黑名单 → 好友申请与进群邀请」里编辑"
+        "hint": "范围选「白名单」时，这些 QQ 的好友申请自动同意。在 WebUI「机器人账号 → 好友申请与进群邀请」里编辑"
     },
     "auto_accept_friend_wl_groups": {
         "description": "好友申请白名单：成员来源群",
@@ -203,7 +203,7 @@
         "description": "进群邀请白名单：QQ 号",
         "type": "list",
         "default": [],
-        "hint": "范围选「白名单」时，这些 QQ 邀请机器人进群自动接受。在 WebUI「踢人与黑名单 → 好友申请与进群邀请」里编辑"
+        "hint": "范围选「白名单」时，这些 QQ 邀请机器人进群自动接受。在 WebUI「机器人账号 → 好友申请与进群邀请」里编辑"
     },
     "auto_accept_invite_wl_groups": {
         "description": "进群邀请白名单：成员来源群",
@@ -457,6 +457,67 @@
         "default": true,
         "hint": "包括管理员手动踢人和本插件踢人（批量踢人、黑名单入群即踢等）"
     },
+    "link_guard_enabled": {
+        "description": "链接管理：识别消息里的链接",
+        "type": "bool",
+        "default": true,
+        "hint": "识别消息文字里的链接（http / https 开头的，以及 t.cn/xxx 这类没写协议的常见后缀域名）和非小程序卡片带的链接；有已拉黑的域名 / 链接时按默认规则组撤回。小程序卡片里的链接不算。可在多群配置中按群开关"
+    },
+    "link_store_enabled": {
+        "description": "链接管理：记录出现过的链接",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后不再记录新的链接（统计为空），拉黑照常生效"
+    },
+    "link_store_days": {
+        "description": "链接管理：记录保留天数",
+        "type": "int",
+        "default": 90,
+        "hint": "范围 1–3650。到期删除发送记录；读到的标题保留到这个链接没有任何记录为止"
+    },
+    "link_title_mode": {
+        "description": "链接管理：读取网页标题",
+        "type": "string",
+        "default": "manual",
+        "options": ["off", "manual", "auto"],
+        "hint": "off=不读；manual=只在页面上点「读取标题」时读；auto=新链接第一次出现时后台自动读一次。读标题是由 AstrBot 所在服务器访问一次该网页：只读开头 128KB、只取 <title>、不执行脚本、不带 Cookie、只访问公网的 80 / 443 端口。对方网站会看到服务器 IP，一次性的确认 / 退订链接会被触发，所以默认不自动读"
+    },
+    "kick_join_lock_enabled": {
+        "description": "踢人后暂停加群：有人被踢出后把群改成禁止加群几小时",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后有人被踢出群（管理员手动踢、本插件踢都算，主动退群不算），把这个群的加群方式改成「禁止加群」，过一段时间自动恢复，防止被踢的人马上换号进群。机器人需要是群主或管理员；可在多群配置中按群开关"
+    },
+    "kick_join_lock_min_hours": {
+        "description": "踢人后暂停加群：最短几小时",
+        "type": "int",
+        "default": 3,
+        "hint": "范围 1–72。实际时长在最短和最长之间随机取"
+    },
+    "kick_join_lock_max_hours": {
+        "description": "踢人后暂停加群：最长几小时",
+        "type": "int",
+        "default": 6,
+        "hint": "范围 1–72"
+    },
+    "kick_join_lock_night_start": {
+        "description": "踢人后暂停加群：夜间开始时间",
+        "type": "string",
+        "default": "23:00",
+        "hint": "HH:MM，按服务器本地时间。恢复加群的时间不会落在夜间；最短到最长这一段全在夜间时，顺延到夜间结束。开始和结束填一样 = 不限制"
+    },
+    "kick_join_lock_night_end": {
+        "description": "踢人后暂停加群：夜间结束时间",
+        "type": "string",
+        "default": "08:00",
+        "hint": "HH:MM"
+    },
+    "kick_join_lock_restore_type": {
+        "description": "踢人后暂停加群：到点恢复成哪种加群方式",
+        "type": "int",
+        "default": 1,
+        "hint": "0 = 允许任何人，1 = 需要验证。LuckyLilliaBot 读不到群原来的加群方式，所以到点统一改成这里选的；各群不一样时在多群配置里按群设置"
+    },
     "leave_recall_use_history": {
         "description": "退群撤回：用群历史兜底",
         "type": "bool",
@@ -503,7 +564,7 @@
         "description": "转发群（可多个，每个群选收哪些内容）",
         "type": "list",
         "default": [],
-        "hint": "建议在插件页面「关键词与识别 → 转发群」里勾选。手动填写时每行一个群：群号:类别,类别。类别：keyword 关键词命中、wxcode 二维码 / 葵花码命中、code_limit 码发送超限、miniapp 小程序命中、manual_recall 指令撤回、leave_recall 退群撤回、bot_join 机器人进群、bot_friend 机器人加好友。转发群本身不参与审核"
+        "hint": "建议在插件页面「识别服务与转发群 → 转发群」里勾选。手动填写时每行一个群：群号:类别,类别。类别：keyword 关键词命中、wxcode 二维码 / 葵花码命中、code_limit 码发送超限、miniapp 小程序命中、manual_recall 指令撤回、leave_recall 退群撤回、bot_join 机器人进群、bot_friend 机器人加好友。转发群本身不参与审核"
     },
     "backup_group_id": {
         "description": "备份群号（旧配置）",

@@ -586,6 +586,20 @@ class OperationLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(out["data"]["total"], 5)
         self.assertEqual(len(out["data"]["items"]), 2)
         self.assertIn("加入黑名单", out["data"]["actions"])
+        # 排序：默认最新的在前，order=asc 最早的在前
+        web_minimal.quart_request.args = {"action": "踢人"}
+        newest = [r["target"] for r in (await call(self.h._web_minimal_oplog))["data"]["items"]]
+        web_minimal.quart_request.args = {"action": "踢人", "order": "asc"}
+        oldest = [r["target"] for r in (await call(self.h._web_minimal_oplog))["data"]["items"]]
+        self.assertEqual(newest, ["30004", "30003", "30002", "30001", "30000"])
+        self.assertEqual(oldest, newest[::-1])
+        # 时间范围：把一条记录改成 10 天前，最近 7 天里就没有它
+        with self.h._storage._connect() as conn:
+            conn.execute("UPDATE op_logs SET ts = ts - 864000 WHERE target = '30000'")
+            conn.commit()
+        self.assertEqual(self.h._op_list(action="踢人", days=7)[1], 4)
+        self.assertEqual(self.h._op_list(action="踢人", days=30)[1], 5)
+        self.assertEqual(self.h._op_list(action="踢人")[1], 5)
 
     def test_command_reason_parsing(self):
         split = self.h._split_reason
@@ -758,12 +772,30 @@ class DashboardWiringTests(unittest.TestCase):
                 self.assertIn(f'<a class="mobile-nav-item" data-tab="{tab}">', html)
         # 侧边栏按用途分组，顺序固定
         sections = re.findall(r'<div class="nav-section">([^<]+)</div>', html)
-        self.assertEqual(sections, ["消息审核", "成员管理", "群运营", "系统"])
+        sections = re.findall(r'<div class="nav-section" data-sec="([^"]+)">', html)
+        self.assertEqual(sections, ["消息拦截", "监控与记录", "成员管理", "群运营", "系统"])
         nav = html[html.index('<nav class="sidebar-nav">'):html.index("</nav>")]
         tabs = re.findall(r'data-tab="([\w-]+)"', nav)
-        self.assertEqual(tabs, ["overview", "guard", "codes", "miniapps", "livelog", "bigscreen", "records", "member", "kick", "dup", "leavelog", "join",
-                                "tasks", "broadcast", "files", "names", "batch", "directory", "oplog", "perms", "commands", "groupcfg",
-                                "settings"])
+        self.assertEqual(tabs, ["overview", "guard", "codes", "miniapps", "links", "services",
+                                "livelog", "bigscreen", "records", "leavelog", "oplog",
+                                "member", "kick", "afterleave", "dup", "join", "tasks",
+                                "broadcast", "files", "names", "batch",
+                                "botacct", "perms", "commands", "groupcfg", "directory", "settings"])
+        # 每个菜单项都有对应的页面；拆出来的卡片在各自的页面里
+        for tab in tabs:
+            self.assertIn(f'id="tab-{tab}"', html)
+
+        def panel(tab):
+            start = html.index(f'id="tab-{tab}"')
+            return html[start:html.index('<div class="tab-panel"', start)]
+
+        for tab, ids in {"kick": ["kickIds", "kickSwitches", "ubList"],
+                         "afterleave": ["leaveRecallSwitches", "leaveFilesSwitches", "joinLockSwitches", "jlBox"],
+                         "botacct": ["acceptSwitches", "mmSwitches", "mmBox"],
+                         "guard": ["rgList", "rgTestText", "guardSwitches"],
+                         "services": ["brTable", "wxSwitches", "ocrDriver"]}.items():
+            for el in ids:
+                self.assertIn(f'id="{el}"', panel(tab), f"{el} 应该在 {tab} 页")
         mobile = html[html.index('<nav class="mobile-nav"'):]
         self.assertEqual(re.findall(r'class="mobile-nav-item(?: active)?" data-tab="([\w-]+)"', mobile), tabs)
         # 原版的群管理 / 刷屏 / 规则库 / 名片 / 词库学习页面已删除

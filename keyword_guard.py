@@ -253,7 +253,8 @@ class KeywordGuardMixin:
         live_set("hit", action, reason)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
         self._record_op(
-            {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回", "miniapp": "小程序撤回"}.get(kind, "关键词撤回"),
+            {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回", "miniapp": "小程序撤回",
+             "link": "链接撤回"}.get(kind, "关键词撤回"),
             source="自动", group_id=group_id,
             target=user_id, reason=reason, result=action,
             detail=(f"{user_name}：" if user_name else "") + (text or "")[:200]

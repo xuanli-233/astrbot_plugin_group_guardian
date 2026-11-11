@@ -20,6 +20,8 @@
   POST /minimal/codes/list             码加入 / 移出白名单或黑名单
   GET  /minimal/msgmask                各群消息接收方式的设置情况
   POST /minimal/msgmask/apply          给选中的群设置消息接收方式（批量任务）
+  GET  /minimal/joinlock               踢人后暂停加群：当前暂停中的群（join_lock.py）
+  POST /minimal/joinlock/restore       立即恢复某个群的加群方式
 业务逻辑全部复用指令所用的函数（group_blacklist / group_broadcast / group_name_task / keyword_guard）。
 """
 import re
@@ -60,8 +62,11 @@ MINIMAL_CONFIG_KEYS = (
     "leave_recall_enabled", "leave_recall_on_leave", "leave_recall_on_kick",
     "leave_recall_count", "leave_recall_minutes", "leave_recall_use_history",
     "leave_files_enabled", "leave_files_on_leave", "leave_files_on_kick",
+    "kick_join_lock_enabled", "kick_join_lock_min_hours", "kick_join_lock_max_hours",
+    "kick_join_lock_night_start", "kick_join_lock_night_end", "kick_join_lock_restore_type",
     "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history", "leave_log_save_images", "leave_log_image_days",
     "miniapp_store_enabled", "miniapp_store_days",
+    "link_guard_enabled", "link_store_enabled", "link_store_days", "link_title_mode",
     "leave_auto_blacklist_times", "leave_auto_blacklist_days",
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
@@ -530,6 +535,7 @@ class MinimalWebMixin:
             action=str(args.get("action", "") or ""), keyword=str(args.get("keyword", "") or "").strip(),
             source=str(args.get("source", "") or ""), operator=str(args.get("operator", "") or "").strip(),
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+            days=self._safe_int(args.get("days", 0), 0), order=str(args.get("order", "") or "desc"),
         )
         return jsonify({"status": "success", "data": {
             "items": items, "total": total, "actions": self._op_actions(), "operators": self._op_operators(),
@@ -543,6 +549,8 @@ class MinimalWebMixin:
         items, total = self._ll_list(
             keyword=str(args.get("keyword", "") or "").strip(), kind=str(args.get("kind", "") or ""),
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+            days=self._safe_int(args.get("days", 0), 0), group_id=str(args.get("group_id", "") or "").strip(),
+            order=str(args.get("order", "") or "desc"),
         )
         return jsonify({"status": "success", "data": {"items": items, "total": total}})
 
@@ -569,6 +577,26 @@ class MinimalWebMixin:
             return self._minimal_error("请选择群")
         job = self._mm_job(groups, mask, **self._web_log())
         return jsonify({"status": "success", "data": {"job": job}})
+
+    async def _web_minimal_joinlock(self):
+        client = await self._get_client()
+        groups = []
+        if client:
+            groups, _err = await self._dir_groups(client)
+        return jsonify({"status": "success", "data": {"items": self._jl_status(groups)}})
+
+    async def _web_minimal_joinlock_restore(self):
+        data = await self._minimal_body()
+        gid = str(data.get("group_id") or "").strip()
+        if not gid.isdigit():
+            return self._minimal_error("请指定群")
+        client = await self._get_client()
+        if not client:
+            return self._minimal_error("QQ 未连接")
+        ok, err = await self._jl_restore_group(client, gid, **self._web_log())
+        if not ok:
+            return self._minimal_error(f"恢复失败：{err}")
+        return jsonify({"status": "success", "data": {"group_id": gid}})
 
     async def _web_minimal_codes(self):
         args = quart_request.args
@@ -729,6 +757,57 @@ class MinimalWebMixin:
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"allow": self._mp_list("allow")}})
+
+    # ------------------------------------------------------------------
+    # 链接管理（link_guard.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_links(self):
+        args = quart_request.args
+        by = "user" if str(args.get("by", "")) == "user" else "domain"
+        sort = str(args.get("sort", "") or "count")
+        items, total = self._lk_stats(
+            days=self._safe_int(args.get("days", 7), 7), keyword=str(args.get("keyword", "") or ""),
+            group_id=str(args.get("group_id", "") or "").strip(), by=by, sort=sort,
+            page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+        )
+        return jsonify({"status": "success", "data": {
+            "items": items, "total": total, "by": by, "sort": sort if sort in self.LK_SORTS else "count",
+            "store_days": self._lk_store_days(), "store_enabled": bool(self._cfg("link_store_enabled", True)),
+            "guard_enabled": bool(self._cfg("link_guard_enabled", True)), "title_mode": self._lk_title_mode(),
+            "lists": self._lk_lists(),
+        }})
+
+    async def _web_minimal_links_detail(self):
+        args = quart_request.args
+        domain = str(args.get("domain", "") or "").strip()
+        if not domain:
+            return self._minimal_error("缺少域名")
+        return jsonify({"status": "success", "data": self._lk_detail(
+            domain, user_id=str(args.get("user_id", "") or "").strip())})
+
+    async def _web_minimal_links_list(self):
+        data = await self._minimal_body()
+        err = self._lk_set_list(str(data.get("kind") or ""), str(data.get("value") or ""), bool(data.get("on", True)),
+                                reason=str(data.get("reason") or "").strip(), **self._web_log())
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": {"lists": self._lk_lists()}})
+
+    async def _web_minimal_links_title(self):
+        """读取链接标题：url_hash 读一个；domain 读这个域名下还没读过的（一次最多 10 个，排队在后台读）。"""
+        data = await self._minimal_body()
+        if self._lk_title_mode() == "off":
+            return self._minimal_error("读取标题已关闭（链接管理 → 设置）")
+        url_hash = str(data.get("url_hash") or "").strip()
+        if url_hash:
+            result = await self._lk_read_title(url_hash, force=bool(data.get("force")))
+            return jsonify({"status": "success", "data": result})
+        domain = str(data.get("domain") or "").strip().lower()
+        if not domain:
+            return self._minimal_error("缺少链接")
+        detail = self._lk_detail(domain)
+        todo = [u["url_hash"] for u in detail["urls"] if not u["title_state"] and u["state"] != "block"][:10]
+        return jsonify({"status": "success", "data": {"queued": self._lk_queue_titles(todo)}})
 
     # ------------------------------------------------------------------
     # 指令管理（command_center.py）

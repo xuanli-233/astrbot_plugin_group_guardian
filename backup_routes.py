@@ -26,6 +26,7 @@ BACKUP_KINDS: List[Tuple[str, str, str]] = [
     ("wxcode", "二维码 / 葵花码命中", "图片里的码命中规则（或解不出的可疑码）撤回前的原消息和识别内容"),
     ("code_limit", "码发送超限", "同一个码发送次数超过限制被撤回的原消息"),
     ("miniapp", "小程序命中", "小程序卡片 / 链接命中规则撤回的原消息"),
+    ("link", "链接命中", "消息里有已拉黑的域名 / 链接被撤回的原消息"),
     ("manual_recall", "指令撤回", "/撤回最新消息、/批量撤回、/回复撤回 撤回的消息"),
     ("leave_recall", "退群撤回", "有人退群 / 被踢后撤回的他最近的消息"),
     ("bot_join", "机器人进群", "机器人被拉进新群时推送群名、人数、邀请人"),
@@ -34,7 +35,7 @@ BACKUP_KINDS: List[Tuple[str, str, str]] = [
 BACKUP_KIND_IDS = [k for k, _n, _d in BACKUP_KINDS]
 BACKUP_KIND_NAMES = {k: n for k, n, _d in BACKUP_KINDS}
 # 表格表头用的短名字
-BACKUP_KIND_SHORT = {"keyword": "关键词", "wxcode": "二维码 / 葵花码", "code_limit": "码超限", "miniapp": "小程序",
+BACKUP_KIND_SHORT = {"keyword": "关键词", "wxcode": "二维码 / 葵花码", "code_limit": "码超限", "miniapp": "小程序", "link": "链接",
                      "manual_recall": "指令撤回", "leave_recall": "退群撤回", "bot_join": "机器人进群",
                      "bot_friend": "机器人加好友"}
 
