@@ -18,6 +18,7 @@ QQ 的卡片消息是 json 消息段（data.data 是一段 JSON 字符串）。�
 跳转链接只做文字匹配，不会去访问（短链接解析不出真实目标）。
 """
 import json
+import re
 from typing import Dict, List, Optional
 
 CARD_FIELD_MAX = 300
@@ -51,7 +52,9 @@ def parse_card(data) -> Optional[Dict]:
         return None
     meta = card.get("meta") if isinstance(card.get("meta"), dict) else {}
     out = {"app": _s(card.get("app")), "view": _s(card.get("view")), "prompt": _s(card.get("prompt")),
-           "kind": "", "title": "", "desc": "", "source": "", "appid": "", "url": "", "preview": "", "icon": ""}
+           "kind": "", "title": "", "desc": "", "source": "", "appid": "", "url": "", "preview": "", "icon": "",
+           # 推荐名片卡片：share_type = group（群名片，分享另一个群）/ user（个人名片）；share_uin = 那个群号 / QQ 号
+           "share_type": "", "share_uin": ""}
     body = None
     if isinstance(meta.get("miniapp"), dict):
         body = meta["miniapp"]
@@ -86,6 +89,8 @@ def parse_card(data) -> Optional[Dict]:
                 out["preview"] = _s(body.get("preview") or body.get("avatar"))
                 out["icon"] = _s(body.get("source_icon") or body.get("tagIcon"))
                 out["appid"] = _s(body.get("appid"))
+                if key == "contact":
+                    _fill_share(out, card, body)
                 break
     if body is None:
         out["kind"] = _KIND_BY_VIEW.get(out["view"], "卡片")
@@ -98,6 +103,26 @@ def parse_card(data) -> Optional[Dict]:
     return out
 
 
+def _fill_share(out: Dict, card: Dict, body: Dict) -> None:
+    """推荐名片卡片（com.tencent.contact.lua）：区分群名片和个人名片，取出被分享的群号 / QQ 号。
+
+    群名片：bizsrc = qun.share，tag = 群名片，jumpUrl 里 card_type=group&uin=群号，头像地址 /gh/群号/。
+    """
+    jump = str(body.get("jumpUrl") or "") + " " + str(body.get("pcJumpUrl") or "")
+    avatar = str(body.get("avatar") or "")
+    is_group = ("card_type=group" in jump or str(card.get("bizsrc") or "") == "qun.share"
+                or str(body.get("tag") or "") == "群名片" or "groupwpa" in jump or "/gh/" in avatar)
+    m = re.search(r"[?&]uin=(\d{5,12})", jump)
+    uin = m.group(1) if m else ""
+    if is_group:
+        if not uin:
+            m = re.search(r"/gh/(\d{5,12})/", avatar)
+            uin = m.group(1) if m else ""
+        out["share_type"], out["share_uin"], out["kind"] = "group", uin, "群名片"
+    elif "card_type=" in jump or uin:
+        out["share_type"], out["share_uin"] = "user", uin
+
+
 def card_text(card: Dict) -> str:
     """卡片 → 一行文字，并入消息文字参与关键词匹配。"""
     parts = [f"[{card.get('kind') or '卡片'}]"]
@@ -107,6 +132,8 @@ def card_text(card: Dict) -> str:
             parts.append(value)
     if card.get("appid"):
         parts.append(f"appid:{card['appid']}")
+    if card.get("share_type") == "group" and card.get("share_uin"):
+        parts.append(f"群号:{card['share_uin']}")
     if card.get("url"):
         parts.append(card["url"])
     return " ".join(parts)
@@ -155,6 +182,8 @@ class CardParseMixin:
                 v for v in (c.get("source"), c.get("title") if c.get("title") != c.get("source") else "", c.get("desc")) if v)
             if c.get("appid"):
                 line += f"（appid {c['appid']}）"
+            if c.get("share_type") == "group":
+                line += f"（分享的群 {c.get('share_uin') or '未知'}）"
             if c.get("url"):
                 line += f" → {c['url'][:120]}"
             if c.get("preview"):

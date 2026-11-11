@@ -244,7 +244,28 @@ class ModerationMixin(ImageAuditMixin):
         if callable(hit_guards):
             self._last_hit_reason = ""
             lk_hit = next((i for i in lk_items if i.get("state") == "block"), None)
-            if lk_hit is not None:
+            # 群名片（分享别的群）：规则组的「群名片」规则（rule_groups._rg_match_card）
+            gc_group, gc_rule = None, None
+            match_card = getattr(self, "_rg_match_card", None)
+            if callable(match_card) and any(c.get("share_type") == "group" for c in cards):
+                # 「分享别的群」要知道机器人自己在哪些群：群列表读本地缓存，过期或还没加载时才调接口
+                load_groups = getattr(self, "_dir_groups", None)
+                if callable(load_groups):
+                    try:
+                        await load_groups(await self._get_client(event))
+                    except Exception as e:
+                        logger.debug(f"[GroupMgr] 加载群列表失败: {e}")
+                for c in cards:
+                    gc_group, gc_rule = match_card(c, group_id)
+                    if gc_group:
+                        break
+            if gc_group is not None:
+                live_stage("检查群名片")
+                hit_notice = await self._execute_hit_action(
+                    event, group_id, user_id, user_name, text, f"{gc_rule}", kind="groupcard",
+                    image_urls=image_urls, action=self._rg_action(gc_group))
+                handled = True
+            elif lk_hit is not None:
                 # 已拉黑的域名 / 链接：按默认规则组的处理方式撤回，不再做后面的检查
                 live_stage("检查链接")
                 hit_notice = await self._execute_hit_action(

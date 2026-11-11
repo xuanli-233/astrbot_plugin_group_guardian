@@ -693,9 +693,13 @@ class MinimalWebMixin:
 
     async def _web_minimal_rulegroups_test(self):
         data = await self._minimal_body()
+        if str(data.get("card_group") or "").strip():   # 群名片规则要知道机器人在哪些群
+            client = await self._get_client()
+            if client:
+                await self._dir_groups(client)
         result = self._rg_test(text=str(data.get("text") or ""), code=str(data.get("code") or ""),
                                app=str(data.get("app") or ""), group_id=str(data.get("group_id") or "").strip(),
-                               title=str(data.get("title") or ""))
+                               title=str(data.get("title") or ""), card_group=str(data.get("card_group") or ""))
         links = extract_links(str(data.get("text") or ""))
         if links and not result.get("app"):  # 文字里带 #小程序:// 链接时，也按小程序规则测一次
             for link in links:

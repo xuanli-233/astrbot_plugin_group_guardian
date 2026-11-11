@@ -106,7 +106,9 @@ class RuleGroupTests(unittest.IsolatedAsyncioTestCase):
                        "moderation_ban_duration": 600, "hit_notice_enabled": True, "hit_notice_template": "撤了 {name}"})
         g = h._rg_default()
         self.assertEqual((g["name"], g["keywords"], g["code_rules"]), ("默认组", ["加微信", "=1"], ["invite"]))
-        self.assertEqual(g["action"], {"mute": True, "mute_minutes": 10, "notice": True, "notice_template": "撤了 {name}"})
+        self.assertEqual(g["action"], {"mute": True, "mute_minutes": 10, "notice": True, "notice_template": "撤了 {name}",
+                                       "kick": "", "kick_days": 7})   # 迁移出来的默认组不踢人
+        self.assertEqual(g["cards"], {"group_card": "", "allow": []})
         # 只迁移一次：之后改配置不影响
         h.config["keyword_rules"] = ["别的"]
         h._rg_db_ready = False

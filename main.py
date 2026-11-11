@@ -108,7 +108,7 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         await self._stop_scheduler()
         # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks", "_jl_tasks", "_lk_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks", "_jl_tasks", "_lk_tasks", "_hg_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):

@@ -17,6 +17,7 @@
 wxcode_regex_rules 每条都按正则处理（同样不区分大小写）。
 正则长度上限 REGEX_MAX_LEN，含嵌套量词（如 (a+)+）的正则会被跳过，防止灾难性回溯。
 """
+import asyncio
 import re
 import time
 from typing import List, Optional, Tuple
@@ -232,11 +233,23 @@ class KeywordGuardMixin:
             template = self._cfg_str("hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id)
         self._last_hit_reason = reason
         backed_up = await self._backup_message(
-            event, group_id, user_id, user_name, reason, extra_text=extra_text, kind=kind,
+            event, group_id, user_id, user_name, reason, extra_text=extra_text,
+            kind="keyword" if kind == "groupcard" else kind,   # 群名片命中归到「关键词命中」这一类转发
         )
         msg_id = self._event_message_id(event)
         recall_result = await self._recall_msg(event, msg_id) if msg_id else None
         recalled = recall_result is True
+
+        # 规则组设了「命中后踢人」：只踢符合条件的人（见 _hg_kick_check），踢了就不用再禁言
+        kicked, kick_note = "", ""
+        if action and action.get("kick"):
+            try:
+                kicked, kick_note = await self._hg_kick(event, group_id, user_id, action, reason)
+            except Exception as e:
+                kick_note = f"踢人出错：{type(e).__name__}"
+                logger.warning(f"[GroupMgr] 命中后踢人出错({group_id}/{user_id}): {e}")
+            if kicked:
+                mute_on = False
 
         muted = False
         if mute_on and not self._hit_throttled("mute", group_id, user_id):
@@ -247,14 +260,18 @@ class KeywordGuardMixin:
         parts = ["撤回" if recalled else "命中（撤回失败）"]
         if muted:
             parts.append("禁言")
+        if kicked:
+            parts.append(kicked)
         if backed_up:
             parts.append("已备份")
+        if kick_note:
+            reason = f"{reason}；{kick_note}"
         action = "+".join(parts)
         live_set("hit", action, reason)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
         self._record_op(
             {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回", "miniapp": "小程序撤回",
-             "link": "链接撤回"}.get(kind, "关键词撤回"),
+             "link": "链接撤回", "groupcard": "群名片撤回"}.get(kind, "关键词撤回"),
             source="自动", group_id=group_id,
             target=user_id, reason=reason, result=action,
             detail=(f"{user_name}：" if user_name else "") + (text or "")[:200]
@@ -268,6 +285,91 @@ class KeywordGuardMixin:
             return (template.replace("{name}", user_name or user_id)
                     .replace("{uid}", user_id).replace("{group}", group_id))
         return None
+
+    # ------------------------------------------------------------------
+    # 命中后踢人（规则组的 kick / kick_days）
+    # ------------------------------------------------------------------
+    async def _hg_join_days(self, client, group_id: str, user_id: str) -> Optional[float]:
+        """这个人进群多少天了；不知道入群时间返回 None。先查本地成员缓存，没有再问一次协议端。"""
+        join_time = 0
+        cached = getattr(self, "_dir_cached_member", None)
+        if callable(cached):
+            try:
+                join_time = int((cached(group_id, user_id) or {}).get("join_time") or 0)
+            except Exception:
+                join_time = 0
+        if not join_time and client is not None and callable(getattr(self, "_call_group_api_result", None)):
+            try:
+                ok, info, _err = await self._call_group_api_result(
+                    client, "get_group_member_info", "查询入群时间",
+                    group_id=self._safe_int(group_id, 0), user_id=self._safe_int(user_id, 0), no_cache=True)
+                if ok and isinstance(info, dict):
+                    join_time = int(info.get("join_time") or 0)
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 查询入群时间失败({group_id}/{user_id}): {e}")
+        if join_time <= 0:
+            return None
+        return max(0.0, (time.time() - join_time) / 86400)
+
+    async def _hg_kick_check(self, client, group_id: str, user_id: str, action: dict) -> str:
+        """这个人能不能自动踢 → 不能踢的原因（空 = 可以踢）。宁可不踢：拿不准就按禁言处理。"""
+        exempt = getattr(self, "_is_blacklist_exempt", None)
+        if callable(exempt) and exempt(user_id):
+            return "插件管理员 / 白名单用户，不踢"
+        days_limit = int(action.get("kick_days", 0) or 0)
+        if days_limit > 0:
+            days = await self._hg_join_days(client, group_id, user_id)
+            if days is None:
+                return "不知道入群时间，没有踢"
+            if days > days_limit:
+                return f"入群已 {int(days)} 天（超过 {days_limit} 天），没有踢"
+        return ""
+
+    async def _hg_kick(self, event, group_id: str, user_id: str, action: dict, reason: str) -> Tuple[str, str]:
+        """按规则组设置踢人 → (结果：踢出 / 踢出并拉黑 / 空, 说明)。
+
+        block：先加入插件黑名单，在本群踢出并勾选「拒绝再次加群」，再在后台把他从其它管理的群里踢出。
+        群主 / 管理员踢不了（_kick_targets_in_group 会跳过并记失败）。
+        """
+        kicker = getattr(self, "_kick_targets_in_group", None)
+        if not callable(kicker):
+            return "", ""
+        client = await self._get_client(event)
+        if not client:
+            return "", "没有可用的 QQ 连接，没有踢"
+        why = await self._hg_kick_check(client, group_id, user_id, action)
+        if why:
+            return "", why
+        block = action.get("kick") == "block"
+        label = "踢出并拉黑" if block else "踢出"
+        why_text = f"命中规则自动{label}：{reason}"[:200]
+        if block:
+            self._add_user_blacklist(user_id, why_text, source="自动", group_id=group_id)
+        log = {"source": "自动", "operator": "", "reason": why_text}
+        result = await kicker(client, group_id, [str(user_id)], block, assume_present=True, log=log)
+        if str(user_id) not in [str(u) for u in result.get("kicked", [])]:
+            fail = result.get("skipped") or (result.get("failed") or {}).get(str(user_id)) or "踢人失败"
+            return "", f"{label}失败：{fail}" + ("（已加入黑名单）" if block else "")
+        if block and callable(getattr(self, "_kick_users_across_groups", None)):
+            # 其它群放到后台：逐个群查成员、踢人，不拖住这条消息后面的处理
+            tasks = getattr(self, "_hg_tasks", None)
+            if tasks is None:
+                tasks = self._hg_tasks = set()
+
+            async def others():
+                try:
+                    groups, _err = await self._list_managed_groups(client)
+                    rest = [g for g in groups if str(g) != str(group_id)]
+                    if rest:
+                        await self._kick_users_across_groups(client, [str(user_id)], True, groups=rest,
+                                                             reason=why_text, source="自动")
+                except Exception as e:
+                    logger.warning(f"[GroupMgr] 在其它群踢出 {user_id} 出错: {e}")
+
+            task = asyncio.create_task(others())
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+        return label, ""
 
     # ------------------------------------------------------------------
     # 流水线入口

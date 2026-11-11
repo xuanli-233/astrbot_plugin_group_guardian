@@ -1073,10 +1073,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
       <!-- ===== 最小化插件新增页面（数据来自 /minimal/* 接口） ===== -->
       <div class="tab-panel" id="tab-guard">
         <div class="page-header"><h1>拦截规则</h1><button class="btn btn-ghost btn-sm" id="btnGuardRefresh">刷新</button></div>
-        <p class="mn-intro">群消息命中下面<strong>你自己的规则组</strong>时：先把原消息备份到转发群，再撤回，按组的设置禁言、提示。原版插件自带的词库与 AI 审核已删除。</p>
+        <p class="mn-intro">群消息命中下面<strong>你自己的规则组</strong>时：先把原消息备份到转发群，再撤回，按组的设置禁言、提示，或者直接踢出并拉黑（可以限定只踢刚进群的人）。原版插件自带的词库与 AI 审核已删除。</p>
         <div class="split" id="rgSplit">
           <div class="card">
-            <div class="card-header"><h2>撤回 / 禁言规则组</h2><button class="btn btn-primary btn-sm" id="btnRgNew">新建</button></div>
+            <div class="card-header"><h2>规则组</h2><div class="header-actions"><button class="btn btn-outline btn-sm" id="btnRgPreset" title="按「勤工俭学 / 兼职进群」这类引流广告预填一个规则组：关键词 + 群名片 + 新成员踢出并拉黑，检查后保存">＋ 引流广告预设</button><button class="btn btn-primary btn-sm" id="btnRgNew">新建</button></div></div>
             <p class="mn-hint" style="padding:8px 18px 0">从上往下检查，第一个命中的组决定怎么处理；「默认组」最后检查，码黑名单 / 超限 / 解不出的码也用它的处理方式。</p>
             <div class="split-list" id="rgList"><div class="split-empty">加载中...</div></div>
           </div>
@@ -1090,6 +1090,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="mn-row" style="margin-top:6px"><input class="input-sm" id="rgTestCode" style="flex:1" placeholder="码内容（可选），例如 https://weixin.qq.com/g/xxx" />
               <input class="input-sm" id="rgTestApp" style="width:180px" placeholder="小程序名或 appid（可选）" />
               <input class="input-sm" id="rgTestTitle" style="width:200px" placeholder="小程序卡片标题（可选）" />
+              <input class="input-sm" id="rgTestCard" style="width:170px" placeholder="群名片分享的群号（可选）" />
               <button class="btn btn-outline btn-sm" id="btnRgTest">测试</button></div>
             <div id="rgTestResult"></div>
           </div>
@@ -4392,11 +4393,25 @@ function rgAppBuild(r) {
   if (!r.app && !cond) return '';
   return cond ? (r.app || '*') + ' | ' + cond : r.app;
 }
+var RG_KICK_TEXT = { kick: '踢出本群', block: '踢出并拉黑' };
 function rgActionText(a) {
   var parts = ['撤回'];
-  if (a.mute) parts.push('禁言 ' + rgMinutesText(a.mute_minutes));
+  if (a.kick) parts.push((Number(a.kick_days) > 0 ? '入群 ' + a.kick_days + ' 天内' : '') + RG_KICK_TEXT[a.kick]);
+  if (a.mute) parts.push((a.kick ? '否则' : '') + '禁言 ' + rgMinutesText(a.mute_minutes));
   if (a.notice) parts.push('提示');
   return parts.join(' + ');
+}
+// 「引流广告」预设：勤工俭学 / 兼职拉群这类广告的常见写法 + 分享别的群的名片；刚进群的直接踢出并拉黑
+function rgPresetDraft() {
+  return { id: 0, is_default: false, name: '引流广告（自动踢）', enabled: true, scope: [],
+    keywords: [
+      { type: 'contains', value: '勤工俭学' }, { type: 'contains', value: '勤工助学' },
+      { type: 'regex', value: '(勤工|兼职|助学|副业).{0,40}(进群|加群|QQ ?群|新群)' },
+      { type: 'regex', value: '统计人数.{0,6}签到' },
+      { type: 'regex', value: '群里?一会.{0,4}满' }
+    ],
+    codes: [], apps: [], cards: { group_card: 'others', allow: '' },
+    action: { mute: true, mute_minutes: 10080, notice: false, notice_template: '', kick: 'block', kick_days: 7 } };
 }
 function rgMinutesText(m) { m = Number(m); return m % 1440 === 0 ? (m / 1440) + ' 天' : (m % 60 === 0 ? (m / 60) + ' 小时' : m + ' 分钟'); }
 function rgScopeText(g) {
@@ -4443,7 +4458,7 @@ function rgRenderList() {
       '<div class="si-main"><div class="si-title">' + (g.is_default ? '' : '<span class="mn-hint">' + (i + 1) + '.</span> ') + esc(g.name) +
       (g.is_default ? ' <span class="mn-chip">默认 · 最后检查</span>' : '') + (g.enabled ? '' : ' <span class="mn-chip">已停用</span>') +
       (on && RG.dirty ? ' <span class="rg-dirty">未保存</span>' : '') + '</div>' +
-      '<div class="si-sub">关键词 ' + g.keywords.length + ' · 码 ' + g.code_rules.length + ' · 小程序 ' + g.apps.length + ' ｜ ' + esc(rgActionText(g.action)) + ' ｜ ' + esc(rgScopeText(g)) + '</div></div></div>';
+      '<div class="si-sub">关键词 ' + g.keywords.length + ' · 码 ' + g.code_rules.length + ' · 小程序 ' + g.apps.length + ((g.cards || {}).group_card ? ' · 群名片' : '') + ' ｜ ' + esc(rgActionText(g.action)) + ' ｜ ' + esc(rgScopeText(g)) + '</div></div></div>';
   }).join('');
   if (RG.sel === 'new') html = '<div class="split-item on"><div class="si-main"><div class="si-title">（新规则组） <span class="rg-dirty">未保存</span></div><div class="si-sub">在右边填写后保存</div></div></div>' + html;
   $('#rgList').innerHTML = html || '<div class="split-empty">还没有规则组</div>';
@@ -4452,16 +4467,18 @@ function rgToDraft(g) {
   return {
     id: g.id, is_default: g.is_default, name: g.name, enabled: g.enabled, scope: (g.scope || []).slice(),
     keywords: g.keywords.map(mnRuleParse), codes: g.code_rules.map(rgCodeParse), apps: g.apps.map(rgAppParse),
-    action: Object.assign({ mute: false, mute_minutes: 30, notice: false, notice_template: '' }, g.action)
+    cards: { group_card: (g.cards || {}).group_card || '', allow: ((g.cards || {}).allow || []).join(' ') },
+    action: Object.assign({ mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 }, g.action)
   };
 }
 async function rgSelect(id, silent) {
   if (!silent && RG.dirty && !(await mnConfirm('当前规则组的修改还没保存，放弃修改？', { okText: '放弃修改', danger: true }))) return;
   RG.dirty = false;
-  if (id === 'new') {
+  if (id === 'new' || id === 'preset') {
     RG.sel = 'new';
-    RG.draft = { id: 0, is_default: false, name: '', enabled: true, scope: [], keywords: [{ type: 'contains', value: '' }], codes: [], apps: [],
-      action: { mute: false, mute_minutes: 30, notice: false, notice_template: '' } };
+    RG.draft = id === 'preset' ? rgPresetDraft() : { id: 0, is_default: false, name: '', enabled: true, scope: [], keywords: [{ type: 'contains', value: '' }], codes: [], apps: [],
+      cards: { group_card: '', allow: '' },
+      action: { mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 } };
     RG.dirty = true;
   } else {
     var g = RG.groups.filter(function(x) { return x.id === Number(id); })[0];
@@ -4517,7 +4534,19 @@ function rgRenderEditor() {
     '<div class="rg-sec"><h3>小程序 <span class="n">' + d.apps.length + ' 条 · 卡片和 #小程序:// 链接都算；可以只拦某个小程序里标题符合条件的</span></h3>' +
     '<div class="rg-rows">' + rgRowsHtml('app') + '</div><datalist id="rgAppList">' + rgAppOptions() + '</datalist>' +
     '<div class="rg-presets"><button class="btn btn-outline btn-sm" data-rg-add="app">＋ 添加小程序</button><span class="mn-hint">小程序名包含即命中；在「小程序」页详情里也可以「按这个标题拉黑」</span></div></div>' +
-    '<div class="rg-sec"><h3>命中后</h3><div class="mn-row"><span>撤回（总是）</span>' +
+    '<div class="rg-sec"><h3>群名片 <span class="n">有人在群里分享另一个群的名片（「推荐群聊」卡片）</span></h3>' +
+    '<div class="mn-row" style="margin:0"><select class="input-sm" style="width:300px" data-rg-f="card_mode">' +
+    [['', '不检查'], ['others', '分享别的群的名片就命中（机器人也在的群除外）'], ['all', '分享任何群的名片都命中']].map(function(o) { return '<option value="' + o[0] + '"' + (d.cards.group_card === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+    '<input class="input-sm" style="flex:1;min-width:200px" data-rg-f="card_allow" value="' + escAttr(d.cards.allow) + '"' + (d.cards.group_card ? '' : ' disabled') + ' placeholder="另外允许分享的群号，空格分隔（可不填）" /></div>' +
+    '<p class="mn-hint">正常成员很少往群里发别的群的名片，这是引流广告最明显的特征。分享机器人所在的群（你自己的其它群）不算。</p></div>' +
+    '<div class="rg-sec"><h3>命中后</h3>' +
+    '<div class="mn-row"><span>撤回（总是）</span><label style="margin-left:8px">然后</label>' +
+    '<select class="input-sm" style="width:250px" data-rg-f="kick">' +
+    [['', '不踢人'], ['kick', '踢出本群'], ['block', '踢出并拉黑（所有管理的群 + 黑名单）']].map(function(o) { return '<option value="' + o[0] + '"' + ((d.action.kick || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+    (d.action.kick ? '<span>只踢入群不满</span><input type="number" min="0" max="3650" class="input-sm" style="width:70px" data-rg-f="kick_days" value="' + escAttr(d.action.kick_days) + '" /><span>天的人</span><span class="mn-hint">0 = 不看入群时间</span>' : '') + '</div>' +
+    (d.action.kick ? '<p class="mn-hint" style="margin:0 0 8px">' + (d.action.kick === 'block' ? '踢出并拉黑：加入插件黑名单，在本群踢出并勾选「拒绝再次加群」，再把他从其它管理的群里踢出。' : '') +
+      '被踢后会触发「退群后处理」里开启的退群撤回、退群删文件、踢人后暂停加群。<b>不会踢</b>：群主、管理员、插件管理员、白名单用户；入群时间超过上面的天数或查不到入群时间的人——这些情况按下面的禁言处理。</p>' : '') +
+    '<div class="mn-row"><span>' + (d.action.kick ? '没有踢的时候' : '') + '</span>' +
     '<label><input type="checkbox" data-rg-f="mute"' + (d.action.mute ? ' checked' : '') + ' /> 同时禁言</label>' +
     '<select class="input-sm" style="width:110px" data-rg-f="mute_minutes"' + (d.action.mute ? '' : ' disabled') + '>' + muteOpts.map(function(x) { return '<option value="' + x + '"' + (x === m ? ' selected' : '') + '>' + rgMinutesText(x) + '</option>'; }).join('') + '<option value="custom">自定义…</option></select></div>' +
     '<div class="mn-row" style="margin:0"><label><input type="checkbox" data-rg-f="notice"' + (d.action.notice ? ' checked' : '') + ' /> 群内提示</label>' +
@@ -4545,6 +4574,10 @@ function rgField(path, el) {
   } else if (path === 'name') d.name = v;
   else if (path === 'enabled') d.enabled = v;
   else if (path === 'mute') { d.action.mute = v; rgRenderEditorKeep(); }
+  else if (path === 'card_mode') { d.cards.group_card = v; rgRenderEditorKeep(); }
+  else if (path === 'card_allow') d.cards.allow = v;
+  else if (path === 'kick') { d.action.kick = v; rgRenderEditorKeep(); }
+  else if (path === 'kick_days') d.action.kick_days = v === '' ? '' : Number(v);
   else if (path === 'notice') { d.action.notice = v; rgRenderEditorKeep(); }
   else if (path === 'notice_template') d.action.notice_template = v;
   else if (path === 'mute_minutes') {
@@ -4573,12 +4606,25 @@ function rgCollect() {
   var scope = some ? $$('.rg-scope-ck').filter(function(c) { return c.checked; }).map(function(c) { return c.value; }) : [];
   if (some && !scope.length) bad.push('选了「只在勾选的群」，但没有勾选群');
   if (!String(d.name).trim()) bad.push('请填写组名');
+  var allow = String(d.cards.allow || '').split(/[\s,，;；]+/).filter(Boolean);
+  if (allow.some(function(x) { return !/^\d+$/.test(x); })) bad.push('允许分享的群号只能填数字，用空格分隔');
+  var kd = Number(d.action.kick_days);
+  if (d.action.kick && !(d.action.kick_days !== '' && kd >= 0 && kd <= 3650 && Math.floor(kd) === kd)) bad.push('入群天数填 0–3650 的整数（0 = 不看入群时间）');
+  if (d.action.kick && !kw.length && !codes.length && !apps.length && !d.cards.group_card) bad.push('选了踢人，但这个组没有任何规则');
   return { bad: bad, data: { id: d.id || undefined, name: String(d.name).trim(), enabled: d.is_default ? true : d.enabled, scope: scope,
-    keywords: kw, code_rules: codes, apps: apps, action: d.action } };
+    keywords: kw, code_rules: codes, apps: apps, cards: { group_card: d.cards.group_card, allow: allow },
+    action: Object.assign({}, d.action, { kick_days: d.action.kick ? kd : (Number(d.action.kick_days) || 7) }) } };
 }
 async function rgSave() {
   var c = rgCollect();
   if (c.bad.length) { $('#rgErr').innerHTML = '<div class="mn-result err">' + c.bad.map(esc).join('<br>') + '</div>'; return; }
+  // 踢人不可撤销：保存前说清楚会发生什么
+  var a = c.data.action, was = (RG.groups.filter(function(x) { return x.id === c.data.id; })[0] || {}).action || {};
+  if (a.kick && (was.kick !== a.kick || Number(was.kick_days) !== Number(a.kick_days))) {
+    var who = Number(a.kick_days) > 0 ? '入群不满 ' + a.kick_days + ' 天的成员' : '任何成员（不看入群时间）';
+    if (!(await mnConfirm('保存后，' + who + '只要命中「' + c.data.name + '」里的任意一条规则，就会被自动' + RG_KICK_TEXT[a.kick] + '，不需要人工确认。' +
+      (Number(a.kick_days) > 0 ? '' : '\n\n没有限定入群时间，老成员误触规则也会被踢。') + '\n\n建议先用页面下方的「测试规则组」试几条正常消息。', { okText: '保存', danger: true }))) return;
+  }
   var res = await safePost('minimal/rulegroups/save', { group: c.data });
   if (isApiError(res)) { $('#rgErr').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res) || {};
@@ -4644,18 +4690,21 @@ function rgOnInput(e) {
 }
 async function rgTest() {
   var out = $('#rgTestResult');
-  var data = { text: $('#rgTestText').value, code: $('#rgTestCode').value, app: $('#rgTestApp').value, title: $('#rgTestTitle').value, group_id: $('#rgTestGroup').value };
-  if (!data.text.trim() && !data.code.trim() && !data.app.trim() && !data.title.trim()) { out.innerHTML = '<div class="mn-result no">请先输入要测试的内容</div>'; return; }
+  var data = { text: $('#rgTestText').value, code: $('#rgTestCode').value, app: $('#rgTestApp').value, title: $('#rgTestTitle').value, group_id: $('#rgTestGroup').value,
+    card_group: $('#rgTestCard').value.trim() };
+  if (!data.text.trim() && !data.code.trim() && !data.app.trim() && !data.title.trim() && !data.card_group) { out.innerHTML = '<div class="mn-result no">请先输入要测试的内容</div>'; return; }
   var res = await safePost('minimal/rulegroups/test', data);
   if (isApiError(res)) { out.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res) || {};
   var line = function(label, r, filled) {
     if (!filled) return '';
-    return r ? '<div class="mn-result ok">' + label + '：会被撤回，命中「' + esc(r.group) + '」的规则「' + esc(r.rule) + '」</div>'
+    var g = r ? RG.groups.filter(function(x) { return x.name === r.group; })[0] : null;
+    return r ? '<div class="mn-result ok">' + label + '：命中「' + esc(r.group) + '」的规则「' + esc(r.rule) + '」，处理方式：' + esc(g ? rgActionText(g.action) : '撤回') + '</div>'
       : '<div class="mn-result no">' + label + '：不会命中</div>';
   };
   out.innerHTML = line('消息文字', d.text, data.text.trim()) + line('码内容', d.code, data.code.trim()) +
-    line('小程序', d.app, data.app.trim() || data.title.trim() || /#小程序:\/\//.test(data.text));
+    line('小程序', d.app, data.app.trim() || data.title.trim() || /#小程序:\/\//.test(data.text)) +
+    line('群名片', d.card, data.card_group);
 }
 
 function mnToggleDriverRows() {
@@ -7965,6 +8014,7 @@ function initMinimalPages() {
   bindIfExists('wxDriver', mnToggleDriverRows, 'change');
   bindIfExists('ocrDriver', mnToggleDriverRows, 'change');
   bindIfExists('btnRgNew', function() { rgSelect('new'); });
+  bindIfExists('btnRgPreset', function() { rgSelect('preset'); });
   bindIfExists('btnRgTest', rgTest);
   var rgSplit = document.getElementById('rgSplit');
   if (rgSplit) { rgSplit.addEventListener('click', rgOnClick); rgSplit.addEventListener('input', rgOnInput); rgSplit.addEventListener('change', rgOnInput); }

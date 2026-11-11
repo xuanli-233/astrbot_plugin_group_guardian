@@ -28,6 +28,10 @@ RG_NAME_MAX = 40
 RG_TEMPLATE_MAX = 200
 RG_APP_MAX_LEN = 300          # 一条小程序条目（含标题条件）
 RG_APP_NAME_MAX = 64
+RG_CARD_ALLOW_MAX = 200       # 群名片规则：允许分享的群号上限
+RG_CARD_MODES = {"": "不检查", "others": "分享别的群的名片", "all": "分享任何群的名片"}
+RG_KICK_MODES = {"": "不踢", "kick": "踢出本群", "block": "踢出并拉黑"}
+RG_KICK_DAYS_DEFAULT = 7
 DEFAULT_NOTICE = "[群管] {name} 的消息含违规内容，已撤回"
 
 
@@ -62,6 +66,10 @@ class RuleGroupMixin:
                 "code_rules TEXT NOT NULL DEFAULT '[]', apps TEXT NOT NULL DEFAULT '[]', "
                 "action TEXT NOT NULL DEFAULT '{}', updated_at INTEGER NOT NULL DEFAULT 0)"
             )
+            # 群名片规则：{"group_card": "" / "others" / "all", "allow": [允许分享的群号]}
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(rule_groups)").fetchall()}
+            if "cards" not in cols:
+                conn.execute("ALTER TABLE rule_groups ADD COLUMN cards TEXT NOT NULL DEFAULT '{}'")
             has_default = conn.execute("SELECT 1 FROM rule_groups WHERE is_default=1").fetchone()
             if not has_default:
                 self._rg_migrate(conn)
@@ -99,16 +107,30 @@ class RuleGroupMixin:
                 return default
             return value if isinstance(value, type(default)) else default
         action = load(row["action"], {})
+        cards = load(row["cards"], {}) if "cards" in row.keys() else {}
+        kick = str(action.get("kick") or "")
+        try:
+            kick_days = int(action.get("kick_days", RG_KICK_DAYS_DEFAULT))
+        except (TypeError, ValueError):
+            kick_days = RG_KICK_DAYS_DEFAULT
         return {
             "id": int(row["id"]), "name": row["name"], "enabled": bool(row["enabled"]), "sort": int(row["sort"]),
             "is_default": bool(row["is_default"]), "scope": [str(x) for x in load(row["scope"], [])],
             "keywords": load(row["keywords"], []), "code_rules": load(row["code_rules"], []),
             "apps": load(row["apps"], []),
+            "cards": {
+                "group_card": str(cards.get("group_card") or "") if str(cards.get("group_card") or "") in RG_CARD_MODES else "",
+                "allow": [str(x) for x in (cards.get("allow") or []) if str(x).isdigit()],
+            },
             "action": {
                 "mute": bool(action.get("mute", False)),
                 "mute_minutes": int(action.get("mute_minutes", 30) or 30),
                 "notice": bool(action.get("notice", False)),
                 "notice_template": str(action.get("notice_template", "") or ""),
+                # kick：命中后踢人（"" 不踢 / kick 踢出本群 / block 所有管理的群踢出并加入黑名单）
+                # kick_days：只踢入群不满这么多天的人（0 = 不看入群时间）；不满足时按上面的禁言处理
+                "kick": kick if kick in RG_KICK_MODES else "",
+                "kick_days": max(0, min(3650, kick_days)),
             },
             "updated_at": int(row["updated_at"] or 0),
         }
@@ -128,6 +150,7 @@ class RuleGroupMixin:
             g["_code"] = self._compile_rule_list(tuple(g["code_rules"]), regex_only=True)
             g["_apps"] = self._rg_compile_apps(g["apps"])
             g["_scope"] = set(g["scope"])
+            g["_card_allow"] = set(g["cards"]["allow"])
         self._rg_cache = groups
         return groups
 
@@ -173,6 +196,35 @@ class RuleGroupMixin:
             rule = self._match_compiled(text, g["_code"])
             if rule:
                 return g, rule
+        return None, None
+
+    def _rg_own_groups(self) -> set:
+        """机器人所在的群（群成员缓存里的群列表）。分享这些群的名片不算引流。"""
+        fn = getattr(self, "_dir", None)
+        try:
+            return {str(g) for g in (fn()["groups"] if callable(fn) else {})}
+        except Exception:
+            return set()
+
+    def _rg_match_card(self, card: dict, group_id: str = "") -> Tuple[Optional[dict], Optional[str]]:
+        """一张卡片 → (命中的组, 命中说明)。目前只有群名片（分享另一个群）这一种卡片规则。"""
+        if not isinstance(card, dict) or card.get("share_type") != "group":
+            return None, None
+        uin = str(card.get("share_uin") or "")
+        label = f"群名片 {card.get('title') or ''}（{uin or '群号未知'}）".replace("  ", " ")
+        own = None
+        for g in self._rg_applicable(group_id):
+            mode = g["cards"]["group_card"]
+            if not mode or (uin and uin in g["_card_allow"]):
+                continue
+            if mode == "all":
+                return g, label
+            if own is None:
+                own = self._rg_own_groups()
+            if not own:
+                continue   # 还不知道机器人在哪些群：不判断，避免把自己群的名片当成引流
+            if not uin or uin not in own:
+                return g, label
         return None, None
 
     # 小程序条目写法：
@@ -297,12 +349,42 @@ class RuleGroupMixin:
         if not 1 <= minutes <= 43200:
             return None, "禁言时长填 1–43200 分钟（最长 30 天）", []
         scope = [str(x).strip() for x in (data.get("scope") or []) if str(x).strip().isdigit()]
+        cards = data.get("cards") if isinstance(data.get("cards"), dict) else {}
+        card_mode = str(cards.get("group_card") or "")
+        if card_mode not in RG_CARD_MODES:
+            return None, "群名片规则只能是：不检查 / 分享别的群的名片 / 分享任何群的名片", []
+        raw_allow = cards.get("allow")
+        if isinstance(raw_allow, str):
+            raw_allow = raw_allow.replace(",", " ").replace("，", " ").split()
+        allow = []
+        for x in raw_allow or []:
+            x = str(x).strip()
+            if not x:
+                continue
+            if not x.isdigit():
+                return None, f"允许分享的群号只能填数字（「{x[:20]}」）", []
+            if x not in allow:
+                allow.append(x)
+        if len(allow) > RG_CARD_ALLOW_MAX:
+            return None, f"允许分享的群号过多（上限 {RG_CARD_ALLOW_MAX} 个）", []
+        kick = str(action.get("kick") or "")
+        if kick not in RG_KICK_MODES:
+            return None, "踢人方式只能是：不踢 / 踢出本群 / 踢出并拉黑", []
+        raw_days = action.get("kick_days")
+        try:
+            kick_days = RG_KICK_DAYS_DEFAULT if raw_days in (None, "") else int(raw_days)
+        except (TypeError, ValueError):
+            return None, "入群天数要填整数", []
+        if not 0 <= kick_days <= 3650:
+            return None, "入群天数填 0–3650（0 = 不看入群时间）", []
         return {
             "name": name, "enabled": bool(data.get("enabled", True)), "scope": sorted(set(scope)),
             "keywords": keywords, "code_rules": code_rules, "apps": apps,
+            "cards": {"group_card": card_mode, "allow": allow},
             "action": {"mute": bool(action.get("mute", False)), "mute_minutes": minutes,
                        "notice": bool(action.get("notice", False)),
-                       "notice_template": str(action.get("notice_template", "") or "").strip()[:RG_TEMPLATE_MAX]},
+                       "notice_template": str(action.get("notice_template", "") or "").strip()[:RG_TEMPLATE_MAX],
+                       "kick": kick, "kick_days": kick_days},
         }, "", []
 
     def _rg_save(self, data: dict, source: str = "WebUI", operator: str = "") -> Tuple[Optional[dict], str, list]:
@@ -315,7 +397,8 @@ class RuleGroupMixin:
         now = int(time.time())
         values = (fields["name"], int(fields["enabled"]), json.dumps(fields["scope"]),
                   json.dumps(fields["keywords"], ensure_ascii=False), json.dumps(fields["code_rules"], ensure_ascii=False),
-                  json.dumps(fields["apps"], ensure_ascii=False), json.dumps(fields["action"], ensure_ascii=False), now)
+                  json.dumps(fields["apps"], ensure_ascii=False), json.dumps(fields["action"], ensure_ascii=False),
+                  json.dumps(fields["cards"], ensure_ascii=False), now)
         with self._storage._connect() as conn:
             if gid:
                 row = conn.execute("SELECT * FROM rule_groups WHERE id=?", (gid,)).fetchone()
@@ -324,7 +407,7 @@ class RuleGroupMixin:
                 if row["is_default"] and not fields["enabled"]:
                     return None, "默认组不能停用（码黑名单等撤回要用它的处理方式）；不想要它的规则可以清空", []
                 conn.execute("UPDATE rule_groups SET name=?, enabled=?, scope=?, keywords=?, code_rules=?, apps=?, "
-                             "action=?, updated_at=? WHERE id=?", values + (gid,))
+                             "action=?, cards=?, updated_at=? WHERE id=?", values + (gid,))
                 op = "修改规则组"
             else:
                 count = conn.execute("SELECT COUNT(*) AS c FROM rule_groups").fetchone()["c"]
@@ -333,8 +416,8 @@ class RuleGroupMixin:
                 sort = conn.execute("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM rule_groups WHERE is_default=0"
                                     ).fetchone()["s"]
                 cur = conn.execute(
-                    "INSERT INTO rule_groups(name, enabled, scope, keywords, code_rules, apps, action, updated_at, sort, "
-                    "is_default) VALUES(?,?,?,?,?,?,?,?,?,0)", values + (sort,))
+                    "INSERT INTO rule_groups(name, enabled, scope, keywords, code_rules, apps, action, cards, updated_at, "
+                    "sort, is_default) VALUES(?,?,?,?,?,?,?,?,?,?,0)", values + (sort,))
                 gid = int(cur.lastrowid)
                 op = "新建规则组"
             conn.commit()
@@ -409,15 +492,23 @@ class RuleGroupMixin:
         try:
             a = group["action"]
             detail = (f"{group['name']}：关键词 {len(group['keywords'])} 条、码规则 {len(group['code_rules'])} 条、"
-                      f"小程序 {len(group['apps'])} 个；" + ("禁言 %d 分钟" % a["mute_minutes"] if a["mute"] else "不禁言")
-                      + ("、群内提示" if a["notice"] else ""))
+                      f"小程序 {len(group['apps'])} 个"
+                      + (f"、群名片（{RG_CARD_MODES[group['cards']['group_card']]}）" if group["cards"]["group_card"] else "")
+                      + "；" + ("禁言 %d 分钟" % a["mute_minutes"] if a["mute"] else "不禁言")
+                      + ("、群内提示" if a["notice"] else "")
+                      + (f"、{RG_KICK_MODES[a['kick']]}"
+                         + (f"（入群不满 {a['kick_days']} 天）" if a["kick_days"] else "（不看入群时间）") if a["kick"] else ""))
             record(op, source=source, operator=operator, detail=detail)
         except Exception as e:
             logger.debug(f"[GroupMgr] 记录规则组操作失败: {e}")
 
-    def _rg_test(self, text: str = "", code: str = "", app: str = "", group_id: str = "", title: str = "") -> dict:
-        """WebUI 测试：分别返回文字、码内容、小程序命中的组和规则。"""
+    def _rg_test(self, text: str = "", code: str = "", app: str = "", group_id: str = "", title: str = "",
+                 card_group: str = "") -> dict:
+        """WebUI 测试：分别返回文字、码内容、小程序、群名片命中的组和规则。card_group：群名片分享的群号。"""
         out = {}
+        if str(card_group or "").strip():
+            g, rule = self._rg_match_card({"share_type": "group", "share_uin": str(card_group).strip()}, group_id)
+            out["card"] = {"group": g["name"], "rule": rule} if g else None
         g, rule = self._rg_match_text(text, group_id)
         out["text"] = {"group": g["name"], "rule": rule} if g else None
         g, rule = self._rg_match_code(code.strip(), group_id) if code.strip() else (None, None)
