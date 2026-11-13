@@ -14,6 +14,7 @@ QQ ── LuckyLilliaBot（协议端）── 反向 WebSocket（OneBot 11）─
 | AstrBot 管理面板 | `http://<AstrBot 所在机器>:6185` | 本插件的管理页面也在这里 |
 | AstrBot 的 OneBot 接入 | `ws://<AstrBot 所在机器>:6199/ws` | LuckyLilliaBot 主动连这个地址 |
 | 定位服务 / 解码服务 | `http://127.0.0.1:8100` / `http://127.0.0.1:8000` | 只在使用二维码 / 葵花码识别时需要，地址可在插件里修改 |
+| 文字识别服务（RapidOCR） | `http://127.0.0.1:8110` | 只在使用图片文字识别（OCR）时需要；在「识别服务与转发群 → 图片文字识别」里选「RapidOCR 文字识别服务」，见 [service_api/文字识别服务API.md](service_api/文字识别服务API.md) |
 
 > 下文中 AstrBot、LuckyLilliaBot 的界面名称以各自的官方文档为准，版本不同时菜单位置可能略有差异。
 

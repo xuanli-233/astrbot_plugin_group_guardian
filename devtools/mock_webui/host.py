@@ -586,7 +586,14 @@ class FakeOneBot:
         self.system(group_id, f"发布了群公告{f'（{flags}）' if flags else ''}：{content[:40]}")
         return _ok(None)
 
+    # 真实的 LuckyLilliaBot 没有 set_group_add_option（返回 retcode 1404）。默认按它模拟；
+    # 把 ADD_OPTION_SUPPORTED 改成 True 可以模拟 NapCat 等支持这个接口的协议端。
+    ADD_OPTION_SUPPORTED = False
+
     def act_set_group_add_option(self, group_id, add_type, **_):
+        if not self.ADD_OPTION_SUPPORTED:
+            msg = "set_group_add_option API 不存在"
+            return {"status": "failed", "retcode": 1404, "data": None, "message": msg, "wording": msg}
         err = self._need_admin(group_id)
         if err:
             return err
@@ -728,6 +735,26 @@ async def _mock_code_http_get(self, url, timeout=5.0):
     return 200, {"status": "ok", "ready": True}
 
 
+async def _mock_ocr_http_post(self, url, data, filename, mime, timeout):
+    """模拟 RapidOCR 文字识别服务：mock://ocr/<文字> 的图片识别出 <文字>（用 | 分行）；
+    页面上传的真实图片固定识别出两行示例文字；其它模拟图片没有文字。"""
+    ACTIONS.append({"time": time.strftime("%H:%M:%S"), "action": "HTTP " + url.split("/", 3)[-1],
+                    "params": {"bytes": len(data)}})
+    prefix = b"mock-image:mock://ocr/"
+    if data.startswith(prefix):
+        texts = [t for t in urllib.parse.unquote(data[len(prefix):].decode("utf-8", "ignore")).split("|") if t.strip()]
+    elif data.startswith(b"mock-image:"):
+        texts = []
+    else:
+        texts = ["模拟文字识别服务", "专业代刷 加微信"]
+    return 200, {"text": "\n".join(texts), "texts": texts, "count": len(texts),
+                 "timing_ms": {"queue": 0.03, "ocr": 180.0}}, {}
+
+
+async def _mock_ocr_http_get(self, url, timeout=5.0):
+    return 200, {"status": "ok"}
+
+
 def _initial_config(schema):
     config = AstrBotConfig({k: v.get("default") for k, v in schema.items()})
     config.update({
@@ -739,7 +766,7 @@ def _initial_config(schema):
         "wxcode_python_module": "wxcode_mock.py",
         "code_detect_api_key": "mock-key",
         "wxcode_regex_rules": ["invite", r"pages/.*share"],
-        "local_ocr_driver": "python",
+        "local_ocr_driver": "rapidocr",
         "local_ocr_python_module": "ocr_mock.py",
         "broadcast_interval_seconds": 1,
         "directory_min_interval_ms": 300,
@@ -776,6 +803,8 @@ def boot(plugin_parent: str):
     Main._download_bytes = fake_download
     Main._code_http_post = _mock_code_http_post
     Main._code_http_get = _mock_code_http_get
+    Main._ocr_http_post = _mock_ocr_http_post
+    Main._ocr_http_get = _mock_ocr_http_get
 
     CONTEXT = Context()
 

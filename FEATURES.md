@@ -25,7 +25,7 @@
 | 页面 | 内容 |
 | --- | --- |
 | 拦截规则 / 识别服务与转发群 | **撤回 / 禁言规则组**（每组：关键词、码内容正则、小程序（整个小程序，或 `小程序 | 标题条件` / `* | 标题条件` 按标题），命中后撤回 + 可选禁言 N 分钟 + 可选群内提示，可只对部分群生效；从上往下检查，默认组最后）、规则组测试、转发群（多个群，每个群勾选收哪些内容）、葵花码识别接入、OCR 接入 |
-| 批量发布 | 勾选群：发布群公告 / 待办公告（可上传配图、Ctrl+V 粘贴截图或填图片地址，查看待办确认情况）；**群消息**（文字 + 可选一张图片，也可以粘贴）；**群文件**（从电脑选择 30 MB 以内，或填服务器上的文件路径——AstrBot 与 LuckyLilliaBot 同机时可用，适合大文件）。都走批量任务，群之间按间隔执行 |
+| 批量发布 | 勾选群：发布群公告 / 待办公告（可上传配图、Ctrl+V 粘贴截图或填图片地址，查看待办确认情况）；**群消息**（文字 + 最多 9 张图片、合计 30 MB 以内，合成一条消息；可一次选多张、Ctrl+V 粘贴追加、调整顺序、单张去掉）；**群文件**（从电脑选择 30 MB 以内，或填服务器上的文件路径——AstrBot 与 LuckyLilliaBot 同机时可用，适合大文件）。都走批量任务，群之间按间隔执行 |
 | 群文件 | 勾选群扫描群文件（根目录 + 一级文件夹，后台进行、群之间按接口间隔）；按上传者 / 文件名 / 群筛选；「按上传者汇总」看谁在几个群传了文件，一键选中某人在所有群的文件；「重复文件」= 同一个群里文件名 + 大小相同的，保留最早的一份；勾选后批量删除（走批量任务，可暂停 / 重试，每个文件写操作记录「删除群文件」）；「去踢人 / 拉黑」跳到踢人页并填好 QQ。见 `group_files.py` |
 | 群名任务 | 各群群名一览，勾选群改后缀（立即 / 定时）、设置 / 停止 / 刷新倒计时；「刷新群列表」从 QQ 重新拉取所有群的最新群名；每行「改名」直接修改当前群名 |
 | 踢人与黑名单 | 跨群踢人 / 踢出并拉黑（拉黑必须填原因）、自动拉黑开关、插件用户黑名单（显示拉黑原因、来源、时间） |
@@ -47,7 +47,7 @@
 2. 在「转发群」里添加一个或多个群并勾选内容类别（配置 `backup_routes`），机器人需在这些群内。
 3. 在「拦截规则 → 撤回 / 禁言规则组」里写规则（第一次启动时原 `keyword_rules`、`wxcode_regex_rules` 已迁移成「默认组」）。关键词每行一条：`加微信`（包含即命中）、`=1`（整条消息就是“1”才命中）、`re:vx\s*\d{5,}`（正则）。
 4. 葵花码：`wxcode_enabled` 打开，按 [examples/wxcode_recognizer_example.py](examples/wxcode_recognizer_example.py) 接入识别模块，在 `wxcode_regex_rules` 写正则，转发到哪些群在「转发群」里勾选「二维码 / 葵花码命中」。
-5. OCR（以后再开）：`local_ocr_driver` 选 `llbot`（LLBot 自带的 `ocr_image`），或选 `http` / `python` 接自己的服务。识别出的文字按 `keyword_rules` 过滤。
+5. OCR：`local_ocr_driver` 选 `rapidocr`（自行部署的 RapidOCR 文字识别服务，`local_ocr_service_url` 留空 = `http://127.0.0.1:8110`，接口见 [service_api/文字识别服务API.md](service_api/文字识别服务API.md)）、`llbot`（LLBot 自带的 `ocr_image`），或选 `http` / `python` 接自己的服务。识别出的文字按规则组的关键词过滤（先按行，没命中再把各行连起来匹配一次）。在「识别服务与转发群」页可以测试连接、上传测试图片。
 
 ### 命中后的处理顺序
 
@@ -127,7 +127,7 @@ AstrBot 不把登录的面板用户传给插件，所以 WebUI 操作人靠 Clou
 | `keyword_guard.py` | 关键词规则解析与匹配、命中处理（备份 → 撤回 → 可选禁言 / 提示 → 日志），审核流水线入口 `_run_hit_guards` |
 | `message_backup.py` | 备份 / 转发到转发群 |
 | `backup_routes.py` | 转发群：多个群、每个群收哪些内容类别 |
-| `image_recognizer.py` | 葵花码 / OCR 识别器接口（http / python / llbot 驱动） |
+| `image_recognizer.py` | 葵花码 / OCR 识别器接口（http / python / llbot 驱动），以及 RapidOCR 文字识别服务对接（rapidocr 驱动：限流、503 重试、结果缓存、失败放行） |
 | `group_broadcast.py` | 批量公告、待办公告、确认情况 |
 | `group_files.py` | 群文件扫描 / 去重 / 批量删除、批量发言、批量传群文件、outbox/（待发送文件，7 天后清理） |
 | `group_name_task.py` | 群名后缀、定时改名、倒计时（任务存在 SQLite meta 表） |
@@ -221,7 +221,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | `/设置名片` `/头衔` | 改群名片 / 专属头衔 | `set_card_enabled` / `set_title_enabled` |
 | `/设置管理` `/取消管理` | 任免群管理员（需机器人是群主） | `set_admin_enabled` |
 | `/群名` | 改群名 | `set_group_name_enabled` |
-| `/加群方式` | 设置加群验证方式 | `join_verify_enabled` |
+| `/加群方式` | 设置加群验证方式（LuckyLilliaBot 没有这个接口，会提示不支持；NapCat 等可用） | `join_verify_enabled` |
 | `/发公告` `/删公告` `/公告列表` | 群公告 | `send_` / `delete_` / `list_announcements_enabled` |
 | `/文件列表` `/删文件` | 群文件 | `group_files_enabled` |
 | `/设精华` `/取消精华` | 精华消息 | `essence_enabled` |
@@ -254,7 +254,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 退群删文件：主动退群 / 被踢后删除他上传的群文件（根目录 + 一级文件夹，单次最多 200 个） | `leave_files.py` | `leave_files_enabled`（`_on_leave` / `_on_kick`） | 默认关 |
 | 引流广告自动处理：规则组新增「群名片」规则（`cards.group_card`：others 分享别的群的名片 / all 任何群；机器人所在的群和 `cards.allow` 里的群不算）和命中后踢人（`action.kick`：kick 踢出本群 / block 加入黑名单 + 本群踢出并拒绝再加群 + 后台踢出其它管理的群；`action.kick_days` 只踢入群不满 N 天的人，查不到入群时间、豁免用户、踢失败时按禁言处理）。WebUI「拦截规则」里的「＋ 引流广告预设」一键预填 | `card_parse._fill_share`（识别群名片卡片、取群号）、`rule_groups._rg_match_card`、`keyword_guard._hg_kick` / `_hg_kick_check`、`moderation.py`（群名片先于链接、关键词检查） | 规则组里设置，默认不踢 | 默认关 |
 | 链接管理：识别消息文字里的链接（http(s) 和常见后缀的裸域名）与非小程序卡片的链接，按主域名汇总次数 / 人 / 群 / 具体链接；拉黑域名（含子域名）或特定链接（可 `*` 前缀），命中按默认规则组撤回（转发类别 `link`，操作记录「链接撤回」）；白名单域名；读取网页标题（`link_title_mode`：off / manual / auto，安全限制见 `link_guard.py` 文件头）。WebUI「链接管理」，接口 `/minimal/links`、`/links/detail`、`/links/list`、`/links/title` | `link_guard.py`（表 `lk_sends` / `lk_urls` / `lk_lists`），`moderation.py` 里在卡片文字并入之前识别 | `link_guard_enabled`、`link_store_enabled`、`link_store_days`、`link_title_mode` | 启用（读标题默认手动） |
-| 踢人后暂停加群：有人被踢（管理员或插件踢，主动退群不算）后把群改成「禁止加群」，3–6 小时内随机一个不在夜间的时刻恢复；暂停期间再踢人只延后；恢复失败自动重试。LLBot 读不到原加群方式，到点改成 `kick_join_lock_restore_type`。WebUI「退群后处理」里设置、看暂停中的群、立即恢复 | `join_lock.py`（表 `join_locks`） | `kick_join_lock_enabled`（`_min_hours` / `_max_hours` / `_night_start` / `_night_end` / `_restore_type`） | 默认关 |
+| 踢人后暂停加群：有人被踢（管理员或插件踢，主动退群不算）后把群改成「禁止加群」，3–6 小时内随机一个不在夜间的时刻恢复；暂停期间再踢人只延后；恢复失败自动重试，到点改成 `kick_join_lock_restore_type`。**LuckyLilliaBot 没有修改加群方式的接口**（`set_group_add_option` 返回 1404）：自动改为暂停期间拒绝这个群的加群申请（回复 `kick_join_lock_reject_reason`），到点停止拒绝——只对「需要验证」的群有效。WebUI「退群后处理」里设置、看暂停中的群、立即恢复 | `join_lock.py`（表 `join_locks`） | `kick_join_lock_enabled`（`_min_hours` / `_max_hours` / `_night_start` / `_night_end` / `_restore_type` / `_reject_reason`） | 默认关 |
 
 ---
 

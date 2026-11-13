@@ -4,7 +4,8 @@
 在消息审核流水线中、内置规则审核之前执行（moderation._handle_message 调用 _run_hit_guards）：
   1. 消息正文（含合并转发内容）匹配 keyword_rules；
   2. 图片交给葵花码识别器，识别内容匹配 wxcode_regex_rules；
-  3. 图片交给 OCR 识别器（local_ocr_driver，默认关），识别文字再匹配 keyword_rules。
+  3. 图片交给 OCR 识别器（local_ocr_driver，默认关），识别文字再匹配 keyword_rules
+     （先按行匹配，没命中再把各行连起来匹配一次，见 _hg_ocr）。
 任一命中 → 先备份 / 转发到指定群 → 撤回 →（可选）禁言、群内提示 → 记审核日志 → 结束本条消息。
 
 有规则组（rule_groups.py）时：关键词 / 码内容规则 / 小程序都按规则组匹配，命中组的处理方式（禁言时长、群内提示）
@@ -386,6 +387,20 @@ class KeywordGuardMixin:
             return rule, self._rg_action(group)
         return self._match_rules(text, "keyword_rules"), None
 
+    def _hg_ocr(self, texts: List[str], group_id: str = "") -> Tuple[Optional[str], Optional[dict]]:
+        """OCR 识别出的各行文字 → (命中的规则, 处理方式)。
+
+        先按行（换行分隔）匹配；没命中再把各行直接连起来匹配一次：图片里的字常被排版断成两行
+        （「加微」/「信」），按行匹配会漏。
+        """
+        lines = [str(t).strip() for t in texts or [] if str(t or "").strip()]
+        if not lines:
+            return None, None
+        rule, action = self._hg_text("\n".join(lines), group_id)
+        if not rule and len(lines) > 1:
+            rule, action = self._hg_text("".join(lines), group_id)
+        return rule, action
+
     def _hg_code(self, text: str, group_id: str = "") -> Tuple[Optional[str], Optional[dict]]:
         """一个码的内容 → (命中说明, 处理方式)。白名单放行；已拉黑的码用默认组的处理方式（None）。"""
         t = str(text or "").strip()
@@ -529,10 +544,14 @@ class KeywordGuardMixin:
             live_stage("OCR 识别图片文字")
             texts = await self._recognize_images(image_urls, "local_ocr")
             joined = "\n".join(texts)
-            rule, ocr_action = self._hg_text(joined, group_id)
+            rule, ocr_action = self._hg_ocr(texts, group_id)
             ocr_text = " ".join(t.strip() for t in texts if t and t.strip())
-            live_detail([f"OCR 文字：{ocr_text[:150]}" + ("…" if len(ocr_text) > 150 else "")
-                         + (f" ← 命中规则 {rule}" if rule else "")] if ocr_text else ["OCR 未识别到文字"])
+            lines = [f"OCR 文字：{ocr_text[:150]}" + ("…" if len(ocr_text) > 150 else "")
+                     + (f" ← 命中规则 {rule}" if rule else "")] if ocr_text else []
+            # 没识别成功的图片说明原因（下载失败、服务不可用、格式跳过），不笼统写成「未识别到文字」
+            notes = getattr(self, "_recognize_last_notes", None)
+            lines += [f"OCR：{n}" for n in (notes() if callable(notes) else [])]
+            live_detail(lines or ["OCR 未识别到文字"])
             if rule:
                 notice = await self._execute_hit_action(
                     event, group_id, user_id, user_name, text or "[图片]", f"图片文字关键词: {rule}",

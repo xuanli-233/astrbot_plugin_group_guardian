@@ -681,6 +681,11 @@ class CommandsMixin:
             # set_group_add_option: OneBot API，修改群的加群验证方式
             ok, err = await self._call_group_api(client, 'set_group_add_option', "加群方式", group_id=gid, add_type=method)
             if not ok:
+                low = str(err or "").lower()
+                if "retcode=1404" in low or "api 不存在" in low or "api不存在" in low:
+                    # LuckyLilliaBot 没有修改加群方式的接口（NapCat 等有）
+                    yield event.plain_result("设置失败: 当前协议端没有修改加群方式的接口（LuckyLilliaBot 不支持），请在 QQ 里手动修改")
+                    return
                 yield event.plain_result(f"设置失败: {err}")
                 return
             yield event.plain_result(f"加群方式已设置为: {method_text}")

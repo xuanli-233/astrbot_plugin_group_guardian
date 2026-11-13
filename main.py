@@ -348,6 +348,10 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
             if await AutoAcceptMixin._handle_group_invite(self, event):
                 event.stop_event()
                 return
+            # 踢人后暂停加群（协议端不能改加群方式时）：暂停期间的加群申请直接拒绝，不再走入群审核
+            if await JoinLockMixin._jl_reject_request(self, event):
+                event.stop_event()
+                return
             handled = await MembershipMixin._handle_group_request(self, event)
             if handled:
                 event.stop_event()

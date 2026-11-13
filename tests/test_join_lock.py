@@ -35,12 +35,14 @@ class _Storage(SqliteConnectMixin):
 
 
 class _H(join_lock.JoinLockMixin):
-    def __init__(self, cfg=None, fail=()):
+    def __init__(self, cfg=None, fail=(), missing=False):
         self.cfg = {"kick_join_lock_enabled": True}
         self.cfg.update(cfg or {})
         self._storage = _Storage()
         self.fail = set(fail)        # 这些 add_type 调用失败
-        self.calls, self.ops = [], []
+        self.missing = missing       # 协议端没有 set_group_add_option
+        self.request_fail = False
+        self.calls, self.ops, self.requests = [], [], []
 
     def _get_raw_event(self, event):
         return event
@@ -71,8 +73,14 @@ class _H(join_lock.JoinLockMixin):
         return object()
 
     async def _call_group_api(self, client, action, name="", **kw):
+        if action == "set_group_add_request":
+            self.requests.append(kw)
+            return (False, "处理失败") if self.request_fail else (True, "")
         assert action == "set_group_add_option"
         self.calls.append((kw["group_id"], kw["add_type"]))
+        if self.missing:   # LuckyLilliaBot：没有这个接口
+            return False, ("<ActionFailed status='failed', retcode=1404, data=None, "
+                           "message='set_group_add_option API 不存在', wording='set_group_add_option API 不存在'>")
         if kw["add_type"] in self.fail:
             return False, "没有权限"
         return True, ""
@@ -219,6 +227,98 @@ class JoinLockTests(unittest.IsolatedAsyncioTestCase):
         ok, err = await h._jl_restore_group(object(), GID, source="WebUI")
         self.assertFalse(ok)
         self.assertIn("没有在暂停", err)
+
+
+def _request(uid=OTHER, flag="f1", sub_type="add", gid=GID, comment="想进群"):
+    return {"post_type": "request", "request_type": "group", "sub_type": sub_type, "group_id": gid,
+            "user_id": uid, "flag": flag, "comment": comment, "self_id": BOT}
+
+
+class RejectModeTests(unittest.IsolatedAsyncioTestCase):
+    """协议端没有 set_group_add_option（LuckyLilliaBot）：暂停期间自动拒绝加群申请。"""
+
+    def test_api_missing_detection(self):
+        self.assertTrue(join_lock.api_missing(
+            "<ActionFailed status='failed', retcode=1404, data=None, message='set_group_add_option API 不存在'>"))
+        self.assertTrue(join_lock.api_missing("加群方式失败：set_group_add_option API 不存在"))
+        for err in ("没有权限", "加群方式 超时（协议端 20s 无响应）", "", None, "retcode=100 群不存在"):
+            self.assertFalse(join_lock.api_missing(err))
+
+    async def test_missing_api_falls_back_to_rejecting_requests(self):
+        h = _H(missing=True)
+        res = await h._jl_lock_group(object(), GID, UID, now=_ts(10))
+        self.assertEqual((True, "reject"), (res["ok"], res["mode"]))
+        row = h._jl_get(GID)
+        self.assertEqual("reject", row["mode"])
+        action, op = h.ops[0]
+        self.assertEqual(("踢人后暂停加群", "成功"), (action, op["result"]))
+        self.assertIn("自动拒绝加群申请", op["detail"])
+        # 暂停期间的加群申请被拒绝，写操作记录
+        self.assertTrue(await h._jl_reject_request(_request(), now=_ts(11)))
+        self.assertEqual([{"flag": "f1", "sub_type": "add", "approve": False,
+                           "reason": "本群暂时停止加群，请过几小时再申请"}], h.requests)
+        action, op = h.ops[-1]
+        self.assertEqual(("暂停加群期间拒绝申请", OTHER), (action, op["target"]))
+        self.assertIn("想进群", op["detail"])
+        self.assertEqual(1, h._jl_status()[0]["reject_count"])
+        # 同一条申请重复上报：不重复拒绝、不重复记录
+        self.assertTrue(await h._jl_reject_request(_request(), now=_ts(11)))
+        self.assertEqual(1, len(h.requests))
+        # 到点：不调用改加群方式的接口，只是停止拒绝
+        calls = list(h.calls)
+        self.assertEqual(1, await h._jl_tick(now=row["unlock_at"]))
+        self.assertEqual(calls, h.calls)
+        self.assertIsNone(h._jl_get(GID))
+        self.assertIn("停止自动拒绝", h.ops[-1][1]["detail"])
+        self.assertIn("拒绝了 1 条", h.ops[-1][1]["detail"])
+        self.assertFalse(await h._jl_reject_request(_request(flag="f2"), now=row["unlock_at"] + 60))
+
+    async def test_interface_is_only_probed_once(self):
+        h = _H(missing=True)
+        await h._jl_lock_group(object(), GID, UID, now=_ts(10))
+        await h._jl_lock_group(object(), "200", UID, now=_ts(10))
+        self.assertEqual([(100, 2)], h.calls)
+        self.assertEqual("reject", h._jl_get("200")["mode"])
+
+    async def test_custom_reason_and_only_matching_requests(self):
+        h = _H({"kick_join_lock_reject_reason": "晚点再来"}, missing=True)
+        await h._jl_lock_group(object(), GID, UID, now=_ts(10))
+        due = h._jl_get(GID)["unlock_at"]
+        self.assertFalse(await h._jl_reject_request(_request(gid="300"), now=_ts(11)))          # 别的群
+        self.assertFalse(await h._jl_reject_request(_request(sub_type="invite"), now=_ts(11)))  # 邀请机器人进群
+        self.assertFalse(await h._jl_reject_request(_decrease(), now=_ts(11)))                  # 不是申请
+        self.assertFalse(await h._jl_reject_request(_request(), now=due))                       # 已到恢复时间
+        self.assertEqual([], h.requests)
+        self.assertTrue(await h._jl_reject_request(_request(), now=_ts(11)))
+        self.assertEqual("晚点再来", h.requests[0]["reason"])
+
+    async def test_reject_failure_leaves_request_to_normal_flow(self):
+        h = _H(missing=True)
+        await h._jl_lock_group(object(), GID, UID, now=_ts(10))
+        h.request_fail = True
+        self.assertFalse(await h._jl_reject_request(_request(), now=_ts(11)))
+        self.assertEqual(0, h._jl_status()[0]["reject_count"])
+        self.assertEqual(1, len(h.ops))   # 只有暂停那一条
+
+    async def test_option_mode_does_not_reject_requests(self):
+        h = _H()   # 协议端支持改加群方式：群已经是禁止加群，不需要拒绝申请
+        await h._jl_lock_group(object(), GID, UID, now=_ts(10))
+        self.assertEqual("option", h._jl_get(GID)["mode"])
+        self.assertFalse(await h._jl_reject_request(_request(), now=_ts(11)))
+        self.assertEqual([], h.requests)
+
+    async def test_old_table_is_migrated(self):
+        h = _H(missing=True)
+        with h._storage._connect() as conn:
+            conn.execute(
+                "CREATE TABLE join_locks (group_id TEXT PRIMARY KEY, locked_at INTEGER NOT NULL, "
+                "unlock_at INTEGER NOT NULL, last_kick_at INTEGER NOT NULL DEFAULT 0, "
+                "kick_count INTEGER NOT NULL DEFAULT 1, last_user TEXT NOT NULL DEFAULT '', "
+                "retry_count INTEGER NOT NULL DEFAULT 0, next_retry_at INTEGER NOT NULL DEFAULT 0, "
+                "last_error TEXT NOT NULL DEFAULT '')")
+            conn.execute("INSERT INTO join_locks(group_id, locked_at, unlock_at) VALUES('900', 1, 2)")
+            conn.commit()
+        self.assertEqual(("option", 0), (h._jl_get("900")["mode"], h._jl_get("900")["reject_count"]))
 
 
 if __name__ == "__main__":

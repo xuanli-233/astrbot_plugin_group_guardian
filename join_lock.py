@@ -10,11 +10,16 @@
   在 [最短, 最长] 里只从「不在夜间」的时刻中随机；整段都在夜间时，顺延到夜间结束的那一刻。
 暂停期间又有人被踢：结束时间取「原来的」和「这次算出的」两者中较晚的，不重复调用接口。
 
-恢复：LuckyLilliaBot 没有读取当前加群方式的接口，所以到点统一改成 kick_join_lock_restore_type
-（0 = 允许任何人，1 = 需要验证，默认 1）。恢复失败按 1、2、4…分钟退避重试（最长 1 小时）。
-暂停记录存在 SQLite 表 join_locks，重启不丢；功能关掉后已暂停的群仍会到点恢复。
-
-接口 set_group_add_option（add_type：0 允许任何人 / 1 需要验证 / 2 禁止加群），机器人需要是群主或管理员。
+两种做法（join_locks.mode）：
+  option  协议端有 set_group_add_option（add_type：0 允许任何人 / 1 需要验证 / 2 禁止加群，NapCat 等）：
+          改成禁止加群，到点统一改成 kick_join_lock_restore_type（0 / 1，默认 1；协议端读不到原来的方式）。
+          恢复失败按 1、2、4…分钟退避重试（最长 1 小时）。
+  reject  协议端没有这个接口（LuckyLilliaBot：OneBot 动作表和内部实现里都没有修改加群方式的功能，
+          调用返回 retcode 1404「API 不存在」）：暂停期间自动拒绝这个群的加群申请
+          （set_group_add_request approve=false，理由 kick_join_lock_reject_reason），到点停止拒绝。
+          只对「需要验证」的群有效——「允许任何人」的群没有申请可拒，拦不住。
+第一次调用发现接口不存在后记在内存里，之后不再调用（重启后会再试一次）。
+暂停记录存在 SQLite 表 join_locks，重启不丢；功能关掉后已暂停的群仍会到点恢复。机器人需要是群主或管理员。
 """
 import asyncio
 import random
@@ -33,7 +38,17 @@ except ImportError:  # 单元测试直接加载本文件
 
 ADD_TYPE_ALLOW, ADD_TYPE_VERIFY, ADD_TYPE_FORBID = 0, 1, 2
 ADD_TYPE_TEXT = {ADD_TYPE_ALLOW: "允许任何人", ADD_TYPE_VERIFY: "需要验证", ADD_TYPE_FORBID: "禁止加群"}
-OP_LOCK, OP_RESTORE = "踢人后暂停加群", "恢复加群方式"
+OP_LOCK, OP_RESTORE, OP_REJECT = "踢人后暂停加群", "恢复加群方式", "暂停加群期间拒绝申请"
+MODE_OPTION, MODE_REJECT = "option", "reject"
+DEFAULT_REJECT_REASON = "本群暂时停止加群，请过几小时再申请"
+
+
+def api_missing(err) -> bool:
+    """协议端的报错是不是「没有这个接口」（LuckyLilliaBot：retcode=1404，「xxx API 不存在」）。"""
+    text = str(err or "").lower()
+    return ("retcode=1404" in text or "api 不存在" in text or "api不存在" in text
+            or "不支持的api" in text or "unsupported action" in text or "no such action" in text
+            or "api not found" in text or "action not found" in text)
 
 
 def parse_hhmm(value, default: str) -> int:
@@ -94,6 +109,11 @@ class JoinLockMixin:
                 "last_user TEXT NOT NULL DEFAULT '', retry_count INTEGER NOT NULL DEFAULT 0, "
                 "next_retry_at INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '')"
             )
+            columns = {r[1] for r in conn.execute("PRAGMA table_info(join_locks)").fetchall()}
+            if "mode" not in columns:
+                conn.execute("ALTER TABLE join_locks ADD COLUMN mode TEXT NOT NULL DEFAULT 'option'")
+            if "reject_count" not in columns:
+                conn.execute("ALTER TABLE join_locks ADD COLUMN reject_count INTEGER NOT NULL DEFAULT 0")
             conn.commit()
         self._jl_db_ready = True
 
@@ -136,6 +156,10 @@ class JoinLockMixin:
         value = self._cfg_int("kick_join_lock_restore_type", ADD_TYPE_VERIFY, group_id=group_id)
         return value if value in (ADD_TYPE_ALLOW, ADD_TYPE_VERIFY) else ADD_TYPE_VERIFY
 
+    def _jl_reject_reason(self, group_id: str) -> str:
+        text = self._cfg_str("kick_join_lock_reject_reason", DEFAULT_REJECT_REASON, group_id=group_id).strip()
+        return (text or DEFAULT_REJECT_REASON)[:60]
+
     @staticmethod
     def _jl_fmt(ts) -> str:
         return datetime.fromtimestamp(int(ts)).strftime("%m-%d %H:%M")
@@ -168,21 +192,70 @@ class JoinLockMixin:
                     self._record_op(OP_LOCK, source="自动", group_id=gid, target=uid, reason=reason, result="成功",
                                     detail=f"已在暂停中，恢复时间：{self._jl_fmt(final)}")
                 return {"ok": True, "extended": True, "unlock_at": final, "error": ""}
-            ok, err = await self._call_group_api(client, "set_group_add_option", "加群方式",
-                                                 group_id=self._safe_int(gid, 0), add_type=ADD_TYPE_FORBID)
-            if not ok:
-                self._record_op(OP_LOCK, source="自动", group_id=gid, target=uid, reason=reason, result="失败",
-                                detail=f"改成禁止加群失败：{err or '未知错误'}（机器人需要是群主或管理员）")
-                logger.warning(f"[GroupMgr] 踢人后暂停加群失败：群 {gid}: {err}")
-                return {"ok": False, "extended": False, "unlock_at": 0, "error": err or "未知错误"}
+            mode = MODE_REJECT if getattr(self, "_jl_option_missing", False) else MODE_OPTION
+            if mode == MODE_OPTION:
+                ok, err = await self._call_group_api(client, "set_group_add_option", "加群方式",
+                                                     group_id=self._safe_int(gid, 0), add_type=ADD_TYPE_FORBID)
+                if not ok and api_missing(err):
+                    # 协议端没有修改加群方式的接口：改为暂停期间自动拒绝加群申请
+                    self._jl_option_missing = True
+                    mode = MODE_REJECT
+                    logger.info("[GroupMgr] 协议端没有 set_group_add_option 接口，踢人后暂停加群改为自动拒绝加群申请")
+                elif not ok:
+                    self._record_op(OP_LOCK, source="自动", group_id=gid, target=uid, reason=reason, result="失败",
+                                    detail=f"改成禁止加群失败：{err or '未知错误'}（机器人需要是群主或管理员）")
+                    logger.warning(f"[GroupMgr] 踢人后暂停加群失败：群 {gid}: {err}")
+                    return {"ok": False, "extended": False, "unlock_at": 0, "error": err or "未知错误"}
             self._jl_execute(
-                "INSERT OR REPLACE INTO join_locks(group_id, locked_at, unlock_at, last_kick_at, kick_count, last_user) "
-                "VALUES(?, ?, ?, ?, 1, ?)", (gid, int(now), unlock_at, int(now), uid))
-        restore = ADD_TYPE_TEXT[self._jl_restore_type(gid)]
-        self._record_op(OP_LOCK, source="自动", group_id=gid, target=uid, reason=reason, result="成功",
-                        detail=f"已改成禁止加群，{self._jl_fmt(unlock_at)} 恢复为「{restore}」")
+                "INSERT OR REPLACE INTO join_locks(group_id, locked_at, unlock_at, last_kick_at, kick_count, "
+                "last_user, mode) VALUES(?, ?, ?, ?, 1, ?, ?)", (gid, int(now), unlock_at, int(now), uid, mode))
+        if mode == MODE_REJECT:
+            detail = (f"协议端不能修改加群方式，改为自动拒绝加群申请，{self._jl_fmt(unlock_at)} 停止"
+                      "（只对「需要验证」的群有效）")
+        else:
+            restore = ADD_TYPE_TEXT[self._jl_restore_type(gid)]
+            detail = f"已改成禁止加群，{self._jl_fmt(unlock_at)} 恢复为「{restore}」"
+        self._record_op(OP_LOCK, source="自动", group_id=gid, target=uid, reason=reason, result="成功", detail=detail)
         logger.info(f"[GroupMgr] 踢人后暂停加群：群 {gid}，{self._jl_fmt(unlock_at)} 恢复")
-        return {"ok": True, "extended": False, "unlock_at": unlock_at, "error": ""}
+        return {"ok": True, "extended": False, "unlock_at": unlock_at, "error": "", "mode": mode}
+
+    async def _jl_reject_request(self, event: AstrMessageEvent, now: Optional[float] = None) -> bool:
+        """暂停加群期间（reject 方式）自动拒绝加群申请。返回 True = 已拒绝（调用方 stop_event）。"""
+        raw = self._get_raw_event(event)
+        if not (isinstance(raw, dict) and raw.get("post_type") == "request"
+                and raw.get("request_type") == "group" and raw.get("sub_type") == "add"):
+            return False
+        gid, uid = str(raw.get("group_id", "") or ""), str(raw.get("user_id", "") or "")
+        flag = str(raw.get("flag", "") or "")
+        if not gid or not flag:
+            return False
+        row = self._jl_get(gid)
+        now = time.time() if now is None else now
+        if not row or row.get("mode") != MODE_REJECT or now >= int(row["unlock_at"]):
+            return False
+        seen = getattr(self, "_jl_rejected_flags", None)
+        if seen is None:
+            seen = self._jl_rejected_flags = {}
+        if flag in seen:   # 协议端重复上报同一条申请
+            return True
+        client = await self._get_client(event)
+        if not client:
+            return False
+        reason = self._jl_reject_reason(gid)
+        ok, err = await self._call_group_api(client, "set_group_add_request", "处理加群申请",
+                                             flag=flag, sub_type="add", approve=False, reason=reason)
+        if not ok:
+            logger.warning(f"[GroupMgr] 暂停加群期间拒绝申请失败：群 {gid} / {uid}: {err}")
+            return False   # 交给后面的入群审核 / 人工处理
+        if len(seen) > 500:
+            seen.clear()
+        seen[flag] = now
+        self._jl_execute("UPDATE join_locks SET reject_count=reject_count+1 WHERE group_id=?", (gid,))
+        comment = str(raw.get("comment", "") or "")
+        self._record_op(OP_REJECT, source="自动", group_id=gid, target=uid, result="成功",
+                        reason=f"踢人后暂停加群中（到 {self._jl_fmt(row['unlock_at'])}）",
+                        detail=f"回复：{reason}" + (f"；验证信息：{comment[:200]}" if comment else ""))
+        return True
 
     async def _jl_restore_group(self, client, group_id: str, source: str = "自动", operator: str = "",
                                 now: Optional[float] = None) -> Tuple[bool, str]:
@@ -194,8 +267,11 @@ class JoinLockMixin:
             if not row:
                 return False, "这个群没有在暂停加群"
             add_type = self._jl_restore_type(gid)
-            ok, err = await self._call_group_api(client, "set_group_add_option", "加群方式",
-                                                 group_id=self._safe_int(gid, 0), add_type=add_type)
+            if row.get("mode") == MODE_REJECT:
+                ok, err = True, ""   # 没改过加群方式，停止拒绝申请即可
+            else:
+                ok, err = await self._call_group_api(client, "set_group_add_option", "加群方式",
+                                                     group_id=self._safe_int(gid, 0), add_type=add_type)
             if ok:
                 self._jl_execute("DELETE FROM join_locks WHERE group_id=?", (gid,))
             else:
@@ -207,9 +283,12 @@ class JoinLockMixin:
         if ok:
             self._record_op(OP_RESTORE, source=source, operator=operator, group_id=gid, result="成功",
                             reason="踢人后暂停加群到期" if source == "自动" else "手动恢复",
-                            detail=f"已恢复为「{ADD_TYPE_TEXT[add_type]}」（{self._jl_fmt(row['locked_at'])} 起暂停，"
-                                   f"期间 {row.get('kick_count') or 1} 人被踢）")
-            logger.info(f"[GroupMgr] 恢复加群方式：群 {gid} → {ADD_TYPE_TEXT[add_type]}")
+                            detail=(f"已停止自动拒绝加群申请（{self._jl_fmt(row['locked_at'])} 起暂停，"
+                                    f"期间 {row.get('kick_count') or 1} 人被踢，拒绝了 {row.get('reject_count') or 0} 条申请）"
+                                    if row.get("mode") == MODE_REJECT else
+                                    f"已恢复为「{ADD_TYPE_TEXT[add_type]}」（{self._jl_fmt(row['locked_at'])} 起暂停，"
+                                    f"期间 {row.get('kick_count') or 1} 人被踢）"))
+            logger.info(f"[GroupMgr] 恢复加群：群 {gid}")
             return True, ""
         # 自动重试时只在第一次失败写操作记录，避免每次重试刷一条
         if source != "自动" or not int(row.get("retry_count") or 0):
@@ -255,7 +334,9 @@ class JoinLockMixin:
                 "locked_at": int(row["locked_at"]), "unlock_at": int(row["unlock_at"]),
                 "kick_count": int(row.get("kick_count") or 1), "last_user": str(row.get("last_user") or ""),
                 "retry_count": int(row.get("retry_count") or 0), "last_error": str(row.get("last_error") or ""),
-                "restore_text": ADD_TYPE_TEXT[self._jl_restore_type(gid)],
+                "mode": str(row.get("mode") or MODE_OPTION), "reject_count": int(row.get("reject_count") or 0),
+                "restore_text": ("停止拒绝申请" if row.get("mode") == MODE_REJECT
+                                 else ADD_TYPE_TEXT[self._jl_restore_type(gid)]),
             })
         return out
 

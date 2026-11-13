@@ -430,6 +430,16 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-result.closable{position:relative;padding-right:34px}
     .mn-result-close{position:absolute;top:4px;right:6px;width:24px;height:24px;border:none;background:none;cursor:pointer;font-size:18px;line-height:24px;color:inherit;opacity:.55;border-radius:4px;padding:0}
     .mn-result-close:hover{opacity:1;background:rgba(0,0,0,.06)}
+.bm-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.bm-thumbs:empty { display: none; }
+.bm-thumb { position: relative; width: 96px; height: 96px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-secondary, rgba(127,127,127,.08)); }
+.bm-thumb.err { border-color: var(--danger); }
+.bm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bm-thumb-no { position: absolute; left: 4px; top: 4px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; color: #fff; background: rgba(0,0,0,.6); border-radius: 9px; padding: 0 4px; }
+.bm-thumb-state { position: absolute; left: 0; right: 0; top: 36px; text-align: center; font-size: 12px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 0; }
+.bm-thumb-ops { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; gap: 2px; padding: 2px; background: rgba(0,0,0,.5); }
+.bm-thumb-ops a { color: #fff; text-decoration: none; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 13px; }
+.bm-thumb-ops a:hover { background: rgba(255,255,255,.25); }
     .mn-result.ok{background:var(--success-light);color:var(--success)}
     .mn-result.no{background:var(--info-light);color:var(--text-secondary)}
     .mn-result.err{background:var(--danger-light);color:var(--danger)}
@@ -1212,15 +1222,23 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="card-header"><h2>图片文字识别（OCR）</h2><span class="rules-subtle">识别出的文字按规则组的关键词过滤</span></div>
             <div class="mn-body">
               <div class="mn-row"><label style="width:84px">接入方式</label>
-                <select class="input-sm" id="ocrDriver">
+                <select class="input-sm" id="ocrDriver" style="flex:1">
                   <option value="off">关闭</option>
+                  <option value="rapidocr">RapidOCR 文字识别服务（推荐）</option>
                   <option value="llbot">LuckyLilliaBot 自带 OCR</option>
-                  <option value="http">本地 HTTP 服务</option>
+                  <option value="http">自己的 HTTP 服务（JSON 接口）</option>
                   <option value="python">插件目录里的 Python 文件</option>
                 </select></div>
               <div class="mn-row" id="ocrUrlRow"><label style="width:84px">服务地址</label><input class="input-sm" id="ocrUrl" style="flex:1" /></div>
-              <div class="mn-row" id="ocrModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="ocrModule" style="flex:1" /></div>
-              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnOcrSave">保存</button></div>
+              <div class="mn-row" id="ocrModRow"><label style="width:84px">Python 文件</label><input class="input-sm" id="ocrModule" style="flex:1" placeholder="ocr.py（放在插件数据目录 extensions/ 下）" /></div>
+              <div class="mn-row" id="ocrTimeoutRow"><label style="width:84px">超时</label><input type="number" class="input-sm" id="ocrTimeout" min="1" max="60" style="width:80px" /><span class="mn-hint">秒（每张图，1-60）</span></div>
+              <p class="mn-hint" id="ocrHint"></p>
+              <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnOcrSave">保存</button>
+                <span id="ocrTestBtns"><button class="btn btn-outline btn-sm" id="btnOcrHealth">测试连接</button>
+                  <label class="btn btn-outline btn-sm" style="cursor:pointer">上传测试图片<input type="file" id="ocrTestFile" accept="image/png,image/jpeg,image/webp,image/bmp" style="display:none" /></label></span></div>
+              <p class="mn-hint">测试用的是已保存的设置；测试图片只识别、对一遍规则，不会撤回或转发。</p>
+              <div id="ocrTestResult"></div>
+              <p class="mn-hint">什么时候识别：「拦截规则」页的「关键词撤回」开着，消息里有图片，且文字、码都没有命中时。每条消息最多识别 4 张图；识别服务连不上或超时时放行，不会误撤回。</p>
             </div>
           </div>
         </div>
@@ -1413,7 +1431,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="card-header"><h2>群消息</h2><span class="rules-subtle">发到「发到哪些群」里勾选的群</span></div>
             <div class="mn-body">
               <textarea class="input-md" id="bmText" rows="5" placeholder="要发到群里的消息"></textarea>
-              <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">选择图片（可选）<input type="file" id="bmImage" accept="image/*" style="display:none" /></label><span class="mn-hint" id="bmImageInfo">不带图片（也可以 Ctrl+V 粘贴截图）</span></div>
+              <div class="mn-row" style="margin-top:8px"><label class="btn btn-outline btn-sm" style="cursor:pointer">添加图片<input type="file" id="bmImage" accept="image/*" multiple style="display:none" /></label><span class="mn-hint" id="bmImageInfo">不带图片（可以一次选多张，也可以 Ctrl+V 粘贴截图）</span></div>
+              <div class="bm-thumbs" id="bmImages"></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnBmSend">发送</button><span class="mn-hint">每个群之间按「批量任务」的间隔发送，可在批量任务栏暂停 / 取消</span></div>
               <div id="bmResult"></div>
             </div>
@@ -1588,10 +1607,13 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <div class="mn-body">
             <div class="mn-row"><label style="width:150px">暂停时长</label><input type="number" min="1" max="72" class="input-sm" id="jlMin" style="width:80px" /><span>到</span><input type="number" min="1" max="72" class="input-sm" id="jlMax" style="width:80px" /><span class="mn-hint">小时，在这个范围里随机取</span></div>
             <div class="mn-row"><label style="width:150px">夜间时间段</label><input type="time" class="input-sm" id="jlNightStart" style="width:120px" /><span>到</span><input type="time" class="input-sm" id="jlNightEnd" style="width:120px" /><span class="mn-hint">恢复加群的时间不会落在这段时间里；两个填一样 = 不限制</span></div>
+            <div class="mn-row"><label style="width:150px">拒绝申请时的回复</label><input class="input-sm" id="jlReason" maxlength="60" style="flex:1" placeholder="本群暂时停止加群，请过几小时再申请" /></div>
             <div class="mn-row"><label style="width:150px">到点恢复为</label>
               <select class="input-sm" id="jlRestore" style="width:200px"><option value="1">需要验证</option><option value="0">允许任何人</option></select>
+              <span class="mn-hint">只在协议端能修改加群方式时有用</span>
               <button class="btn btn-primary btn-sm" id="btnJlSave">保存</button></div>
-            <p class="mn-hint">管理员手动踢人、本插件踢人（含批量踢人、黑名单入群即踢）都会触发。时长范围里只要有不在夜间的时刻，就从这些时刻里随机；整段都在夜间时，顺延到夜间结束的那一刻（这时会超过最长时长）。暂停期间又有人被踢，恢复时间只会延后、不会提前。LuckyLilliaBot 读不到群原来的加群方式，所以到点统一改成上面选的方式，各群不一样时在「多群配置」里按群设置。机器人需要是群主或管理员，暂停和恢复都写入操作记录。</p>
+            <p class="mn-hint" style="color:var(--warning)">LuckyLilliaBot 没有修改加群方式的接口，所以用的是另一种做法：暂停期间机器人<b>自动拒绝这个群的加群申请</b>，申请人会看到上面那句回复，到点后停止拒绝。这只对加群方式是「需要验证」的群有效；「允许任何人加群」的群没有申请可以拒，拦不住，需要先在 QQ 里把它改成「需要验证」。协议端支持修改加群方式时（NapCat 等），仍然是改成「禁止加群」、到点改回上面选的方式。</p>
+            <p class="mn-hint">管理员手动踢人、本插件踢人（含批量踢人、黑名单入群即踢）都会触发。时长范围里只要有不在夜间的时刻，就从这些时刻里随机；整段都在夜间时，顺延到夜间结束的那一刻（这时会超过最长时长）。暂停期间又有人被踢，恢复时间只会延后、不会提前。机器人需要是群主或管理员；暂停、每一次拒绝申请、恢复都写入操作记录。</p>
             <div class="mn-row"><b>目前暂停加群的群</b><button class="btn btn-outline btn-sm" id="btnJlLoad">刷新</button></div>
             <div id="jlBox"></div>
           </div>
@@ -3318,6 +3340,7 @@ var MANUAL_SETTING_KEYS = {
   kick_join_lock_night_start: true,
   kick_join_lock_night_end: true,
   kick_join_lock_restore_type: true,
+  kick_join_lock_reject_reason: true,
   leave_log_enabled: true,
   leave_log_msg_count: true,
   leave_log_use_history: true,
@@ -4163,7 +4186,7 @@ var MN_SWITCHES = {
     { key: 'leave_files_on_kick', label: '被踢出时', desc: '被管理员或本插件踢出（含批量踢人、黑名单入群即踢）' }
   ],
   joinLockSwitches: [
-    { key: 'kick_join_lock_enabled', label: '启用踢人后暂停加群', desc: '有人被踢出群后，把这个群改成「禁止加群」几小时再恢复，防止换号进群（主动退群不触发）' }
+    { key: 'kick_join_lock_enabled', label: '启用踢人后暂停加群', desc: '有人被踢出群后，几小时内不让人加群，防止换号进群（主动退群不触发）。LuckyLilliaBot 上是自动拒绝加群申请' }
   ]
 };
 var MN_TYPES = {
@@ -4713,8 +4736,62 @@ function mnToggleDriverRows() {
   $('#wxUrlRow').style.display = wx === 'http' ? '' : 'none';
   $('#wxModRow').style.display = wx === 'python' ? '' : 'none';
   var ocr = $('#ocrDriver').value;
-  $('#ocrUrlRow').style.display = ocr === 'http' ? '' : 'none';
+  $('#ocrUrlRow').style.display = (ocr === 'http' || ocr === 'rapidocr') ? '' : 'none';
+  $('#ocrUrl').placeholder = ocr === 'rapidocr' ? 'http://127.0.0.1:8110（留空就用这个地址）' : 'http://127.0.0.1:8090/ocr';
   $('#ocrModRow').style.display = ocr === 'python' ? '' : 'none';
+  $('#ocrTimeoutRow').style.display = (ocr === 'off' || ocr === 'llbot') ? 'none' : '';
+  $('#ocrTestBtns').style.display = (ocr === 'off' || ocr === 'llbot') ? 'none' : '';
+  $('#btnOcrHealth').style.display = ocr === 'rapidocr' ? '' : 'none';
+  $('#ocrHint').textContent = ({
+    off: '关闭时图片里的文字不参与关键词匹配。',
+    rapidocr: '对接部署好的 RapidOCR 服务（POST /v1/ocr）。地址只写到端口；服务没有鉴权，只应监听本机。GIF 动图不识别；同一张图 10 分钟内只识别一次。',
+    llbot: '调用 LuckyLilliaBot 的 ocr_image 接口，不需要另外部署服务。',
+    http: '把图片（base64）用 JSON POST 到这个地址，返回文字列表。协议见插件目录 examples/wxcode_recognizer_example.py。',
+    python: '调用这个文件里的 recognize(image_bytes, image_url)。'
+  })[ocr] || '';
+}
+
+/* ---- 图片文字识别（image_recognizer.py）：探活、上传测试图片 ---- */
+async function mnOcrHealth() {
+  var box = $('#ocrTestResult');
+  box.innerHTML = '<div class="mn-result no">正在测试文字识别服务……</div>';
+  var res = await safeGet('minimal/ocr/health');
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res) || {};
+  if (d.note) { box.innerHTML = '<div class="mn-result no">' + esc(d.note) + '</div>'; return; }
+  var part = function(label, r) {
+    r = r || {};
+    return label + '：' + (r.ok ? '正常' : '不可用' + (r.error ? '（' + r.error + '）' : r.status ? '（HTTP ' + r.status + '）' : ''));
+  };
+  var lines = ['文字识别服务 ' + d.url, part('进程存活（/health）', d.health), part('模型就绪（/ready）', d.ready)];
+  if (!d.ok) lines.push('请确认服务已启动（start-service.cmd），并且和 AstrBot 在同一台机器或地址填对了');
+  box.innerHTML = '<div class="mn-result ' + (d.ok ? 'ok' : 'err') + '">' + esc(lines.join('\n')) + '</div>';
+}
+function mnOcrTestFile() {
+  var input = $('#ocrTestFile'), file = input.files && input.files[0];
+  if (!file) return;
+  var box = $('#ocrTestResult');
+  if (file.size > 20 * 1024 * 1024) { box.innerHTML = '<div class="mn-result err">测试图片不能超过 20 MiB</div>'; input.value = ''; return; }
+  var reader = new FileReader();
+  reader.onload = async function() {
+    box.innerHTML = '<div class="mn-result no">识别中……</div>';
+    var res = await safePost('minimal/ocr/test', { image_base64: reader.result }, 120000);
+    input.value = '';
+    if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
+    var d = mnData(res) || {}, texts = d.texts || [], lines = [];
+    if (d.note) lines.push((d.failed ? '识别失败：' : '') + d.note);
+    else if (!texts.length) lines.push('没有识别到文字');
+    else {
+      lines.push('识别到 ' + texts.length + ' 行文字（用时 ' + d.elapsed_ms + ' 毫秒' +
+        (d.service_ms != null ? '，其中服务端识别 ' + Math.round(d.service_ms) + ' 毫秒' : '') + (d.cached ? '，结果来自缓存' : '') + '）：');
+      texts.forEach(function(t) { lines.push('  ' + t); });
+    }
+    if (texts.length) lines.push(d.hit ? '命中规则：' + d.hit : '没有命中规则组里的关键词');
+    if (d.hit && !d.guard_enabled) lines.push('「关键词撤回」现在是关着的，所以不会处理');
+    lines.push(d.would_recall ? '结论：群里发这张图会被撤回并转发' : '结论：群里发这张图会放行');
+    box.innerHTML = '<div class="mn-result ' + (d.failed || d.would_recall ? 'err' : 'ok') + '">' + esc(lines.join('\n')) + '</div>';
+  };
+  reader.readAsDataURL(file);
 }
 
 async function mnCodeHealth() {
@@ -4880,6 +4957,7 @@ async function loadGuard() {
   $('#ocrDriver').value = mnCfg('local_ocr_driver') || 'off';
   $('#ocrUrl').value = mnCfg('local_ocr_service_url') || '';
   $('#ocrModule').value = mnCfg('local_ocr_python_module') || '';
+  $('#ocrTimeout').value = mnCfg('local_ocr_timeout') || 10;
   mnToggleDriverRows();
 }
 
@@ -5493,7 +5571,8 @@ function gfOnChange(e) {
 }
 
 /* ---- 批量发言 / 批量传群文件 ---- */
-var BULK = { image: null, file: null, noticeImage: null };
+var BULK = { images: [], file: null, noticeImage: null, imgSeq: 0 };
+var BULK_IMAGES_MAX = 9, BULK_IMAGES_TOTAL_MAX = 30 * 1048576;
 function bulkReadFile(input) {
   return bulkReadFileObj(input.files && input.files[0]);
 }
@@ -5511,7 +5590,7 @@ async function bulkOutbox(file) {
   if (isApiError(res)) throw new Error(mnErr(res));
   return mnData(res);
 }
-var BULK_NO_IMAGE_HINT = '不带图片（也可以 Ctrl+V 粘贴截图）';
+var BULK_NO_IMAGE_HINT = '不带图片（可以一次选多张，也可以 Ctrl+V 粘贴截图）';
 function bulkImageThumb(dataUrl) {
   return '<img alt="图片" src="' + escAttr(dataUrl) + '" style="max-width:120px;max-height:80px;border-radius:4px;vertical-align:middle;margin-right:6px;border:1px solid var(--border)" />';
 }
@@ -5541,17 +5620,62 @@ function bulkBindPaste(anchorId, handler) {
     handler(f);
   });
 }
-function bulkClearMsgImage() { BULK.image = null; $('#bmImage').value = ''; $('#bmImageInfo').textContent = BULK_NO_IMAGE_HINT; }
+// 群消息的图片：可以有多张，按添加顺序跟在文字后面，合成一条消息。每张 {id, name, size, data, info, error}
+function bulkClearMsgImages() { BULK.images = []; $('#bmImage').value = ''; bulkRenderMsgImages(); }
+function bulkMsgImagesReady() { return BULK.images.filter(function(i) { return i.info; }); }
+function bulkRenderMsgImages() {
+  var box = $('#bmImages'), list = BULK.images;
+  var total = list.reduce(function(n, i) { return n + i.size; }, 0), busy = list.filter(function(i) { return !i.info && !i.error; }).length;
+  $('#bmImageInfo').innerHTML = !list.length ? esc(BULK_NO_IMAGE_HINT) :
+    esc(list.length + ' / ' + BULK_IMAGES_MAX + ' 张，共 ' + gfSize(total) + (busy ? '，' + busy + ' 张正在上传……' : '') + '；按下面的顺序跟在文字后面') +
+    ' <a href="javascript:void(0)" data-bm-clear="1">全部去掉</a>';
+  box.innerHTML = list.map(function(i, n) {
+    return '<div class="bm-thumb' + (i.error ? ' err' : '') + '" title="' + escAttr(i.name + '（' + gfSize(i.size) + '）' + (i.error ? ' 上传失败：' + i.error : '')) + '">' +
+      '<img alt="图片" src="' + escAttr(i.data) + '" />' +
+      '<span class="bm-thumb-no">' + (n + 1) + '</span>' +
+      (i.error ? '<span class="bm-thumb-state">上传失败</span>' : !i.info ? '<span class="bm-thumb-state">上传中</span>' : '') +
+      '<span class="bm-thumb-ops">' +
+        (n > 0 ? '<a href="javascript:void(0)" data-bm-move="-1" data-bm-id="' + i.id + '" title="往前移">←</a>' : '') +
+        (n < list.length - 1 ? '<a href="javascript:void(0)" data-bm-move="1" data-bm-id="' + i.id + '" title="往后移">→</a>' : '') +
+        '<a href="javascript:void(0)" data-bm-del="' + i.id + '" title="去掉这张">×</a></span></div>';
+  }).join('');
+}
+function bulkMsgImagesClick(e) {
+  var t = e.target;
+  if (t.getAttribute('data-bm-clear')) { bulkClearMsgImages(); return; }
+  var del = t.getAttribute('data-bm-del'), move = t.getAttribute('data-bm-move');
+  if (del) { BULK.images = BULK.images.filter(function(i) { return String(i.id) !== del; }); bulkRenderMsgImages(); return; }
+  if (move) {
+    var idx = BULK.images.findIndex(function(i) { return String(i.id) === t.getAttribute('data-bm-id'); }), to = idx + Number(move);
+    if (idx < 0 || to < 0 || to >= BULK.images.length) return;
+    var item = BULK.images.splice(idx, 1)[0];
+    BULK.images.splice(to, 0, item);
+    bulkRenderMsgImages();
+  }
+}
+// pasted：粘贴进来的一张图；否则取文件选择框里选中的（可以多张）
 async function bulkPickImage(pasted) {
-  var src = pasted instanceof Blob ? pasted : null;
-  var f = await (src ? bulkReadFileObj(src) : bulkReadFile($('#bmImage')));
-  if (f && src && src.displayName) f.name = src.displayName;
-  if (!f) { bulkClearMsgImage(); return; }
-  if (f.size > 20 * 1048576) { toast('图片不能超过 20 MB', 'warning'); $('#bmImage').value = ''; return; }
-  if (src) $('#bmImage').value = '';
-  $('#bmImageInfo').textContent = '正在上传 ' + f.name + '……';
-  try { BULK.image = await bulkOutbox(f); $('#bmImageInfo').innerHTML = bulkImageThumb(f.data) + esc(f.name + '（' + gfSize(f.size) + '）') + ' <a href="javascript:void(0)" id="bmImageClear">去掉</a>'; bindIfExists('bmImageClear', bulkClearMsgImage); }
-  catch (e) { BULK.image = null; $('#bmImageInfo').textContent = '上传失败：' + e.message; }
+  var files = pasted instanceof Blob ? [pasted] : Array.prototype.slice.call($('#bmImage').files || []);
+  $('#bmImage').value = '';   // 清掉选择框，下次选同一张图也能触发
+  if (!files.length) return;
+  var skipped = [];
+  for (var n = 0; n < files.length; n++) {
+    var src = files[n], name = src.displayName || src.name || '图片';
+    if (!/^image\//.test(src.type || '')) { skipped.push(name + ' 不是图片'); continue; }
+    if (BULK.images.length >= BULK_IMAGES_MAX) { skipped.push('最多 ' + BULK_IMAGES_MAX + ' 张，其余没有添加'); break; }
+    if (src.size > 20 * 1048576) { skipped.push(name + ' 超过 20 MB'); continue; }
+    var total = BULK.images.reduce(function(sum, i) { return sum + i.size; }, 0);
+    if (total + src.size > BULK_IMAGES_TOTAL_MAX) { skipped.push('图片合计不能超过 30 MB，' + name + ' 没有添加'); continue; }
+    var f = await bulkReadFileObj(src);
+    if (!f) continue;
+    var item = { id: ++BULK.imgSeq, name: name, size: f.size, data: f.data, info: null, error: '' };
+    BULK.images.push(item);
+    bulkRenderMsgImages();
+    try { item.info = await bulkOutbox({ name: name, size: f.size, data: f.data }); }
+    catch (e) { item.error = e.message || '上传失败'; }
+    bulkRenderMsgImages();
+  }
+  if (skipped.length) toast(skipped.join('；'), 'warning');
 }
 async function bulkPickFile() {
   var f = await bulkReadFile($('#bfFile'));
@@ -5592,10 +5716,14 @@ async function bcPickImage(pasted) {
 async function bulkSendMsg() {
   var groups = mnSelectedGroups('#bcGroups'), text = $('#bmText').value.trim();
   if (!groups.length) { toast('请在「发到哪些群」里勾选要发送的群', 'warning'); return; }
-  if (!text && !BULK.image) { toast('请填写消息或选择图片', 'warning'); return; }
-  if (!await mnConfirm('把这条消息发到 ' + groups.length + ' 个群？', { title: '批量发言', okText: '发送' })) return;
-  var res = await safePost('minimal/bulk/send', { groups: groups, text: text, image: BULK.image });
-  if (bulkJobMsg('#bmResult', res, '发送到')) { $('#bmText').value = ''; }
+  if (BULK.images.some(function(i) { return !i.info && !i.error; })) { toast('图片还在上传，请稍等', 'warning'); return; }
+  if (BULK.images.some(function(i) { return i.error; })) { toast('有图片上传失败，请先去掉它或重新添加', 'warning'); return; }
+  var images = bulkMsgImagesReady().map(function(i) { return i.info; });
+  if (!text && !images.length) { toast('请填写消息或添加图片', 'warning'); return; }
+  var what = images.length ? '这条消息（带 ' + images.length + ' 张图片）' : '这条消息';
+  if (!await mnConfirm('把' + what + '发到 ' + groups.length + ' 个群？', { title: '批量发言', okText: '发送' })) return;
+  var res = await safePost('minimal/bulk/send', { groups: groups, text: text, images: images });
+  if (bulkJobMsg('#bmResult', res, '发送到')) { $('#bmText').value = ''; bulkClearMsgImages(); }
 }
 async function bulkSendFile() {
   var groups = mnSelectedGroups('#bcGroups');
@@ -6557,6 +6685,7 @@ async function loadKick() {
   $('#jlNightStart').value = jlV('kick_join_lock_night_start', '23:00');
   $('#jlNightEnd').value = jlV('kick_join_lock_night_end', '08:00');
   $('#jlRestore').value = String(jlV('kick_join_lock_restore_type', 1));
+  $('#jlReason').value = jlV('kick_join_lock_reject_reason', '');
   jlLoad();
   mnRenderSwitches('acceptSwitches');
   mnRenderSwitches('mmSwitches');
@@ -6590,17 +6719,18 @@ async function jlLoad() {
   if (isApiError(res)) { box.innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
   var rows = (mnData(res) || {}).items || [];
   if (!rows.length) { box.innerHTML = '<p class="mn-hint">没有。</p>'; return; }
-  box.innerHTML = '<table class="mn-table"><thead><tr><th>群</th><th>开始暂停</th><th>恢复时间</th><th>期间被踢</th><th>恢复为</th><th></th></tr></thead><tbody>' +
+  box.innerHTML = '<table class="mn-table"><thead><tr><th>群</th><th>开始暂停</th><th>恢复时间</th><th>期间被踢</th><th>做法</th><th>到点后</th><th></th></tr></thead><tbody>' +
     rows.map(function(r) {
       var fail = r.retry_count ? '<div style="color:var(--danger)">恢复失败 ' + esc(r.retry_count) + ' 次：' + esc(r.last_error) + '（会自动重试）</div>' : '';
       return '<tr><td>' + mnGroupCell(r.group_id, r.group_name) + '</td><td>' + esc(mnTime(r.locked_at)) + '</td>' +
-        '<td>' + esc(mnTime(r.unlock_at)) + fail + '</td><td>' + esc(r.kick_count) + ' 人</td><td>' + esc(r.restore_text) + '</td>' +
+        '<td>' + esc(mnTime(r.unlock_at)) + fail + '</td><td>' + esc(r.kick_count) + ' 人</td>' +
+        '<td>' + (r.mode === 'reject' ? '自动拒绝加群申请<div class="mn-hint">已拒绝 ' + esc(r.reject_count || 0) + ' 条</div>' : '已改成禁止加群') + '</td><td>' + esc(r.restore_text) + '</td>' +
         '<td><button class="btn btn-outline btn-sm" data-jl-restore="' + escAttr(r.group_id) + '">立即恢复</button></td></tr>';
     }).join('') + '</tbody></table>';
   $$('[data-jl-restore]', box).forEach(function(btn) {
     btn.addEventListener('click', async function() {
       var gid = btn.getAttribute('data-jl-restore');
-      if (!(await mnConfirm('现在就把群 ' + gid + ' 的加群方式改回去？', { okText: '恢复' }))) return;
+      if (!(await mnConfirm('现在就恢复群 ' + gid + ' 的加群（改回加群方式 / 停止拒绝申请）？', { okText: '恢复' }))) return;
       var r = await safePost('minimal/joinlock/restore', { group_id: gid });
       if (isApiError(r)) { toast(mnErr(r, '恢复失败'), 'error'); return; }
       toast('已恢复', 'success');
@@ -8038,9 +8168,13 @@ function initMinimalPages() {
   bindIfExists('btnCodeHealth', mnCodeHealth);
   bindIfExists('codeTestFile', mnCodeTestFile, 'change');
   bindIfExists('btnOcrSave', function() {
+    var timeout = Math.round(Number($('#ocrTimeout').value));
+    if (!(timeout >= 1 && timeout <= 60)) { toast('超时请填 1-60 秒', 'error'); return; }
     mnSaveConfig({ local_ocr_driver: $('#ocrDriver').value, local_ocr_service_url: $('#ocrUrl').value.trim(),
-      local_ocr_python_module: $('#ocrModule').value.trim() }, '已保存');
+      local_ocr_python_module: $('#ocrModule').value.trim(), local_ocr_timeout: timeout }, '已保存');
   });
+  bindIfExists('btnOcrHealth', mnOcrHealth);
+  bindIfExists('ocrTestFile', mnOcrTestFile, 'change');
 
   bindIfExists('btnBcRefresh', loadBroadcast);
   $$('input[name=bcMode]').forEach(function(r) { r.addEventListener('change', mnSyncBroadcastMode); });
@@ -8217,6 +8351,8 @@ function initMinimalPages() {
   var gfTable = document.getElementById('gfTable');
   if (gfTable) { gfTable.addEventListener('click', gfOnClick); gfTable.addEventListener('change', gfOnChange); }
   bindIfExists('bmImage', function() { bulkPickImage(); }, 'change');
+  bindIfExists('bmImages', bulkMsgImagesClick);
+  bindIfExists('bmImageInfo', bulkMsgImagesClick);
   bindIfExists('bcImageFile', function() { bcPickImage(); }, 'change');
   bulkBindPaste('bmText', bulkPickImage);
   bulkBindPaste('bcContent', bcPickImage);
@@ -8344,7 +8480,8 @@ function initMinimalPages() {
     if (lo > hi) { toast('最短时长不能大于最长时长', 'warning'); return; }
     if (!/^\d\d:\d\d$/.test(ns) || !/^\d\d:\d\d$/.test(ne)) { toast('请填写夜间时间段', 'warning'); return; }
     mnSaveConfig({ kick_join_lock_min_hours: lo, kick_join_lock_max_hours: hi, kick_join_lock_night_start: ns,
-      kick_join_lock_night_end: ne, kick_join_lock_restore_type: Number($('#jlRestore').value) }, '已保存');
+      kick_join_lock_night_end: ne, kick_join_lock_restore_type: Number($('#jlRestore').value),
+      kick_join_lock_reject_reason: $('#jlReason').value.trim() }, '已保存');
   });
   bindIfExists('btnLrSave', function() {
     var count = Number($('#lrCount').value), minutes = Number($('#lrMinutes').value);

@@ -64,6 +64,7 @@ MINIMAL_CONFIG_KEYS = (
     "leave_files_enabled", "leave_files_on_leave", "leave_files_on_kick",
     "kick_join_lock_enabled", "kick_join_lock_min_hours", "kick_join_lock_max_hours",
     "kick_join_lock_night_start", "kick_join_lock_night_end", "kick_join_lock_restore_type",
+    "kick_join_lock_reject_reason",
     "leave_log_enabled", "leave_log_msg_count", "leave_log_use_history", "leave_log_save_images", "leave_log_image_days",
     "miniapp_store_enabled", "miniapp_store_days",
     "link_guard_enabled", "link_store_enabled", "link_store_days", "link_title_mode",
@@ -433,6 +434,58 @@ class MinimalWebMixin:
         return jsonify({"status": "success", "data": {
             "scan": scan, "summary": self._code_describe([scan]), "hits": hits,
             "would_recall": would_recall, "classes": self._code_classes(),
+        }})
+
+    # ------------------------------------------------------------------
+    # 图片文字识别（image_recognizer.py）
+    # ------------------------------------------------------------------
+    async def _web_minimal_ocr_health(self):
+        driver = self._cfg_str("local_ocr_driver", "off").strip().lower()
+        out = {"driver": driver}
+        if driver != "rapidocr":
+            out["note"] = "只有「RapidOCR 文字识别服务」有探活接口，其它接入方式请用「上传测试图片」验证"
+            return jsonify({"status": "success", "data": out})
+        base = self._ocr_service_base()
+        out["url"] = base
+        for name in ("health", "ready"):
+            try:
+                status, body = await self._ocr_http_get(f"{base}/{name}")
+                out[name] = {"ok": status == 200, "status": status, "body": body}
+            except Exception as e:
+                out[name] = {"ok": False, "error": str(e) or type(e).__name__}
+        out["ok"] = bool(out["health"]["ok"] and out["ready"]["ok"])
+        return jsonify({"status": "success", "data": out})
+
+    async def _web_minimal_ocr_test(self):
+        import base64 as _b64
+        import time as _time
+        data = await self._minimal_body()
+        raw = str(data.get("image_base64") or "")
+        if raw.startswith("data:") and "," in raw:
+            raw = raw.split(",", 1)[1]
+        try:
+            image = _b64.b64decode(raw) if raw else b""
+        except Exception:
+            return self._minimal_error("图片数据无效")
+        if not image:
+            return self._minimal_error("请上传一张图片")
+        if len(image) > 20 * 1024 * 1024:
+            return self._minimal_error("测试图片不能超过 20 MiB")
+        driver = self._cfg_str("local_ocr_driver", "off").strip().lower()
+        if driver in ("", "off"):
+            return self._minimal_error("图片文字识别是关闭的，请先选择接入方式并保存")
+        if driver == "llbot":
+            return self._minimal_error("LuckyLilliaBot 自带 OCR 只能识别群消息里的图片，不能用上传的图片测试")
+        started = _time.time()
+        texts, note, info = await self._recognize_bytes("local_ocr", driver, image)
+        elapsed = int((_time.time() - started) * 1000)
+        rule, _action = self._hg_ocr(texts)
+        guard = bool(self._cfg("keyword_guard_enabled", True))
+        return jsonify({"status": "success", "data": {
+            "driver": driver, "texts": texts, "note": note, "elapsed_ms": elapsed,
+            "service_ms": info.get("ms"), "cached": bool(info.get("cached")),
+            "failed": bool(info.get("failed")), "skipped": bool(info.get("skipped")),
+            "hit": rule or "", "guard_enabled": guard, "would_recall": bool(rule) and guard,
         }})
 
     # ------------------------------------------------------------------
@@ -881,12 +934,15 @@ class MinimalWebMixin:
         groups, denied = self._minimal_allowed_groups(data.get("groups"))
         if not groups:
             return self._minimal_error("请选择要发送的群")
-        image = None
-        if isinstance(data.get("image"), dict) and data["image"].get("path"):
-            image, err = self._outbox_local(str(data["image"]["path"]))  # 再检查一次，不直接用前端传来的路径
+        # images：多张图（按顺序）；image：旧页面只传一张
+        raw_images = data.get("images") if isinstance(data.get("images"), list) else [data.get("image")]
+        images = []
+        for index, item in enumerate([i for i in raw_images if isinstance(i, dict) and i.get("path")], 1):
+            info, err = self._outbox_local(str(item["path"]))  # 再检查一次，不直接用前端传来的路径
             if err:
-                return self._minimal_error(f"图片：{err}")
-        job, err = self._bulk_send_job(groups, str(data.get("text") or ""), image, **self._web_log())
+                return self._minimal_error(f"第 {index} 张图片：{err}")
+            images.append(info)
+        job, err = self._bulk_send_job(groups, str(data.get("text") or ""), images, **self._web_log())
         if err:
             return self._minimal_error(err)
         return jsonify({"status": "success", "data": {"job": job, "denied": denied}})

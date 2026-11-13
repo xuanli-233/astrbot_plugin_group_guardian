@@ -176,6 +176,60 @@ class FilesTests(unittest.IsolatedAsyncioTestCase):
         os.remove(local["path"])
         self.assertEqual((await h._bq_exec_upfile(h.client, "1", "", params))[0], "failed")
 
+    async def test_send_with_multiple_images(self):
+        h = _H()
+        files = []
+        for n, body in enumerate((b"one", b"two", b"three"), 1):
+            info, err = h._outbox_save(f"图{n}.png", base64.b64encode(body).decode())
+            self.assertEqual(err, "")
+            files.append(info)
+        job, err = h._bulk_send_job(["1", "2"], "看图", files)
+        self.assertEqual((err, job["items"]), ("", 2))
+        title, kind, items = h.jobs[-1]
+        self.assertEqual(kind, "sendmsg")
+        self.assertIn("[图片×3]", title)
+        params = items[0]["params"]
+        self.assertEqual(params["images"], [f["path"] for f in files])
+        status, _ = await h._bq_exec_sendmsg(h.client, "1", "", params)
+        self.assertEqual(status, "ok")
+        message = h.client.calls[-1][1]["message"]
+        # 一条消息：文字在前，图片按给的顺序
+        self.assertEqual([seg["type"] for seg in message], ["text", "image", "image", "image"])
+        self.assertEqual([seg["data"]["file"] for seg in message[1:]],
+                         ["base64://" + base64.b64encode(b).decode() for b in (b"one", b"two", b"three")])
+        self.assertIn("[图片×3]", h.ops[-1][1]["detail"])
+        # 只有图片、没有文字
+        job, err = h._bulk_send_job(["1"], "", files[:2])
+        self.assertEqual(err, "")
+        self.assertIn("[图片×2]", h.jobs[-1][0])
+        status, _ = await h._bq_exec_sendmsg(h.client, "1", "", h.jobs[-1][2][0]["params"])
+        self.assertEqual([seg["type"] for seg in h.client.calls[-1][1]["message"]], ["image", "image"])
+        # 其中一张已被清理：整条不发，说明是第几张
+        os.remove(files[1]["path"])
+        calls = len(h.client.calls)
+        status, msg = await h._bq_exec_sendmsg(h.client, "1", "", params)
+        self.assertEqual(status, "failed")
+        self.assertIn("第 2 张图片", msg)
+        self.assertEqual(calls, len(h.client.calls))
+
+    async def test_send_image_limits_and_old_job_params(self):
+        h = _H()
+        info, _ = h._outbox_save("a.png", base64.b64encode(b"img").decode())
+        too_many = [info] * (group_files.SEND_IMAGES_MAX + 1)
+        self.assertIn(f"最多带 {group_files.SEND_IMAGES_MAX} 张", h._bulk_send_job(["1"], "x", too_many)[1])
+        big = [dict(info, size=group_files.SEND_IMAGES_TOTAL_MAX // 2 + 1)] * 2
+        self.assertIn("合计超过", h._bulk_send_job(["1"], "x", big)[1])
+        self.assertEqual(h.jobs, [])
+        # 一张图仍可以直接传字典（旧调用方式）
+        job, err = h._bulk_send_job(["1"], "x", info)
+        self.assertEqual(err, "")
+        self.assertEqual(h.jobs[-1][2][0]["params"]["images"], [info["path"]])
+        # 升级前排队的任务只有 image 字段，照常发送
+        status, _ = await h._bq_exec_sendmsg(h.client, "1", "", {"text": "旧任务", "image": info["path"]})
+        self.assertEqual(status, "ok")
+        self.assertEqual([seg["type"] for seg in h.client.calls[-1][1]["message"]], ["text", "image"])
+        self.assertTrue(h.ops[-1][1]["detail"].endswith("[图片]"))
+
     def test_image_payload(self):
         h = _H()
         info, _ = h._outbox_save("海报.png", base64.b64encode(b"img").decode())

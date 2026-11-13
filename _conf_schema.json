@@ -483,10 +483,16 @@
         "hint": "off=不读；manual=只在页面上点「读取标题」时读；auto=新链接第一次出现时后台自动读一次。读标题是由 AstrBot 所在服务器访问一次该网页：只读开头 128KB、只取 <title>、不执行脚本、不带 Cookie、只访问公网的 80 / 443 端口。对方网站会看到服务器 IP，一次性的确认 / 退订链接会被触发，所以默认不自动读"
     },
     "kick_join_lock_enabled": {
-        "description": "踢人后暂停加群：有人被踢出后把群改成禁止加群几小时",
+        "description": "踢人后暂停加群：有人被踢出后几小时内不让人加群",
         "type": "bool",
         "default": false,
-        "hint": "开启后有人被踢出群（管理员手动踢、本插件踢都算，主动退群不算），把这个群的加群方式改成「禁止加群」，过一段时间自动恢复，防止被踢的人马上换号进群。机器人需要是群主或管理员；可在多群配置中按群开关"
+        "hint": "开启后有人被踢出群（管理员手动踢、本插件踢都算，主动退群不算），几小时内不让人加群，防止被踢的人马上换号进群。协议端能修改加群方式时（NapCat 等）改成「禁止加群」再到点恢复；LuckyLilliaBot 没有这个接口，改为这段时间自动拒绝加群申请（只对「需要验证」的群有效）。机器人需要是群主或管理员；可在多群配置中按群开关"
+    },
+    "kick_join_lock_reject_reason": {
+        "description": "踢人后暂停加群：拒绝申请时的回复",
+        "type": "string",
+        "default": "本群暂时停止加群，请过几小时再申请",
+        "hint": "协议端不能修改加群方式（LuckyLilliaBot）时，暂停期间自动拒绝加群申请，申请人会看到这句话。最多 60 字"
     },
     "kick_join_lock_min_hours": {
         "description": "踢人后暂停加群：最短几小时",
@@ -516,7 +522,7 @@
         "description": "踢人后暂停加群：到点恢复成哪种加群方式",
         "type": "int",
         "default": 1,
-        "hint": "0 = 允许任何人，1 = 需要验证。LuckyLilliaBot 读不到群原来的加群方式，所以到点统一改成这里选的；各群不一样时在多群配置里按群设置"
+        "hint": "0 = 允许任何人，1 = 需要验证。只在协议端能修改加群方式时有用（LuckyLilliaBot 用的是自动拒绝申请，不改加群方式，这项不起作用）。协议端读不到群原来的加群方式，所以到点统一改成这里选的；各群不一样时在多群配置里按群设置"
     },
     "leave_recall_use_history": {
         "description": "退群撤回：用群历史兜底",
@@ -700,14 +706,14 @@
         "description": "图片文字识别（OCR）接入方式",
         "type": "string",
         "default": "off",
-        "options": ["off", "llbot", "http", "python"],
-        "hint": "off=关闭；llbot=LuckyLilliaBot 自带 ocr_image；http / python 同葵花码。识别出的文字按「关键词规则」过滤"
+        "options": ["off", "rapidocr", "llbot", "http", "python"],
+        "hint": "off=关闭；rapidocr=RapidOCR 文字识别服务（POST /v1/ocr，推荐）；llbot=LuckyLilliaBot 自带 ocr_image；http / python 同葵花码。识别出的文字按规则组的关键词过滤"
     },
     "local_ocr_service_url": {
         "description": "OCR 服务地址",
         "type": "string",
         "default": "",
-        "hint": "接入方式为 http 时使用"
+        "hint": "接入方式为 rapidocr 或 http 时使用。rapidocr 只写到端口即可（留空 = http://127.0.0.1:8110）"
     },
     "local_ocr_python_module": {
         "description": "OCR Python 文件",

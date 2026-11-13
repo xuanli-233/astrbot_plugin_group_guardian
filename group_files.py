@@ -8,7 +8,7 @@
   「重复文件」= 同一个群里文件名 + 大小都相同的（QQ 不返回 md5，按这两项判断），保留最早上传的一份。
   删除走批量任务队列（动作 delfile → delete_group_file），可暂停 / 重试，每删一个写操作记录「删除群文件」。
 
-批量发言（动作 sendmsg → send_group_msg）：文字 + 可选一张图片。
+批量发言（动作 sendmsg → send_group_msg）：文字 + 最多 SEND_IMAGES_MAX 张图片，合成一条消息发出（文字在前，图片按顺序）。
 批量传群文件（动作 upfile → upload_group_file）：文件传到插件数据目录 outbox/ 后，把本机路径交给协议端
   （AstrBot 与 LuckyLilliaBot 在同一台机器上时可用）；也可以直接填服务器上的文件路径（适合大文件）。
   outbox/ 里 7 天前的文件在下次上传时清理。
@@ -31,6 +31,8 @@ OUTBOX_MAX_BYTES = 30 * 1024 * 1024       # 从浏览器上传的文件上限（
 OUTBOX_LOCAL_MAX_BYTES = 4 * 1024 * 1024 * 1024
 OUTBOX_KEEP_SECONDS = 7 * 86400
 SEND_TEXT_MAX = 4500
+SEND_IMAGES_MAX = 9                        # 一条群消息最多带几张图
+SEND_IMAGES_TOTAL_MAX = 30 * 1024 * 1024   # 图片合计上限（都转成 base64 放在一次调用里，不宜过大）
 _SAFE_NAME = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 
 
@@ -342,36 +344,49 @@ class GroupFilesMixin:
     # ------------------------------------------------------------------
     # 批量发言（sendmsg）/ 批量传群文件（upfile）
     # ------------------------------------------------------------------
-    def _bulk_send_job(self, groups: List[str], text: str, image: Optional[dict] = None,
+    def _bulk_send_job(self, groups: List[str], text: str, image=None,
                        source: str = "WebUI", operator: str = "") -> Tuple[dict, str]:
+        """image：一张图（{path, size}）或多张图的列表，按给的顺序排在文字后面，一条消息发出。"""
         text = str(text or "").strip()
-        if not text and not image:
+        images = image if isinstance(image, (list, tuple)) else ([image] if image else [])
+        images = [i for i in images if isinstance(i, dict) and i.get("path")]
+        if not text and not images:
             return {}, "请填写要发送的内容或选择图片"
         if len(text) > SEND_TEXT_MAX:
             return {}, f"内容过长（上限 {SEND_TEXT_MAX} 字）"
-        preview = (text[:30] + ("…" if len(text) > 30 else "")) or "[图片]"
-        items = [{"group_id": g, "action": "sendmsg", "label": f"发送「{preview}」",
-                  "params": {"text": text, "image": (image or {}).get("path", ""), "source": source,
+        if len(images) > SEND_IMAGES_MAX:
+            return {}, f"一条消息最多带 {SEND_IMAGES_MAX} 张图片"
+        total = sum(int(i.get("size") or 0) for i in images)
+        if total > SEND_IMAGES_TOTAL_MAX:
+            return {}, f"图片合计超过 {SEND_IMAGES_TOTAL_MAX // 1024 // 1024} MB，请减少或压缩图片"
+        mark = "[图片]" if len(images) == 1 else f"[图片×{len(images)}]" if images else ""
+        preview = (text[:30] + ("…" if len(text) > 30 else "")) or mark
+        paths = [str(i["path"]) for i in images]
+        items = [{"group_id": g, "action": "sendmsg", "label": f"发送「{preview}」" + (f" {mark}" if text and mark else ""),
+                  "params": {"text": text, "images": paths, "source": source,
                              "operator": operator}} for g in groups]
-        job = self._bq_create_job(f"批量发言到 {len(items)} 个群：{preview}", "sendmsg", items, source=source,
-                                  operator=operator)
+        job = self._bq_create_job(f"批量发言到 {len(items)} 个群：{preview}" + (f" {mark}" if text and mark else ""),
+                                  "sendmsg", items, source=source, operator=operator)
         return job, ""
 
     async def _bq_exec_sendmsg(self, client, gid: str, _target: str, params: dict) -> Tuple[str, str]:
         segments = []
         if params.get("text"):
             segments.append({"type": "text", "data": {"text": params["text"]}})
-        image = params.get("image")
-        if image:
+        images = [str(p) for p in (params.get("images") or []) if p]
+        if not images and params.get("image"):   # 升级前创建、还没执行完的任务：只有一张图
+            images = [str(params["image"])]
+        for index, image in enumerate(images, 1):
             payload, err = image_payload(image)
             if err:
-                return "failed", err
+                return "failed", err if len(images) == 1 else f"第 {index} 张图片：{err}"
             segments.append({"type": "image", "data": {"file": payload}})
         ok, err = await self._call_group_api(client, "send_group_msg", "批量发言", group_id=self._safe_int(gid, 0),
                                              message=segments)
+        mark = " [图片]" if len(images) == 1 else f" [图片×{len(images)}]" if images else ""
         self._record_op("批量发言", source=params.get("source", ""), operator=params.get("operator", ""),
                         group_id=gid, result="成功" if ok else f"失败：{err}",
-                        detail=(params.get("text") or "")[:200] + (" [图片]" if image else ""))
+                        detail=(params.get("text") or "")[:200] + mark)
         return ("ok", "已发送") if ok else ("failed", err or "发送失败")
 
     def _bulk_upload_job(self, groups: List[str], file: dict, name: str = "",
