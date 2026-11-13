@@ -735,13 +735,40 @@ async def _mock_code_http_get(self, url, timeout=5.0):
     return 200, {"status": "ok", "ready": True}
 
 
+MOCK_OCR_IMAGES = {}          # 图片 sha1 → 图上的文字（多行用 | 分隔）
+MOCK_CODE_IMAGES_BYTES = set()  # 模拟码图片的字节（OCR 对它们返回空）
+
+
+def _mock_ocr_png(text: str) -> bytes:
+    """mock://ocr/<文字> → 一张真实的图片（底色随文字变化，看板上能看到缩略图）。"""
+    import hashlib
+    import io
+    from PIL import Image, ImageDraw
+    digest = hashlib.sha1(text.encode("utf-8")).digest()
+    image = Image.new("RGB", (360, 220), (200 + digest[0] % 50, 205 + digest[1] % 45, 210 + digest[2] % 40))
+    draw = ImageDraw.Draw(image)
+    for i, _line in enumerate([t for t in text.split("|") if t.strip()][:6]):
+        draw.rectangle([24, 28 + i * 30, 24 + 120 + (digest[3 + i % 10] % 180), 44 + i * 30], fill=(70, 70, 80))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    data = buf.getvalue()
+    MOCK_OCR_IMAGES[hashlib.sha1(data).hexdigest()] = text
+    return data
+
+
 async def _mock_ocr_http_post(self, url, data, filename, mime, timeout):
     """模拟 RapidOCR 文字识别服务：mock://ocr/<文字> 的图片识别出 <文字>（用 | 分行）；
     页面上传的真实图片固定识别出两行示例文字；其它模拟图片没有文字。"""
     ACTIONS.append({"time": time.strftime("%H:%M:%S"), "action": "HTTP " + url.split("/", 3)[-1],
                     "params": {"bytes": len(data)}})
+    import hashlib
     prefix = b"mock-image:mock://ocr/"
-    if data.startswith(prefix):
+    known = MOCK_OCR_IMAGES.get(hashlib.sha1(data).hexdigest())
+    if known is not None:   # mock://ocr/<文字> 生成的图片
+        texts = [t for t in known.split("|") if t.strip()]
+    elif data in MOCK_CODE_IMAGES_BYTES:   # 模拟的码图片：图上没有文字
+        texts = []
+    elif data.startswith(prefix):
         texts = [t for t in urllib.parse.unquote(data[len(prefix):].decode("utf-8", "ignore")).split("|") if t.strip()]
     elif data.startswith(b"mock-image:"):
         texts = []
@@ -798,7 +825,11 @@ def boot(plugin_parent: str):
                 image_audit_mod.DOWNLOAD_ERROR.set(
                     "图片域名 multimedia.nt.qq.com.cn 解析到了内网 / 保留地址或无法解析，出于安全考虑拒绝下载（模拟）")
                 return None
-            return _mock_code_png(content)
+            png = _mock_code_png(content)
+            MOCK_CODE_IMAGES_BYTES.add(png)
+            return png
+        if url.startswith("mock://ocr/"):
+            return _mock_ocr_png(urllib.parse.unquote(url[len("mock://ocr/"):]))
         return f"mock-image:{url}".encode()
     Main._download_bytes = fake_download
     Main._code_http_post = _mock_code_http_post

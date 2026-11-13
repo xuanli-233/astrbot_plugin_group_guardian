@@ -277,6 +277,34 @@ class RecognizeImagesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await h._recognize_images(["u9"], "local_ocr"), ["第一张"])
         self.assertEqual(h._recognize_last_notes(), [])
 
+    async def test_per_image_details_for_board(self):
+        svc = _Service()
+        h = _Harness(svc)
+        h.images = {"u1": PNG, "u2": GIF, "u4": JPG}   # u3 下载失败
+        svc.responses = [_ok("第一张", ms=150.0), _ok("第四张", "第一张")]
+        h.RECOGNIZE_CONCURRENCY = 1
+        texts = await h._recognize_images(["u1", "u2", "u3", "u4"], "local_ocr")
+        self.assertEqual(texts, ["第一张", "第四张"])           # 合并结果去重
+        d1, d2, d3, d4 = h._recognize_last_details()
+        self.assertEqual((d1["url"], d1["texts"], d1["note"], d1["ms"], d1["data"]), ("u1", ["第一张"], "", 150.0, PNG))
+        self.assertEqual((d2["texts"], d2["data"]), ([], GIF))
+        self.assertIn("GIF", d2["note"])
+        self.assertEqual((d3["texts"], d3["data"]), ([], None))
+        self.assertIn("下载失败", d3["note"])
+        self.assertEqual(d4["texts"], ["第四张", "第一张"])     # 每张图保留自己的全部文字
+        # 同一张图再来一次：标记为缓存
+        await h._recognize_images(["u1"], "local_ocr")
+        (again,) = h._recognize_last_details()
+        self.assertTrue(again["cached"])
+        # 看板关着时不带图片字节
+        h.cfg_values["code_board_enabled"] = False
+        await h._recognize_images(["u1"], "local_ocr")
+        self.assertIsNone(h._recognize_last_details()[0]["data"])
+        # 关闭 OCR 后不留上一次的结果
+        h.cfg_values["local_ocr_driver"] = "off"
+        await h._recognize_images(["u1"], "local_ocr")
+        self.assertEqual(h._recognize_last_details(), [])
+
     async def test_base64_image_and_driver_scope(self):
         import base64
         svc = _Service()

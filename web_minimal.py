@@ -1085,6 +1085,8 @@ class MinimalWebMixin:
                                  epoch=self._safe_int(args.get("epoch", 0), 0))
         snap["enabled"] = bool(self._cfg("code_board_enabled", True))
         snap["wxcode_enabled"] = bool(self._cfg("wxcode_enabled", False))
+        snap["ocr_enabled"] = (self._cfg_str("local_ocr_driver", "off").strip().lower() not in ("", "off")
+                               and bool(self._cfg("keyword_guard_enabled", True)))
         snap["blocked"] = self._code_block_list()
         snap["allowed"] = self._code_allow_list()
         names = {}

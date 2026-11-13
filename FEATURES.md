@@ -148,7 +148,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 │  └─ image_audit.py          图片下载：公网地址校验、本地临时文件读取、共享 HTTP 会话
 ├─ keyword_guard.py   关键词撤回 → 葵花码 / 二维码识别 → OCR 文字（_run_hit_guards）
 ├─ code_pipeline.py   二维码 / 葵花码两阶段识别（定位服务 → 裁剪 → 解码服务）
-├─ code_board.py      二维码看板 + 码内容拉黑
+├─ code_board.py      图片看板（码 + 图片文字）+ 码内容拉黑
 ├─ code_limit.py      码记录（统计 + 保存图片）、同一个码的发送次数限制（按码 / 按人，滑动窗口）
 ├─ card_parse.py      小程序 / 分享卡片解析（文字、appid、链接、封面图）
 ├─ image_recognizer.py / message_backup.py   识别器接口、备份到指定群
@@ -246,7 +246,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 退群记录：主动退群 / 被踢时记录时间、群、方式、操作人和退群前最近 N 条消息（摘要只存内存，不足时群历史兜底），WebUI「退群记录」按 QQ / 群查询、看某人汇总 | `leave_log.py`（表 `leave_logs`，保留 5 万条） | `leave_log_enabled`、`leave_log_msg_count`、`leave_log_use_history` | 默认开，10 条 |
 | 退群记录图片：记录消息时顺带记下图片地址（每条最多 4 张，只在内存）；退群时后台下载、压缩到 500KB 以内存到数据目录 `leave_images/`，链接失效时用 `get_image` 向协议端取本地缓存；WebUI 显示缩略图、点开看大图；保留 `leave_log_image_days` 天后只删图片 | `leave_log.py`（表 `leave_images`） | `leave_log_save_images`、`leave_log_image_days` | 默认开；30 天 |
 | 自动同意好友申请 / 自动接受进群邀请 | `auto_accept.py`（main `_on_friend_request`、`_on_group_request` 先于入群审核处理 invite） | `auto_accept_friend_enabled` / `_friend_scope`（all / admin / whitelist）、`auto_accept_invite_enabled` / `_invite_scope`（admin / all / whitelist）、白名单 `auto_accept_{friend,invite}_wl_users` / `_wl_groups`、`auto_accept_delay_seconds` | 都默认关；邀请默认仅接受插件管理员的；黑名单用户好友申请拒绝、邀请不接受；不在范围内的留给人工。白名单 = 插件管理员 + 白名单 QQ + 成员来源群（`_wl_groups`，从这些群提取群成员）的群成员，好友申请和邀请各一套，不在白名单的不处理；只决定是否自动通过，与管理范围的群白名单 / 群黑名单无关；群成员先查本地缓存，没找到时把超过 60 秒没拉取的成员来源群重新拉一次成员列表再比对（每群 60 秒最多一次）。WebUI「踢人与黑名单」可测试某个 QQ 能否通过（接口 `/minimal/accept/check`） |
-| 二维码看板：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |
+| 图片看板（原二维码看板）：原图 + 每个码的裁剪图、识别结果；复制、拉黑 / 解除拉黑该码；图片文字识别（OCR）的各行文字、命中的规则、没认出来的原因，可复制；只开了 OCR 的图片也有卡片 | `code_board.py`、`web_minimal.py:_web_minimal_codeboard*` | `code_board_enabled`、`code_board_size`、`wxcode_block_codes`（已拉黑的码，完全一致即命中，优先于正则规则） | 看板默认开（只存内存，30 张），名单默认空 |
 | 实时日志：WebUI 查看近期消息处理进度与耗时 | `live_log.py`、`web_minimal.py:_web_minimal_livelog` | `live_log_enabled`、`live_log_show_text`、`live_log_size` | 默认开（只存内存，300 条） |
 | 机器人进群 / 加好友推送到勾选了「机器人进群」/「机器人加好友」的转发群：进群（group_increase 里 user_id 是机器人）发群名、群号、人数、邀请人；加好友（friend_add）发昵称、QQ、验证消息、是否自动同意 | `bot_notify.py` | `bot_notify_join_enabled`、`bot_notify_friend_enabled` | 都默认开；没有这样的转发群不发 |
 | 进群后自动设置机器人的群消息接收方式（LLBot `set_group_msg_mask`，默认 4 = 接收消息但不提醒）：进群通知触发，群成员缓存后台刷新时补漏；第一次开启时已在的群记为基线不改动；已有的群在「踢人与黑名单」批量设置（批量任务） | `group_msg_mask.py`（meta 表 `msg_mask_state`） | `auto_msg_mask_enabled`、`auto_msg_mask_value` | 默认关 |

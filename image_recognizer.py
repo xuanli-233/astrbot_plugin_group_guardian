@@ -38,7 +38,7 @@ import inspect
 import os
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from astrbot.api import logger
 
@@ -53,6 +53,9 @@ except ImportError:
 
 # 最近一次 _recognize_images 里没识别成功的图片的原因（每张图一条）
 RECOGNIZE_NOTES = contextvars.ContextVar("group_guardian_recognize_notes", default=())
+# 最近一次 _recognize_images 里每张图的结果（按图片顺序）：
+#   {"url", "texts", "note", "cached", "ms", "data"}；data 只在开着图片看板时保留（给看板生成缩略图）
+RECOGNIZE_DETAILS = contextvars.ContextVar("group_guardian_recognize_details", default=())
 
 OCR_SERVICE_DEFAULT_URL = "http://127.0.0.1:8110"
 
@@ -367,29 +370,35 @@ class ImageRecognizerMixin:
                 return None
         return await self._download_bytes(text)
 
-    async def _recognize_one(self, kind: str, driver: str, image_url: str, group_id: str) -> Tuple[List[str], str]:
-        """返回 (文字列表, 没识别成功的原因)。"""
+    async def _recognize_one(self, kind: str, driver: str, image_url: str,
+                             group_id: str) -> Tuple[List[str], str, dict, Optional[bytes]]:
+        """返回 (文字列表, 没识别成功的原因, 附加信息, 图片字节)。llbot 驱动不下载图片，字节为 None。"""
         try:
             if driver == "llbot":
-                return await self._recognize_llbot_ocr(image_url), ""
+                return await self._recognize_llbot_ocr(image_url), "", {}, None
             data = await self._recognize_fetch(image_url)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.warning(f"[GroupMgr] {kind} 识别失败: {e}")
-            return [], f"识别失败：{str(e)[:120] or type(e).__name__}（已放行）"
+            return [], f"识别失败：{str(e)[:120] or type(e).__name__}（已放行）", {"failed": True}, None
         if not data:
-            return [], f"图片下载失败：{last_download_error() or '未知原因'}"
-        texts, note, _info = await self._recognize_bytes(kind, driver, data, image_url, group_id)
-        return texts, note
+            return [], f"图片下载失败：{last_download_error() or '未知原因'}", {"failed": True}, None
+        texts, note, info = await self._recognize_bytes(kind, driver, data, image_url, group_id)
+        return texts, note, info, data
 
     def _recognize_last_notes(self) -> List[str]:
         """最近一次 _recognize_images 里没识别成功的图片的原因。"""
         return list(RECOGNIZE_NOTES.get())
 
+    def _recognize_last_details(self) -> List[dict]:
+        """最近一次 _recognize_images 里每张图的结果（见 RECOGNIZE_DETAILS）。"""
+        return list(RECOGNIZE_DETAILS.get())
+
     async def _recognize_images(self, image_urls: list, kind: str, group_id: str = "") -> List[str]:
         """识别多张图片，按图片顺序返回所有文字（已去重）。"""
         RECOGNIZE_NOTES.set(())
+        RECOGNIZE_DETAILS.set(())
         driver = self._cfg_str(f"{kind}_driver", "off").strip().lower()
         if driver in ("", "off") or (driver in ("llbot", "rapidocr") and kind != "local_ocr"):
             return []
@@ -408,12 +417,19 @@ class ImageRecognizerMixin:
         results = await asyncio.gather(*(run(u) for u in urls))
         texts: List[str] = []
         notes: List[str] = []
+        details: List[dict] = []
         multi = len(urls) > 1
-        for index, (items, note) in enumerate(results, 1):
+        # 图片字节只在开着图片看板时带出去（看板要生成缩略图），否则识别完就丢
+        keep_data = kind == "local_ocr" and bool(self._cfg("code_board_enabled", True))
+        for index, (url, (items, note, info, data)) in enumerate(zip(urls, results), 1):
             for text in items:
                 if text not in texts:
                     texts.append(text)
             if note:
                 notes.append((f"图{index} " if multi else "") + note)
+            details.append({"url": url, "texts": list(items), "note": note,
+                            "cached": bool((info or {}).get("cached")), "ms": (info or {}).get("ms"),
+                            "data": data if keep_data else None})
         RECOGNIZE_NOTES.set(tuple(notes))
+        RECOGNIZE_DETAILS.set(tuple(details))
         return texts

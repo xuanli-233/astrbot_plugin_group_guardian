@@ -557,6 +557,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .cb-text.open{max-height:none}
     .cb-text.err{color:var(--warning);font-family:inherit}
     .cb-acts{display:flex;gap:4px;flex-wrap:wrap}
+    .cb-ocr{padding:8px 10px;border-top:1px dashed var(--border);font-size:12px}
+    .cb-ocr.hit{background:var(--danger-light)}
+    .cb-ocr-title{font-weight:600;color:var(--text-primary)}
+    .cb-ocr-text{white-space:pre-wrap;word-break:break-all;margin:4px 0;color:var(--text-primary);line-height:1.6;max-height:6.4em;overflow:hidden}
+    .cb-ocr-text.open{max-height:320px;overflow:auto;padding-right:4px}
     .cb-acts .btn{padding:2px 8px;font-size:11px}
     .cb-tag{font-size:11px;padding:0 6px;border-radius:9px;background:var(--danger-light);color:var(--danger)}
     .cb-tag.blocked{background:var(--text-primary);color:var(--surface)}
@@ -1771,7 +1776,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <div class="header-actions">
             <div class="seg" role="tablist">
               <button class="seg-btn active" data-live-view="messages" role="tab">消息处理</button>
-              <button class="seg-btn" data-live-view="board" role="tab">二维码看板</button>
+              <button class="seg-btn" data-live-view="board" role="tab">图片看板</button>
             </div>
             <button class="btn btn-outline btn-sm lv-view" id="btnLivePause">暂停</button>
             <button class="btn btn-ghost btn-sm lv-view" id="btnLiveClear">清空显示</button>
@@ -1779,13 +1784,13 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         </div>
 
         <div id="cbView" style="display:none">
-          <p class="mn-intro">每张经过二维码 / 葵花码识别的群图片一张卡片：原图上用编号框标出每个码（红 = 命中规则，绿 = 已解出，橙 = 解不出），下面逐个列出码的裁剪图和识别内容。「拉黑该码」后，任何群里再解出完全相同内容的码都会按命中处理（撤回 + 备份）；「解除拉黑」即恢复。图片只在内存里保留最近几十张，重启清空。</p>
+          <p class="mn-intro">每张经过识别的群图片一张卡片：原图上用编号框标出每个码（红 = 命中规则，绿 = 已解出，橙 = 解不出），下面逐个列出码的裁剪图和识别内容，再下面是<strong>图片文字识别（OCR）</strong>认出的文字、命中了哪条关键词规则（没认出来时写明原因）。只开了文字识别、没开码识别的图片也会出现在这里。「拉黑该码」后，任何群里再解出完全相同内容的码都会按命中处理（撤回 + 备份）；「解除拉黑」即恢复。图片只在内存里保留最近几十张，重启清空。</p>
           <div id="cbNotice" class="mn-banner" style="display:none"></div>
           <div class="card">
             <div class="card-header"><h2>识别记录</h2>
               <div class="header-actions">
                 <select class="input-sm" id="cbFilter" style="width:130px">
-                  <option value="">全部</option><option value="hit">命中处理</option><option value="code">有码</option><option value="blocked">含已拉黑的码</option>
+                  <option value="">全部</option><option value="hit">命中处理</option><option value="code">有码</option><option value="ocr">有文字</option><option value="ocrhit">文字命中规则</option><option value="blocked">含已拉黑的码</option>
                 </select>
                 <button class="btn btn-ghost btn-sm" id="btnCbBlocked">已拉黑的码</button>
               </div></div>
@@ -4209,7 +4214,7 @@ var MN_SWITCHES = {
     { key: 'bot_notify_friend_enabled', label: '加好友后推送到备份群', desc: '机器人新加了好友：在备份群发昵称、QQ 号、验证消息、是否自动同意' }
   ],
   cbSwitches: [
-    { key: 'code_board_enabled', label: '保留识别图片（二维码看板）', desc: '关闭后不保留任何图片，看板为空；码内容拉黑仍然有效' }
+    { key: 'code_board_enabled', label: '保留识别图片（图片看板）', desc: '关闭后不保留任何图片，看板为空；码内容拉黑、文字识别仍然有效' }
   ],
   liveSwitches: [
     { key: 'live_log_enabled', label: '记录实时日志', desc: '只在内存里保留最近几百条，不写数据库、不调用接口' },
@@ -7775,7 +7780,7 @@ function bsRenderFeed() {
     return e && (e.codes || []).length && (!ff || (ff === 'hit' ? e.outcome === 'hit' : e.outcome !== 'hit'));
   }).slice(0, 24);
   if (!all.length && ff) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">最近没有' + (ff === 'hit' ? '被撤回' : '放行') + '的码</div>'; BS.first = false; return; }
-  if (!all.length) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">还没有识别到码。二维码看板需要开启（「实时日志 → 二维码看板」设置）。</div>'; BS.first = false; return; }
+  if (!all.length) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">还没有识别到码。图片看板需要开启（「实时日志 → 图片看板」设置）。</div>'; BS.first = false; return; }
   $('#bsFeed').innerHTML = all.map(function(e) {
     var c = (e.codes || []).filter(function(x) { return x.decoded; })[0] || e.codes[0];
     var isNew = !BS.first && !BS.seen[e.id];
@@ -7825,8 +7830,8 @@ function bsSetFull(on) {
   }
 }
 
-/* ---- 二维码看板 ---- */
-var CB = { epoch: 0, seq: 0, map: {}, ids: [], blocked: [], blockedSet: {}, allowed: [], allowedSet: {}, names: {}, timer: null, inflight: false, enabled: true };
+/* ---- 图片看板（码 + 图片文字） ---- */
+var CB = { ocrOpen: {}, epoch: 0, seq: 0, map: {}, ids: [], blocked: [], blockedSet: {}, allowed: [], allowedSet: {}, names: {}, timer: null, inflight: false, enabled: true };
 function cbActive() {
   var p = $('#tab-livelog');
   return !!(p && p.classList.contains('active') && !document.hidden && LIVE_VIEW === 'board');
@@ -7848,7 +7853,7 @@ async function cbPoll() {
     var d = mnData(res) || {};
     if (d.reset) CB.map = {};
     CB.epoch = d.epoch; CB.seq = d.seq; CB.ids = d.ids || []; CB.enabled = d.enabled !== false;
-    CB.wxEnabled = d.wxcode_enabled !== false;
+    CB.wxEnabled = d.wxcode_enabled !== false; CB.ocrEnabled = !!d.ocr_enabled;
     codeListsApply(d.allowed || [], d.blocked || []);
     Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) CB.names[k] = d.group_names[k]; });
     (d.items || []).forEach(function(e) {
@@ -7860,7 +7865,7 @@ async function cbPoll() {
       CB.map[e.id] = e;
     });
     var keep = {}; CB.ids.forEach(function(id) { keep[id] = true; });
-    Object.keys(CB.map).forEach(function(id) { if (!keep[id]) delete CB.map[id]; });
+    Object.keys(CB.map).forEach(function(id) { if (!keep[id]) { delete CB.map[id]; delete CB.ocrOpen[id]; } });
     cbRender();
   } finally {
     CB.inflight = false;
@@ -7870,26 +7875,57 @@ async function cbPoll() {
 function cbEntryBlocked(e) { return (e.codes || []).some(function(c) { return c.text && CB.blockedSet[c.text.trim()]; }); }
 function cbRender() {
   var notice = $('#cbNotice');
-  var msg = !CB.enabled ? '二维码看板已关闭，新识别的图片不会显示（可在下方「设置」打开）。'
-    : (!CB.wxEnabled ? '葵花码 / 二维码识别还没有开启（「识别服务与转发群」页面），群图片不会被识别。' : '');
+  var msg = !CB.enabled ? '图片看板已关闭，新识别的图片不会显示（可在下方「设置」打开）。'
+    : (!CB.wxEnabled && !CB.ocrEnabled ? '葵花码 / 二维码识别和图片文字识别都还没有开启（「识别服务与转发群」页面），群图片不会被识别。'
+      : !CB.ocrEnabled ? '图片文字识别（OCR）还没有开启，卡片上只有码的识别结果。在「识别服务与转发群 → 图片文字识别」里选接入方式，并保持「关键词撤回」开着。'
+      : !CB.wxEnabled ? '葵花码 / 二维码识别没有开启，卡片上只有图片文字。' : '');
   notice.style.display = msg ? '' : 'none'; notice.textContent = msg;
   var all = CB.ids.slice().reverse().map(function(id) { return CB.map[id]; }).filter(Boolean);
   var f = $('#cbFilter').value;
   var rows = all.filter(function(e) {
     if (f === 'hit') return e.outcome === 'hit';
     if (f === 'code') return (e.codes || []).length > 0;
+    if (f === 'ocr') return cbOcrLines(e).length > 0;
+    if (f === 'ocrhit') return !!(e.ocr && e.ocr.hit);
     if (f === 'blocked') return cbEntryBlocked(e);
     return true;
   });
   var codes = all.reduce(function(n, e) { return n + (e.codes || []).length; }, 0);
   var hits = all.filter(function(e) { return e.outcome === 'hit'; }).length;
-  $('#cbStats').textContent = '最近 ' + all.length + ' 张图（共 ' + codes + ' 个码，命中处理 ' + hits + ' 张）· 已拉黑的码 ' + CB.blocked.length + ' 个 · 每 3 秒更新';
+  var withText = all.filter(function(e) { return cbOcrLines(e).length > 0; }).length;
+  $('#cbStats').textContent = '最近 ' + all.length + ' 张图（共 ' + codes + ' 个码，' + withText + ' 张认出文字，命中处理 ' + hits + ' 张）· 已拉黑的码 ' + CB.blocked.length + ' 个 · 每 3 秒更新';
   $('#btnCbBlocked').textContent = '已拉黑的码（' + CB.blocked.length + '）';
   if (!rows.length) {
-    $('#cbGrid').innerHTML = '<div class="mn-empty" style="grid-column:1/-1">' + (all.length ? '没有符合筛选条件的图片' : '还没有识别记录。群里有人发图片并经过二维码 / 葵花码识别后，会出现在这里。') + '</div>';
+    $('#cbGrid')._cbHtml = null;
+    $('#cbGrid').innerHTML = '<div class="mn-empty" style="grid-column:1/-1">' + (all.length ? '没有符合筛选条件的图片' : '还没有识别记录。群里有人发图片并经过二维码 / 葵花码识别或图片文字识别后，会出现在这里。') + '</div>';
     return;
   }
-  $('#cbGrid').innerHTML = rows.map(cbCardHtml).join('');
+  // 内容没变就不重画：每 3 秒轮询一次，重画会把展开的长文字滚动位置弹回顶部
+  var html = rows.map(cbCardHtml).join(''), grid = $('#cbGrid');
+  if (grid._cbHtml !== html || !grid.firstChild) { grid.innerHTML = html; grid._cbHtml = html; }
+}
+function cbOcrLines(e) { return (e.ocr && e.ocr.texts) || []; }
+// 卡片上的「图片文字」一段：没做 OCR 的图片不显示
+function cbOcrHtml(e) {
+  var o = e.ocr;
+  if (!o) return '';
+  var lines = o.texts || [], chars = lines.reduce(function(n, t) { return n + t.length; }, 0);
+  var meta = '<span class="cb-ocr-title">图片文字</span>' +
+    (lines.length ? '<span>' + (o.truncated ? '共 ' + o.total_lines + ' 行 · ' + o.total_chars + ' 字' : lines.length + ' 行 · ' + chars + ' 字') + '</span>' : '') +
+    (o.ms != null ? '<span>识别 ' + Math.round(o.ms) + ' 毫秒</span>' : '') +
+    (o.cached ? '<span title="同一张图 10 分钟内只识别一次">缓存结果</span>' : '') +
+    (o.hit ? '<span class="cb-tag">命中 ' + esc(o.hit) + '</span>' : '');
+  var open = !!CB.ocrOpen[e.id], long = lines.length > 4 || chars > 160;
+  var body = lines.length
+    ? '<div class="cb-ocr-text' + (open ? ' open' : '') + '">' + esc(lines.join('\n')) + '</div>'
+    : '<div class="cb-text err">' + esc(o.note || '没有认出文字') + '</div>';
+  if (o.truncated) body += '<div class="mn-hint">文字太多，这里只保留前 ' + Math.min(chars, 2000) + ' 字（' + lines.length + ' 行）；是否命中规则是按全部文字判断的</div>';
+  if (lines.length && o.note) body += '<div class="cb-text err">' + esc(o.note) + '</div>';
+  var acts = lines.length ? '<div class="cb-acts">' +
+    '<button class="btn btn-ghost btn-sm" data-cb-ocr="copy" data-id="' + e.id + '"' + (o.truncated ? ' title="复制的是卡片上保留的这部分"' : '') + '>复制文字</button>' +
+    (long ? '<button class="btn btn-ghost btn-sm" data-cb-ocr="expand" data-id="' + e.id + '">' + (open ? '收起' : '展开') + '</button>' : '') +
+    '</div>' : '';
+  return '<div class="cb-ocr' + (o.hit ? ' hit' : '') + '"><div class="cb-meta">' + meta + '</div>' + body + acts + '</div>';
 }
 function cbCardHtml(e) {
   var gname = CB.names[e.group_id];
@@ -7928,12 +7964,13 @@ function cbCardHtml(e) {
   }).join('');
   var foot = [];
   if (e.error) foot.push(e.error);
+  else if (e.code_scanned === false) foot.push('没有做码识别（葵花码 / 二维码识别未开启）');
   else if (!(e.codes || []).length) foot.push(e.has_code ? '检测到码，但不属于要解码的类别' : '未发现码');
   if (e.over_limit) foot.push('另有 ' + e.over_limit + ' 个码超过每张图上限，未解码');
   if (e.reason) foot.push('处理原因：' + e.reason);
   if (e.text) foot.push('消息：' + e.text);
   return '<div class="cb-card' + (e.outcome === 'hit' ? ' hit' : '') + '"><div class="cb-head">' + head + '</div>' + orig +
-    (codes ? '<div class="cb-codes">' + codes + '</div>' : '') +
+    (codes ? '<div class="cb-codes">' + codes + '</div>' : '') + cbOcrHtml(e) +
     (foot.length ? '<div class="cb-foot">' + foot.map(esc).join('<br>') + '</div>' : '') + '</div>';
 }
 function cbCode(id, i) { var e = CB.map[id]; return e && e.codes ? e.codes[Number(i)] : null; }
@@ -8006,6 +8043,14 @@ function cbOnClick(e) {
         '<button class="btn btn-primary btn-sm" id="cbZoomClose">关闭</button>');
       $('#cbZoomClose').addEventListener('click', closeModal);
     }
+    return;
+  }
+  var ocrBtn = e.target.closest('[data-cb-ocr]');
+  if (ocrBtn) {
+    var oid = ocrBtn.getAttribute('data-id'), oe = CB.map[oid];
+    if (!oe) return;
+    if (ocrBtn.getAttribute('data-cb-ocr') === 'copy') cbCopy(cbOcrLines(oe).join('\n'));
+    else { CB.ocrOpen[oid] = !CB.ocrOpen[oid]; cbRender(); }
     return;
   }
   var btn = e.target.closest('[data-cb-act]');

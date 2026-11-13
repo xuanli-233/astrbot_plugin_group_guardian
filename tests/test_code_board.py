@@ -227,5 +227,140 @@ class BoardFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(scheduled[0][-1], "")  # 放行：reason 为空
 
 
+@unittest.skipIf(Image is None, "需要 Pillow")
+class OcrOnBoardTests(unittest.IsolatedAsyncioTestCase):
+    """图片看板上的图片文字识别（OCR）结果。"""
+
+    def _harness(self, **cfg):
+        h = _Harness(cfg={"local_ocr_driver": "rapidocr", **cfg}, config={"keyword_rules": ["代刷"]})
+        h.ocr_details = []
+        h.ocr_calls = 0
+
+        async def recognize(urls, kind, group_id=""):
+            h.ocr_calls += 1
+            return [t for d in h.ocr_details for t in d["texts"]]
+        h._recognize_images = recognize
+        h._recognize_last_details = lambda: list(h.ocr_details)
+        self.scheduled = []
+        h._cb_schedule = lambda collected, *args, **kw: self.scheduled.append((collected, args, kw))
+        return h
+
+    @staticmethod
+    def _event():
+        return types.SimpleNamespace(message_str="", get_messages=lambda: [])
+
+    async def test_card_built_with_code_and_ocr(self):
+        h = _Harness(config={"keyword_rules": ["代刷"]})
+        h.images["u1"] = _png()
+        h.detections = [_det(3, 0.9, (20, 20, 120, 120))]
+        h.decodes = ["https://fine.example"]
+        collected = []
+        await h._code_scan_images(["u1"], collect=collected)
+        ocr = {"u1": {"url": "u1", "texts": ["校园兼职", " 专业代刷 日结 ", ""], "note": "", "cached": True, "ms": 181.5}}
+        (entry,) = await h._cb_build(collected, "100", "555", "张三", "", "图片文字关键词: 代刷", ocr=ocr)
+        self.assertTrue(entry["code_scanned"])
+        self.assertEqual(len(entry["codes"]), 1)
+        self.assertEqual(entry["ocr"], {"texts": ["校园兼职", "专业代刷 日结"], "total_lines": 2, "total_chars": 11,
+                                        "truncated": False, "note": "", "hit": "代刷",
+                                        "cached": True, "ms": 181.5})
+        self.assertEqual(entry["outcome"], "hit")
+        # 没做 OCR 的卡片没有这一段
+        (plain,) = await h._cb_build(collected, "100", "555", "张三", "", "")
+        self.assertIsNone(plain["ocr"])
+
+    async def test_ocr_only_card_note_and_long_text(self):
+        h = _Harness()
+        ocr = {"a": {"url": "a", "texts": ["今天天气不错"], "note": "", "cached": False, "ms": None},
+               "b": {"url": "b", "texts": [], "note": "文字识别服务连接失败：refused（已放行）"},
+               "c": {"url": "c", "texts": ["长" * 1500, "文" * 1500, "后面的不要"]}}
+        items = [{"url": "a", "data": _png(), "scan": None}, {"url": "b", "data": None, "scan": None},
+                 {"url": "c", "data": _png(), "scan": None}]
+        a, b, c = await h._cb_build(items, "100", "555", "", "", "", ocr=ocr)
+        self.assertFalse(a["code_scanned"])
+        self.assertEqual((a["codes"], a["error"], a["outcome"]), ([], "", "pass"))
+        self.assertTrue(a["orig"])                                  # 只做了 OCR 的图也有缩略图
+        self.assertEqual((a["ocr"]["texts"], a["ocr"]["hit"]), (["今天天气不错"], ""))
+        self.assertEqual((a["image_index"], a["image_count"]), (1, 3))
+        self.assertEqual(b["ocr"]["texts"], [])
+        self.assertIn("连接失败", b["ocr"]["note"])
+        self.assertEqual(b["error"], "")                            # 原因写在图片文字那一段，不重复报下载失败
+        total = sum(len(t) for t in c["ocr"]["texts"])
+        self.assertLessEqual(total, code_board.CB_TEXT_MAX + 1)     # 文字总量有上限
+        self.assertEqual(len(c["ocr"]["texts"]), 2)
+        self.assertEqual((c["ocr"]["truncated"], c["ocr"]["total_lines"], c["ocr"]["total_chars"]), (True, 3, 3005))
+        self.assertFalse(a["ocr"]["truncated"])
+
+    async def test_long_text_hit_is_judged_on_full_text(self):
+        # 关键词在 2000 字之后：卡片上看不到这部分，但「命中」仍按全部文字判断
+        h = _Harness(config={"keyword_rules": ["代刷"]})
+        texts = [f"第{i}行 " + "聊天记录" * 5 for i in range(150)] + ["专业代刷"]
+        ocr = {"a": {"url": "a", "texts": texts, "note": ""}}
+        (entry,) = await h._cb_build([{"url": "a", "data": _png(), "scan": None}], "100", "555", "", "",
+                                     "图片文字关键词: 代刷", ocr=ocr)
+        info = entry["ocr"]
+        self.assertTrue(info["truncated"])
+        self.assertEqual(info["total_lines"], 151)
+        self.assertNotIn("专业代刷", info["texts"])
+        self.assertLessEqual(sum(len(t) for t in info["texts"]), code_board.CB_TEXT_MAX + 1)
+        self.assertEqual(info["hit"], "代刷")
+
+    async def test_pass_schedules_once_after_ocr_with_results(self):
+        h = self._harness()
+        h.images["u1"] = _png()
+        h.detections = [_det(3, 0.9, (20, 20, 120, 120))]
+        h.decodes = ["https://fine.example"]
+        h.ocr_details = [{"url": "u1", "texts": ["你好"], "note": "", "cached": False, "ms": 12.0, "data": b"x"}]
+        handled, _ = await h._run_hit_guards(self._event(), "100", "555", "", "", ["u1"])
+        self.assertFalse(handled)
+        (collected, args, kw), = self.scheduled                     # 只生成一次卡片
+        self.assertEqual(collected[0]["scan"]["codes"][0]["decoded"]["text"], "https://fine.example")
+        self.assertEqual(args[-1], "")
+        self.assertEqual(kw["ocr"]["u1"]["texts"], ["你好"])
+        self.assertNotIn("data", kw["ocr"]["u1"])                   # 图片字节不进卡片字段
+
+    async def test_ocr_hit_sets_reason_on_card(self):
+        h = self._harness()
+        h.images["u1"] = _png()
+        h.ocr_details = [{"url": "u1", "texts": ["专业代刷"], "note": "", "data": b"x"}]
+        handled, _ = await h._run_hit_guards(self._event(), "100", "555", "", "", ["u1"])
+        self.assertTrue(handled)
+        self.assertEqual(h.hits, ["图片文字关键词: 代刷"])
+        (_collected, args, kw), = self.scheduled
+        self.assertEqual(args[-1], "图片文字关键词: 代刷")
+        self.assertEqual(kw["ocr"]["u1"]["texts"], ["专业代刷"])
+
+    async def test_code_hit_skips_ocr(self):
+        h = self._harness()
+        h.config["wxcode_block_codes"] = ["https://spam.example/a"]
+        h.images["u1"] = _png()
+        h.detections = [_det(3, 0.9, (20, 20, 120, 120))]
+        h.decodes = ["https://spam.example/a"]
+        handled, _ = await h._run_hit_guards(self._event(), "100", "555", "", "", ["u1"])
+        self.assertTrue(handled)
+        self.assertEqual(h.ocr_calls, 0)                            # 码已经命中，不再做 OCR
+        (_collected, args, kw), = self.scheduled
+        self.assertEqual((args[-1], kw), ("码内容规则: 已拉黑的码", {}))
+
+    async def test_ocr_only_images_get_cards(self):
+        h = self._harness(wxcode_enabled=False)
+        h.ocr_details = [{"url": "u1", "texts": ["文字"], "note": "", "data": b"img1"},
+                         {"url": "u2", "texts": [], "note": "GIF 动图不做文字识别，已跳过", "data": None}]
+        handled, _ = await h._run_hit_guards(self._event(), "100", "555", "", "", ["u1", "u2"])
+        self.assertFalse(handled)
+        (collected, _args, kw), = self.scheduled
+        self.assertEqual(collected, [{"url": "u1", "data": b"img1", "scan": None},
+                                     {"url": "u2", "data": None, "scan": None}])
+        self.assertEqual(sorted(kw["ocr"]), ["u1", "u2"])
+
+    async def test_ocr_off_keeps_old_behaviour(self):
+        h = self._harness(local_ocr_driver="off")
+        h.images["u1"] = _png()
+        handled, _ = await h._run_hit_guards(self._event(), "100", "555", "", "", ["u1"])
+        self.assertFalse(handled)
+        self.assertEqual(h.ocr_calls, 0)
+        (_collected, args, kw), = self.scheduled
+        self.assertEqual((args[-1], kw), ("", {}))
+
+
 if __name__ == "__main__":
     unittest.main()

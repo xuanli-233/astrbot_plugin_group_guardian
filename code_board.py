@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-"""二维码看板 + 码内容拉黑（WebUI「实时日志 → 二维码看板」，二次开发新增）。
+"""图片看板（原「二维码看板」）+ 码内容拉黑（WebUI「实时日志 → 图片看板」，二次开发新增）。
 
-每张经过两阶段识别（定位 → 裁剪 → 解码）的群图片生成一张卡片：
+每张经过识别的群图片生成一张卡片：
   原图缩略图（用编号框标出每个码的位置：命中红、解出绿、解不出橙）、
-  每个码的裁剪图、类别 / 置信度 / 码类型、识别内容、是否命中规则；支持一图多码。
+  每个码的裁剪图、类别 / 置信度 / 码类型、识别内容、是否命中规则；支持一图多码；
+  图片文字识别（OCR）的结果：识别出的各行文字、命中的关键词规则、没识别成功的原因。
+只开了 OCR、没开码识别时图片也有卡片（code_scanned = False，没有码的部分）。
 卡片上可复制识别内容，或「拉黑该码」：把这段内容加入 wxcode_block_codes，之后任何群里解出完全相同
 内容的码都按命中处理（撤回 + 备份），与正则规则（wxcode_regex_rules）分开存放，可随时解除。
 
@@ -218,7 +220,9 @@ class CodeBoardMixin:
     # 生成卡片（撤回之后在后台执行）
     # ------------------------------------------------------------------
     def _cb_schedule(self, collected: List[dict], group_id: str, user_id: str, user_name: str,
-                     text: str, reason: str) -> None:
+                     text: str, reason: str, ocr: Optional[Dict[str, dict]] = None) -> None:
+        """collected：[{url, data, scan}]（scan 为 None = 这张图没做码识别）；
+        ocr：{图片地址: {texts, note, cached, ms}}，做过 OCR 时传。"""
         if not collected or not self._cfg("code_board_enabled", True):
             return
         tasks = getattr(self, "_cb_tasks", None)
@@ -227,7 +231,7 @@ class CodeBoardMixin:
 
         async def run():
             try:
-                await self._cb_build(collected, group_id, user_id, user_name, text, reason)
+                await self._cb_build(collected, group_id, user_id, user_name, text, reason, ocr=ocr)
             except Exception as e:
                 logger.debug(f"[GroupMgr] 生成二维码看板卡片失败: {e}")
 
@@ -247,8 +251,42 @@ class CodeBoardMixin:
         except RuntimeError:
             return fn(*args)
 
+    def _cb_ocr_info(self, detail: Optional[dict], group_id: str) -> Optional[dict]:
+        """一张图的 OCR 结果 → 卡片上的字段。没做 OCR 返回 None。"""
+        if not isinstance(detail, dict):
+            return None
+        source = [str(t or "").strip() for t in detail.get("texts") or []]
+        source = [t for t in source if t]
+        lines, used = [], 0
+        for t in source:
+            if used + len(t) > CB_TEXT_MAX:
+                if CB_TEXT_MAX - used > 0:
+                    lines.append(t[:CB_TEXT_MAX - used] + "…")
+                break
+            lines.append(t)
+            used += len(t)
+        total_chars = sum(len(t) for t in source)
+        hit = None
+        matcher = getattr(self, "_hg_ocr", None)
+        if lines and callable(matcher):
+            try:
+                hit = matcher(lines, group_id)[0]
+            except Exception:
+                hit = None
+        ms = detail.get("ms")
+        # 规则按完整文字匹配；卡片上只留前 CB_TEXT_MAX 字，另外告诉页面原来一共多少
+        if source and callable(matcher) and total_chars > used:
+            try:
+                hit = matcher(source, group_id)[0]
+            except Exception:
+                pass
+        return {"texts": lines, "total_lines": len(source), "total_chars": total_chars,
+                "truncated": total_chars > used,
+                "note": str(detail.get("note") or "")[:300], "hit": hit or "",
+                "cached": bool(detail.get("cached")), "ms": ms if isinstance(ms, (int, float)) else None}
+
     async def _cb_build(self, collected: List[dict], group_id: str, user_id: str, user_name: str,
-                        text: str, reason: str) -> List[dict]:
+                        text: str, reason: str, ocr: Optional[Dict[str, dict]] = None) -> List[dict]:
         preview = ""
         if self._cfg("live_log_show_text", True):
             preview = str(text or "").replace("\n", " ").strip()
@@ -256,6 +294,7 @@ class CodeBoardMixin:
         total = len(collected)
         entries = []
         for index, item in enumerate(collected, 1):
+            code_scanned = item.get("scan") is not None
             scan = item.get("scan") or {}
             codes = []
             for n, c in enumerate(scan.get("codes") or [], 1):
@@ -285,7 +324,8 @@ class CodeBoardMixin:
                 "user_name": str(user_name or "")[:32], "text": preview,
                 "image_index": index, "image_count": total, "orig": images.get("orig", ""),
                 "size": images.get("size"), "codes": codes, "has_code": bool(scan.get("has_code")),
-                "error": scan.get("error", "") or ("" if data else "图片下载失败"),
+                "code_scanned": code_scanned, "ocr": self._cb_ocr_info((ocr or {}).get(item.get("url")), group_id),
+                "error": scan.get("error", "") or ("" if (data or not code_scanned) else "图片下载失败"),
                 "cached": bool(scan.get("cached")), "stopped_early": bool(scan.get("stopped_early")),
                 "over_limit": int(scan.get("over_limit") or 0),
                 "outcome": "hit" if reason else "pass", "reason": reason or "",

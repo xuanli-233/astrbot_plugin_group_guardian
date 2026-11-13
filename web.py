@@ -756,7 +756,7 @@ class WebMixin:
                 ("/minimal/leavelog/image", self._web_minimal_leavelog_image, ["GET"], "退群记录里的图片"),
                 ("/minimal/leavelog/user", self._web_minimal_leavelog_user, ["GET"], "某人的退群汇总"),
                 ("/minimal/livelog", self._web_minimal_livelog, ["GET"], "实时日志"),
-                ("/minimal/codeboard", self._web_minimal_codeboard, ["GET"], "二维码看板"),
+                ("/minimal/codeboard", self._web_minimal_codeboard, ["GET"], "图片看板"),
                 ("/minimal/codeboard/block", self._web_minimal_codeboard_block, ["POST"], "拉黑 / 解除拉黑二维码内容"),
                 ("/minimal/batch/jobs", self._web_minimal_batch_jobs, ["GET"], "批量任务列表"),
                 ("/minimal/batch/job", self._web_minimal_batch_job, ["GET"], "批量任务详情"),

@@ -462,6 +462,10 @@ class KeywordGuardMixin:
         if not image_urls:
             return False, None
 
+        # 图片看板（code_board.py）：码识别没命中时先不生成卡片，等 OCR 做完把图片文字一起放上去
+        board_schedule = getattr(self, "_cb_schedule", None)
+        board_pending = None
+
         if not self._cfg("wxcode_enabled", False, group_id=group_id):
             live_detail("葵花码识别未开启，图片未做码识别")
         if self._cfg("wxcode_enabled", False, group_id=group_id):
@@ -508,12 +512,12 @@ class KeywordGuardMixin:
                         collected=collected)
                     if limited:
                         reason = "同一个码发送次数超限"
-                # 二维码看板：撤回之后再在后台生成缩略图
-                schedule = getattr(self, "_cb_schedule", None)
-                if callable(schedule) and collected:
-                    schedule(collected, group_id, user_id, user_name, text, reason)
+                # 图片看板：撤回之后再在后台生成缩略图。没命中的留到 OCR 之后一起生成
                 if reason:
+                    if callable(board_schedule) and collected:
+                        board_schedule(collected, group_id, user_id, user_name, text, reason)
                     return True, notice
+                board_pending = collected or None
             else:
                 live_stage("识别葵花码")
                 texts = await self._recognize_images(image_urls, "wxcode")
@@ -552,11 +556,25 @@ class KeywordGuardMixin:
             notes = getattr(self, "_recognize_last_notes", None)
             lines += [f"OCR：{n}" for n in (notes() if callable(notes) else [])]
             live_detail(lines or ["OCR 未识别到文字"])
+            reason = f"图片文字关键词: {rule}" if rule else ""
+            notice = None
             if rule:
                 notice = await self._execute_hit_action(
-                    event, group_id, user_id, user_name, text or "[图片]", f"图片文字关键词: {rule}",
+                    event, group_id, user_id, user_name, text or "[图片]", reason,
                     kind="keyword", extra_text=f"OCR 内容：\n{joined}", image_urls=image_urls,
                     action=ocr_action,
                 )
+            # 图片看板：每张图带上自己的 OCR 结果。没做码识别的图片（只开了 OCR）也生成卡片
+            if callable(board_schedule):
+                details_fn = getattr(self, "_recognize_last_details", None)
+                details = details_fn() if callable(details_fn) else []
+                ocr = {d["url"]: {k: v for k, v in d.items() if k != "data"} for d in details if d.get("url")}
+                items = board_pending or [{"url": d["url"], "data": d.get("data"), "scan": None}
+                                          for d in details if d.get("url")]
+                if items:
+                    board_schedule(items, group_id, user_id, user_name, text, reason, ocr=ocr)
+            if rule:
                 return True, notice
+        elif callable(board_schedule) and board_pending:
+            board_schedule(board_pending, group_id, user_id, user_name, text, "")
         return False, None
