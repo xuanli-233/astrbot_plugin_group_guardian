@@ -518,6 +518,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .split-item:hover{background:var(--info-light)}
     .split-item.on{background:var(--primary-light);box-shadow:inset 3px 0 0 var(--primary)}
     .split-item .si-main{min-width:0;flex:1}
+    .vr-day{padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);background:var(--bg-secondary,rgba(127,127,127,.08));border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+    .vr-times{display:inline-block;font-size:11px;font-weight:600;color:var(--danger);background:var(--danger-light);border-radius:9px;padding:0 7px;line-height:18px;vertical-align:1px}
     .split-item .si-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .split-item .si-sub{font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .si-thumb{width:40px;height:40px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0;border:1px solid var(--border)}
@@ -933,7 +935,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <div class="tab-panel" id="tab-records">
         <div class="page-header"><h1>违规记录</h1></div>
-        <p class="mn-intro">被撤回的消息都记在这里：左边按人汇总（被撤回几次、在哪些群），点一个人在右边看他每条被撤回的消息；最下面是逐条的审核日志，点「查看」看完整内容和保存下来的图片。可以导出 CSV。</p>
+        <p class="mn-intro">被撤回的消息都记在这里：左边按人汇总（一个人被撤回多次只占一行，写明几次、在哪些群、最近一次的时间和内容），默认最近违规的人排在最前面，也可以改成按次数排；点一个人在右边看他每条被撤回的消息；最下面是逐条的审核日志，点「查看」看完整内容和保存下来的图片。可以导出 CSV。</p>
         <div class="split" id="vrSplit">
           <div class="card">
             <div class="card-header"><h2>被撤回用户</h2><div class="header-actions">
@@ -942,9 +944,15 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               <button class="btn btn-ghost btn-sm" id="btnExport">导出CSV</button>
             </div></div>
             <div class="mn-body" style="padding-bottom:8px"><div class="mn-row" style="gap:6px">
-              <input class="input-sm" id="vrKeyword" placeholder="QQ号 / 昵称 / 群号" style="flex:1" />
+              <input class="input-sm" id="vrKeyword" placeholder="QQ号 / 昵称 / 群号" style="flex:1;min-width:120px" />
+              <select class="input-sm" id="vrSort" style="width:150px" title="每个人只占一行；这里选的是人的先后顺序">
+                <option value="recent" selected>最近违规的在前</option>
+                <option value="count">违规次数多的在前</option>
+                <option value="groups">涉及群多的在前</option>
+                <option value="first">最早违规的在前</option>
+              </select>
               <label class="mn-hint" style="white-space:nowrap"><input type="checkbox" id="vrCheckAll" /> 全选</label>
-            </div></div>
+            </div><p class="mn-hint" id="vrSummary" style="margin-top:6px"></p></div>
             <div class="split-list" id="userContainer"><div class="split-empty">暂无数据</div></div>
           </div>
           <div class="split-right"><div class="card" id="vrDetail"><div class="split-empty">在左边点一个人：看他被撤回的每条消息</div></div></div>
@@ -3059,24 +3067,65 @@ function renderUsers(users) {
   if (still) vrOpen(VR.sel); else if (VR.sel) { VR.sel = ''; $('#vrDetail').innerHTML = '<div class="split-empty">在左边点一个人：看他被撤回的每条消息</div>'; }
 }
 function vrGroupName(gid) { return (typeof cuGroupName === 'function' && cuGroupName(gid)) || gid; }
+// 一个人的最近 / 最早一次违规时间（后端给 last_ts / first_ts；旧数据从记录里算）
+function vrLastTs(u) { return u.last_ts || Math.max.apply(null, [0].concat(u.records.map(function(r) { return r.ts || 0; }))); }
+function vrFirstTs(u) { return u.first_ts || Math.min.apply(null, u.records.map(function(r) { return r.ts || 0; }).concat([vrLastTs(u)])); }
+function vrGroupCount(u) { return u.group_count || (u.groups || []).length || 0; }
+function vrSortMode() { var el = document.getElementById('vrSort'); return (el && el.value) || 'recent'; }
+var VR_SORTS = {
+  recent: function(a, b) { return vrLastTs(b) - vrLastTs(a) || b.count - a.count; },
+  count: function(a, b) { return b.count - a.count || vrLastTs(b) - vrLastTs(a); },
+  groups: function(a, b) { return vrGroupCount(b) - vrGroupCount(a) || b.count - a.count || vrLastTs(b) - vrLastTs(a); },
+  first: function(a, b) { return vrFirstTs(a) - vrFirstTs(b) || b.count - a.count; }
+};
+// 按时间排时的日期分隔：今天 / 昨天 / 前天 / 具体日期
+function vrDayLabel(ts) {
+  if (!ts) return '时间未知';
+  var d = new Date(ts * 1000), now = new Date();
+  var day0 = function(x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+  var diff = Math.round((day0(now) - day0(d)) / 86400000);
+  var p = function(n) { return (n < 10 ? '0' : '') + n; };
+  var date = (d.getFullYear() !== now.getFullYear() ? d.getFullYear() + '-' : '') + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  return diff === 0 ? '今天' : diff === 1 ? '昨天' : diff === 2 ? '前天' : date + ' 周' + '日一二三四五六'.charAt(d.getDay());
+}
 function vrRenderList() {
   var c = $('#userContainer');
   var kw = ($('#vrKeyword') || {}).value ? $('#vrKeyword').value.trim().toLowerCase() : '';
+  var mode = vrSortMode();
   var list = VR.users.filter(function(u) {
     if (!kw) return true;
-    var key = (u.user_id + ' ' + (u.user_name || '') + ' ' + u.records.map(function(r) { return r.group_id; }).join(' ')).toLowerCase();
+    var key = (u.user_id + ' ' + (u.user_name || '') + ' ' + (u.groups || []).join(' ') + ' ' + u.records.map(function(r) { return r.group_id; }).join(' ')).toLowerCase();
     return key.indexOf(kw) >= 0;
-  });
+  }).sort(VR_SORTS[mode] || VR_SORTS.recent);
+  var sum = document.getElementById('vrSummary');
+  if (sum) {
+    var times = list.reduce(function(n, u) { return n + u.count; }, 0), repeat = list.filter(function(u) { return u.count > 1; }).length;
+    sum.textContent = list.length ? list.length + ' 人，共被撤回 ' + times + ' 次' + (repeat ? '，其中 ' + repeat + ' 人不止一次' : '') : '';
+  }
   if (!list.length) { c.innerHTML = '<div class="split-empty">' + (VR.users.length ? '没有匹配的人' : '暂无数据') + '</div>'; return; }
+  var lastDay = null;
   c.innerHTML = list.map(function(u) {
-    var groups = [];
+    var groups = (u.groups || []).slice();
     u.records.forEach(function(r) { if (r.group_id && groups.indexOf(r.group_id) === -1) groups.push(r.group_id); });
-    var latest = u.records[u.records.length - 1] || {};
-    var uid = String(u.user_id);
-    return '<div class="split-item' + (uid === VR.sel ? ' on' : '') + '" data-vr-open="' + escAttr(uid) + '">' +
+    var latest = u.records[0] || {};   // 记录是新的在前
+    var uid = String(u.user_id), last = vrLastTs(u), first = vrFirstTs(u);
+    var head = '';
+    if (mode === 'recent' || mode === 'first') {   // 按时间排：每天一个分隔行
+      var day = vrDayLabel(mode === 'first' ? first : last);
+      if (day !== lastDay) { head = '<div class="vr-day">' + esc(day) + '</div>'; lastDay = day; }
+    }
+    var prev = String(latest.msg_preview || '').replace(/\s+/g, ' ');
+    var span = u.count > 1 && first && fmtTime(first) !== fmtTime(last);   // 同一分钟内的不重复写
+    var when = mode === 'first' ? '首次 ' + fmtTime(first) + (span ? ' · 最近 ' + fmtTime(last) : '')
+      : '最近 ' + fmtTime(last) + (span ? ' · 首次 ' + fmtTime(first) : '');
+    return head + '<div class="split-item' + (uid === VR.sel ? ' on' : '') + '" data-vr-open="' + escAttr(uid) + '">' +
       '<input type="checkbox" class="ck" data-uid="' + escAttr(uid) + '" title="勾选后可批量删除" />' +
-      '<div class="si-main"><div class="si-title">' + esc(u.user_name || uid) + ' <span class="mn-hint">' + esc(uid) + '</span></div>' +
-      '<div class="si-sub"><b style="color:var(--danger)">' + u.count + '</b> 次 · ' + groups.length + ' 个群（' + esc(groups.slice(0, 2).map(vrGroupName).join('、')) + (groups.length > 2 ? '…' : '') + '） · ' + fmtTime(latest.ts) + '</div></div></div>';
+      '<div class="si-main"><div class="si-title">' + esc(u.user_name || uid) + ' <span class="mn-hint">' + esc(uid) + '</span>' +
+      (u.count > 1 ? ' <span class="vr-times">' + u.count + ' 次</span>' : '') + '</div>' +
+      '<div class="si-sub">' + esc(when) + ' · ' + groups.length + ' 个群（' + esc(groups.slice(0, 2).map(vrGroupName).join('、')) + (groups.length > 2 ? '…' : '') + '）</div>' +
+      (prev || latest.reason ? '<div class="si-sub" title="' + escAttr((latest.reason || '') + '\n' + prev) + '">' +
+        esc(prev ? (prev.length > 40 ? prev.slice(0, 40) + '…' : prev) : '') + (latest.reason ? ' <span style="color:var(--danger)">' + esc(String(latest.reason).slice(0, 24)) + '</span>' : '') + '</div>' : '') +
+      '</div></div>';
   }).join('');
 }
 function vrOpen(uid) {
@@ -3084,11 +3133,11 @@ function vrOpen(uid) {
   if (!u) return;
   VR.sel = String(uid);
   $$('#userContainer [data-vr-open]').forEach(function(el) { el.classList.toggle('on', el.getAttribute('data-vr-open') === VR.sel); });
-  var recs = u.records.slice().reverse();
+  var recs = u.records.slice().sort(function(a, b) { return (b.ts || 0) - (a.ts || 0) || (b.id || 0) - (a.id || 0); });
   $('#vrDetail').innerHTML = '<div class="card-header"><h2>' + esc(u.user_name || uid) + ' 被撤回 ' + u.count + ' 次</h2><div class="header-actions">' +
     '<button class="btn btn-outline btn-sm" data-member="' + escAttr(uid) + '">群成员档案</button>' +
     '<button class="btn btn-danger btn-sm" data-vr-delall="' + escAttr(uid) + '">删除他的全部记录</button></div></div>' +
-    '<div class="mn-body split-detail-body"><p class="mn-hint" style="margin-bottom:6px">' + mbrLink(uid) + ' · 新的在前；点「查看」看完整内容和图片</p>' +
+    '<div class="mn-body split-detail-body"><p class="mn-hint" style="margin-bottom:6px">' + mbrLink(uid) + ' · 新的在前' + (u.count > recs.length ? '，只列出最近 ' + recs.length + ' 条' : '') + '；点「查看」看完整内容和图片</p>' +
     '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>消息</th><th>原因</th><th>操作</th></tr></thead><tbody>' +
     recs.map(function(r) {
       var prev = r.msg_preview || '';
@@ -5819,7 +5868,7 @@ var FLT_LABELS = {
   cbFilter: '只看', liveGroup: '群', liveFilter: '结果',
   llDays: '时间', llGroup: '群', llKind: '方式', llOrder: '排序',
   opDays: '时间', opAction: '操作', opOperator: '操作人', opSource: '来源', opOrder: '排序',
-  cmdCat: '分类', ubSort: '排序'
+  cmdCat: '分类', ubSort: '排序', vrSort: '排序'
 };
 function fltAnchor(el) {
   ['gsel', 'flt'].forEach(function(cls) { if (el.parentNode && el.parentNode.classList.contains(cls)) el = el.parentNode; });
@@ -8416,7 +8465,7 @@ function initMinimalPages() {
   if (llTab) llTab.addEventListener('click', llOnClick);
   var vrSplit = document.getElementById('vrSplit');
   if (vrSplit) vrSplit.addEventListener('click', vrOnClick);
-  bindAutoFilter(['vrKeyword'], vrRenderList);
+  bindAutoFilter(['vrKeyword', 'vrSort'], vrRenderList);
   bindIfExists('vrCheckAll', function(e) { $$('#userContainer .ck').forEach(function(ck) { ck.checked = e.target.checked; }); }, 'change');
   bindIfExists('btnLlSave', function() {
     var n = Number($('#llMsgCount').value);

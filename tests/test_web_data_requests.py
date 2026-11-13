@@ -680,6 +680,31 @@ class WebDataRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["data"][0]["count"], 1)
         self.assertEqual(result["data"][0]["records"][0]["action"], "撤回+禁言")
 
+    async def test_moderation_users_time_fields_and_recent_sort(self):
+        # 违规记录按人聚合：带上最早 / 最近一次的时间，记录新的在前；sort=recent 时最近违规的人在前。
+        harness = _Harness()
+
+        def log(i, uid, ts):
+            return {"id": i, "group_id": f"g{i % 2}", "user_id": uid, "user_name": uid.upper(),
+                    "time": f"t{ts}", "ts": ts, "msg_preview": f"m{i}", "action": "撤回", "reason": "关键词"}
+        # list_logs 是新的在前：a 违规 3 次（最近一次较早），b 只有 1 次但最新
+        harness._storage.list_logs = lambda limit=5000, **_kwargs: [
+            log(5, "b", 500), log(4, "a", 400), log(3, "a", 300), log(2, "c", 200), log(1, "a", 100)]
+
+        web.quart_request = _Request()
+        by_count = (await harness._web_get_moderation_users())["data"]
+        self.assertEqual([u["user_id"] for u in by_count], ["a", "b", "c"])   # 次数相同的，最近的在前
+        a = by_count[0]
+        self.assertEqual((a["count"], a["first_ts"], a["last_ts"]), (3, 100, 400))
+        self.assertEqual((a["first_time"], a["last_time"]), ("t100", "t400"))
+        self.assertEqual([r["id"] for r in a["records"]], [4, 3, 1])
+        self.assertEqual(a["groups"], ["g0", "g1"])
+
+        web.quart_request = _Request({"sort": "recent"})
+        recent = (await harness._web_get_moderation_users())["data"]
+        self.assertEqual([u["user_id"] for u in recent], ["b", "a", "c"])
+        self.assertEqual([u["count"] for u in recent], [1, 3, 1])
+
     async def test_moderation_users_explicit_action_filter_still_matches_passed(self):
         # 显式指定 action 筛选时仍按筛选条件返回，不受默认排除放行逻辑影响。
         harness = _Harness()

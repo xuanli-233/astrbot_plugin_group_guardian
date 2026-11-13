@@ -1116,7 +1116,12 @@ class WebMixin:
                 }
             u = user_map[uid]
             u["count"] += 1
-            u["last_time"] = log.get("time", "")
+            # list_logs 是新的在前：不能假设顺序，按时间戳取最早 / 最近一次
+            ts = self._safe_int(log.get("ts", 0), 0)
+            if not u.get("last_ts") or ts >= u["last_ts"]:
+                u["last_ts"], u["last_time"] = ts, log.get("time", "")
+            if not u.get("first_ts") or ts <= u["first_ts"]:
+                u["first_ts"], u["first_time"] = ts, log.get("time", "")
             gid = log.get("group_id", "")
             if gid:
                 u["groups"].add(gid)
@@ -1133,7 +1138,16 @@ class WebMixin:
         for u in user_map.values():
             u["group_count"] = len(u["groups"])
             u["groups"] = sorted(u["groups"])
-        users = sorted(user_map.values(), key=lambda x: x["count"], reverse=True)
+            u.setdefault("last_ts", 0)
+            u.setdefault("first_ts", 0)
+            # 每人最多带最近 50 条，新的在前
+            u["records"].sort(key=lambda r: (self._safe_int(r.get("ts", 0), 0), self._safe_int(r.get("id", 0), 0)),
+                              reverse=True)
+        # sort=recent：最近违规的在前（默认仍按次数，兼容旧页面）；页面拿到后也可以自己重排
+        if quart_request.args.get("sort", "").strip() == "recent":
+            users = sorted(user_map.values(), key=lambda x: (x["last_ts"], x["count"]), reverse=True)
+        else:
+            users = sorted(user_map.values(), key=lambda x: (x["count"], x["last_ts"]), reverse=True)
         return jsonify({"status": "success", "data": users, "total": len(users)})
 
     async def _web_delete_logs(self):
