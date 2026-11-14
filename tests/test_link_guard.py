@@ -201,6 +201,95 @@ class ListAndRecordTests(unittest.TestCase):
             self.assertIsNotNone(conn.execute("SELECT 1 FROM lk_urls WHERE domain='x.com'").fetchone())
 
 
+class MessageAndCardTests(unittest.TestCase):
+    """链接是什么内容：看带它的消息原文和卡片上的标题 / 描述，不靠访问网页。"""
+
+    def test_message_text_is_kept_per_send_and_on_url(self):
+        h = _H()
+        now = int(time.time())
+        h._lk_record(GID, UID, "张三", h._lk_items("考研资料\n点这里 a.com/x 领取"), now=now - 10,
+                     text="考研资料\n点这里 a.com/x 领取")
+        h._lk_record(GID, "666", "李四", h._lk_items("http://a.com/x"), now=now, text="http://a.com/x")
+        d = h._lk_detail("a.com")
+        # 整条消息只有这个链接：不记原文，链接上保留上一次有文字的那条
+        self.assertEqual([s["msg_text"] for s in d["sends"]], ["", "考研资料\n点这里 a.com/x 领取"])
+        self.assertEqual(d["urls"][0]["sample_text"], "考研资料\n点这里 a.com/x 领取")
+        # 搜索消息内容能找到这个域名
+        self.assertEqual(h._lk_stats(keyword="考研")[0][0]["domain"], "a.com")
+        self.assertEqual(h._lk_user(UID)["recent"][0]["msg_text"], "考研资料\n点这里 a.com/x 领取")
+        # 不传原文（旧调用方式）照常记录
+        h._lk_record(GID, UID, "张三", h._lk_items("b.com/1"))
+        self.assertEqual(h._lk_detail("b.com")["sends"][0]["msg_text"], "")
+
+    def test_long_message_keeps_part_around_link_and_strips_control_chars(self):
+        h = _H()
+        text = "前" * 3000 + " 加群 evil.com/join 进 " + "后" * 3000
+        item = h._lk_items(text)[0]
+        snip = link_guard.message_snippet(text, item)
+        self.assertLessEqual(len(snip), link_guard.LINK_MSG_MAX + 2)
+        self.assertIn("evil.com/join", snip)
+        self.assertTrue(snip.startswith("…") and snip.endswith("…"))
+        self.assertEqual(link_guard.message_snippet("a\u202eb\u200bc\x00  d\n\n\n e x.com", {"key": "x.com", "host": "x.com"}),
+                         "a b c d\ne x.com")
+        self.assertEqual(link_guard.message_snippet("HTTPS://www.X.com/", {"key": "x.com", "host": "x.com"}), "")
+
+    def test_card_title_and_desc_are_kept(self):
+        h = _H()
+        cards = [{"url": "https://b.com/news/1", "title": "免费领取\u202e资料", "desc": "点击查看详情", "source": "某某网"},
+                 {"url": "http://a.com/x", "title": "同一个链接", "desc": "", "source": "同一个链接"}]
+        items = h._lk_items("看 a.com/x", cards)
+        self.assertEqual([(i["key"], i["form"], i.get("card_title")) for i in items],
+                         [("a.com/x", "text", "同一个链接"), ("b.com/news/1", "card", "免费领取 资料")])
+        self.assertEqual(items[0]["card_source"], "")                  # 来源和标题一样时不重复
+        h._lk_record(GID, UID, "张三", items, text="看 a.com/x")
+        u = h._lk_detail("b.com")["urls"][0]
+        self.assertEqual((u["card_title"], u["card_desc"], u["card_source"]), ("免费领取 资料", "点击查看详情", "某某网"))
+        s = h._lk_detail("b.com")["sends"][0]
+        self.assertEqual((s["card_title"], s["card_desc"], s["msg_text"]), ("免费领取 资料", "点击查看详情", "看 a.com/x"))
+        # 域名列表上显示卡片标题；按卡片内容能搜到
+        self.assertEqual(h._lk_stats(keyword="b.com")[0][0]["title"], "免费领取 资料")
+        self.assertEqual(h._lk_stats(keyword="点击查看")[1], 1)
+        # 之后同一个链接以文字形式出现：卡片内容不被清空
+        h._lk_record(GID, UID, "张三", h._lk_items("b.com/news/1"), text="b.com/news/1")
+        self.assertEqual(h._lk_detail("b.com")["urls"][0]["card_title"], "免费领取 资料")
+
+    def test_typed_text_ignores_card_segments(self):
+        h = _H()
+        raw = {"message": [{"type": "text", "data": {"text": "看这个 "}}, {"type": "json", "data": {"data": "{}"}},
+                           {"type": "text", "data": {"text": "a.com/x"}}, {"type": "image", "data": {"url": "u"}}]}
+        h._get_raw_event = lambda event: raw
+        self.assertEqual(h._lk_typed_text(object()), "看这个 a.com/x")
+        # 卡片的原始字段被拼进了文字：链接算卡片带的，除非发送者自己也打了
+        flat, cards = "[分享]标题 https://b.com/n/1 看 a.com/x", [{"url": "https://b.com/n/1", "title": "标题"}]
+        self.assertEqual([(i["key"], i["form"]) for i in h._lk_items(flat, cards, typed="看 a.com/x")],
+                         [("b.com/n/1", "card"), ("a.com/x", "text")])
+        self.assertEqual(h._lk_items(flat, cards, typed="看 b.com/n/1")[0]["form"], "text")
+        raw["message"] = [{"type": "json", "data": {"data": "{}"}}]
+        self.assertEqual(h._lk_typed_text(object()), "")               # 只有卡片：没有原文
+        h._get_raw_event = lambda event: None
+        self.assertIsNone(h._lk_typed_text(object()))                  # 拿不到原始事件：调用方用原来的文字
+
+    def test_old_database_gets_new_columns(self):
+        h = _H()
+        with h._storage._connect() as conn:
+            conn.execute("CREATE TABLE lk_sends (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, "
+                         "group_id TEXT NOT NULL, user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', "
+                         "form TEXT NOT NULL DEFAULT 'text', domain TEXT NOT NULL, host TEXT NOT NULL, url_hash TEXT NOT NULL, "
+                         "outcome TEXT NOT NULL DEFAULT 'pass', reason TEXT NOT NULL DEFAULT '')")
+            conn.execute("CREATE TABLE lk_urls (url_hash TEXT PRIMARY KEY, url TEXT NOT NULL, url_key TEXT NOT NULL, "
+                         "host TEXT NOT NULL, domain TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', "
+                         "title_state TEXT NOT NULL DEFAULT '', title_error TEXT NOT NULL DEFAULT '', "
+                         "title_ts INTEGER NOT NULL DEFAULT 0, final_host TEXT NOT NULL DEFAULT '', first_ts INTEGER NOT NULL DEFAULT 0)")
+            conn.execute("INSERT INTO lk_urls(url_hash, url, url_key, host, domain) VALUES('h','http://old.com/1','old.com/1','old.com','old.com')")
+            conn.execute("INSERT INTO lk_sends(ts, group_id, user_id, domain, host, url_hash) VALUES(?,?,?,?,?,?)",
+                         (int(time.time()), GID, UID, "old.com", "old.com", "h"))
+            conn.commit()
+        d = h._lk_detail("old.com")                                    # 旧记录：新字段为空，不报错
+        self.assertEqual((d["sends"][0]["msg_text"], d["urls"][0]["sample_text"], d["urls"][0]["card_title"]), ("", "", ""))
+        h._lk_record(GID, UID, "张三", h._lk_items("新消息 old.com/2"), text="新消息 old.com/2")
+        self.assertEqual(h._lk_detail("old.com")["sends"][0]["msg_text"], "新消息 old.com/2")
+
+
 class TitleFetchTests(unittest.IsolatedAsyncioTestCase):
     HTML = {"Content-Type": "text/html; charset=utf-8"}
 

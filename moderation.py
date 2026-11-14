@@ -214,12 +214,18 @@ class ModerationMixin(ImageAuditMixin):
                              + ("；白名单，放行" if i.get("_allowed") else "") for i in mp_items])
 
         # 链接（link_guard.py）：文字里的链接 + 非小程序卡片带的链接（小程序卡片的不算），在卡片文字并入之前识别
-        lk_items = []
+        lk_items, lk_text = [], text
+        if cards and callable(getattr(self, "_lk_typed_text", None)):
+            # 带卡片的消息：text 里混有卡片的原始字段，链接记录里的「消息原文」只要发送者自己打的字
+            typed = self._lk_typed_text(event)
+            if typed is not None:
+                lk_text = typed
         lk_extract = getattr(self, "_lk_items", None)
         if callable(lk_extract) and self._cfg("link_guard_enabled", True, group_id=group_id):
             try:
                 mp_cards = {id(i["card"]) for i in mp_items if i.get("card") is not None}
-                lk_items = lk_extract(text, [c for c in cards if id(c) not in mp_cards])
+                lk_items = lk_extract(text, [c for c in cards if id(c) not in mp_cards],
+                                      typed=lk_text if lk_text is not text else None)
             except Exception as e:
                 logger.debug(f"[GroupMgr] 识别链接失败: {e}")
                 lk_items = []
@@ -280,7 +286,8 @@ class ModerationMixin(ImageAuditMixin):
             if lk_items:
                 try:
                     self._lk_record(group_id, user_id, user_name, lk_items, "rule" if handled else "pass",
-                                    reason=getattr(self, "_last_hit_reason", "") if handled else "")
+                                    reason=getattr(self, "_last_hit_reason", "") if handled else "",
+                                    text=lk_text)
                 except Exception as e:
                     logger.debug(f"[GroupMgr] 记录链接失败: {e}")
             if mp_items:

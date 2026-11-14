@@ -4,8 +4,11 @@
 记录哪些链接：消息文字里的 http(s) 链接和裸域名（如 t.cn/xxx），以及「链接分享」等非小程序卡片带的链接。
 小程序卡片里的链接不算（它们在「小程序」页）；图片地址不算。
 
-每次出现记一行 lk_sends（时间、群、发送者、域名、链接、处理结果），保留 link_store_days 天；
-lk_urls 记每个链接本身和读到的网页标题，不随记录清理。
+每次出现记一行 lk_sends（时间、群、发送者、域名、链接、处理结果、带这个链接的消息原文、卡片的标题 / 描述 / 来源），
+保留 link_store_days 天；lk_urls 记每个链接本身、最近一次带它的消息原文和卡片内容、读到的网页标题，不随记录清理。
+
+链接是什么内容，主要看「带它的消息原文」和「卡片里的标题 / 描述」（QQ 已经给出来了，不用访问网页）：很多页面限制
+浏览器标识、要在社交软件里登录才能打开，服务器去读标题读不到。读取网页标题只作为补充（默认手动）。
 按「域名」汇总：域名 = 主域名（a.b.example.com → example.com，x.com.cn → x.com.cn），详情里再分主机名和具体链接。
 
 拉黑（lk_lists）：
@@ -41,6 +44,8 @@ LINK_TITLE_MAX_BYTES = 128 * 1024
 LINK_TITLE_TIMEOUT = 8
 LINK_TITLE_REDIRECTS = 3
 LINK_TITLE_PORTS = {None, 80, 443}
+LINK_MSG_MAX = 500               # 每条记录保留的消息原文长度（更长时取链接前后的一段）
+LINK_CARD_MAX = 200              # 卡片标题 / 描述 / 来源各自的长度上限
 LINK_LIST_MAX = 2000
 LINK_STORE_DAYS_MAX = 3650
 LIST_KINDS = {"block_domain": "拉黑域名", "block_url": "拉黑链接", "allow_domain": "白名单域名"}
@@ -141,6 +146,37 @@ def clean_title(value: str) -> str:
     return text[:LINK_TITLE_MAX]
 
 
+def plain_text(value, limit: int, keep_newline: bool = False) -> str:
+    """群消息 / 卡片里的文字 → 只含可见文字：去掉控制字符、方向控制符、零宽字符，压缩空白，截断。"""
+    text = str(value or "")
+    text = "".join(ch if (ch == "\n" and keep_newline) or unicodedata.category(ch) not in ("Cc", "Cf", "Co", "Cs", "Cn")
+                   else " " for ch in text)
+    if keep_newline:
+        text = re.sub(r"[^\S\n]+", " ", text)
+        text = re.sub(r" ?\n[ \n]*", "\n", text).strip()
+    else:
+        text = re.sub(r"\s+", " ", text).strip()
+    return text[:limit]
+
+
+def message_snippet(text: str, item: Dict, limit: int = LINK_MSG_MAX) -> str:
+    """带这个链接的消息原文。太长时（合并转发等）取链接前后的一段；整条消息只有这个链接时返回空串。"""
+    text = plain_text(text, 20000, keep_newline=True)
+    if not text:
+        return ""
+    if not re.search(r"\s", text):
+        only = normalize_url(text)
+        if only and only["key"] == item.get("key"):
+            return ""
+    if len(text) <= limit:
+        return text
+    pos = max(text.lower().find(str(item.get("host") or "\x00")), 0)
+    start = max(0, pos - limit // 3)
+    end = min(len(text), start + limit)
+    start = max(0, end - limit)
+    return ("…" if start else "") + text[start:end] + ("…" if end < len(text) else "")
+
+
 def parse_title(body: bytes, content_type: str = "") -> str:
     """从网页开头的字节里取标题（<title>，没有时取 og:title）。只做正则匹配，不解析、不执行任何内容。"""
     body = bytes(body or b"")[:LINK_TITLE_MAX_BYTES]
@@ -195,6 +231,13 @@ class LinkGuardMixin:
                 "title_ts INTEGER NOT NULL DEFAULT 0, final_host TEXT NOT NULL DEFAULT '', first_ts INTEGER NOT NULL DEFAULT 0)"
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_lk_urls_domain ON lk_urls(domain)")
+            # 消息原文、卡片内容（后加的列，旧库补上）
+            for table, cols in (("lk_sends", ("msg_text", "card_title", "card_desc", "card_source")),
+                                ("lk_urls", ("sample_text", "card_title", "card_desc", "card_source"))):
+                have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+                for col in cols:
+                    if col not in have:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
             conn.execute("CREATE TABLE IF NOT EXISTS lk_lists (kind TEXT NOT NULL, value TEXT NOT NULL, "
                          "reason TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(kind, value))")
             conn.commit()
@@ -312,25 +355,53 @@ class LinkGuardMixin:
     # ------------------------------------------------------------------
     # 识别与记录
     # ------------------------------------------------------------------
-    def _lk_items(self, text: str, cards: Optional[List[Dict]] = None) -> List[Dict]:
-        """一条消息里的链接：文字里的 + 非小程序卡片带的。每项附 state / entry（名单命中情况）。"""
+    def _lk_items(self, text: str, cards: Optional[List[Dict]] = None, typed: Optional[str] = None) -> List[Dict]:
+        """一条消息里的链接：文字里的 + 非小程序卡片带的。每项附 state / entry（名单命中情况）。
+
+        卡片带的链接另附 card_title / card_desc / card_source（卡片上显示的标题、描述、来源）。
+        typed：发送者自己打的字（text 里混有卡片的原始字段时传）。卡片的链接没出现在 typed 里的，form 记为 card。
+        """
+        typed_keys = {u["key"] for u in extract_urls(typed)} if typed is not None else None
         items = extract_urls(text)
         for it in items:
             it["form"] = "text"
-        seen = {it["key"] for it in items}
+        seen = {it["key"]: it for it in items}
         for c in cards or []:
             item = normalize_url(c.get("url") or "")
-            if item and item["key"] not in seen and len(items) < LINK_MAX_PER_MESSAGE:
-                seen.add(item["key"])
+            if not item:
+                continue
+            if item["key"] in seen:
+                item = seen[item["key"]]      # 文字里也写了同一个链接：只补上卡片内容
+                if typed_keys is not None and item["key"] not in typed_keys:
+                    item["form"] = "card"     # 其实是从卡片的原始字段里认出来的，发送者没有打这个链接
+            elif len(items) < LINK_MAX_PER_MESSAGE:
+                seen[item["key"]] = item
                 item["form"] = "card"
                 items.append(item)
+            else:
+                continue
+            title = plain_text(c.get("title"), LINK_CARD_MAX)
+            item["card_title"] = title
+            item["card_desc"] = plain_text(c.get("desc"), LINK_CARD_MAX)
+            source = plain_text(c.get("source"), LINK_CARD_MAX)
+            item["card_source"] = source if source != title else ""
         for it in items:
             it["url_hash"] = _h(it["key"])
             it["state"], it["entry"] = self._lk_check(it)
         return items
 
+    def _lk_typed_text(self, event) -> Optional[str]:
+        """发送者自己打的字（协议端上报的 text 消息段）；拿不到原始事件返回 None。"""
+        raw = self._get_raw_event(event) if hasattr(self, "_get_raw_event") else None
+        segments = raw.get("message") if isinstance(raw, dict) else None
+        if not isinstance(segments, list):
+            return None
+        return "".join(str((seg.get("data") or {}).get("text") or "") for seg in segments
+                       if isinstance(seg, dict) and seg.get("type") == "text" and isinstance(seg.get("data"), dict))
+
     def _lk_record(self, group_id: str, user_id: str, user_name: str, items: List[Dict], outcome: str = "pass",
-                   reason: str = "", now: Optional[int] = None) -> List[int]:
+                   reason: str = "", now: Optional[int] = None, text: str = "") -> List[int]:
+        """text：带这些链接的消息原文（卡片文字并入之前的），每条记录存一段，见 message_snippet。"""
         if not items or not self._cfg("link_store_enabled", True):
             return []
         self._lk_init_db()
@@ -339,17 +410,25 @@ class LinkGuardMixin:
         with self._storage._connect() as conn:
             for it in items:
                 result = "allow" if it.get("state") == "allow" and outcome != "rule" else outcome
+                msg = message_snippet(text, it) if text else ""
+                card = [str(it.get(k) or "") for k in ("card_title", "card_desc", "card_source")]
                 cur = conn.execute(
-                    "INSERT INTO lk_sends(ts, group_id, user_id, user_name, form, domain, host, url_hash, outcome, reason) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO lk_sends(ts, group_id, user_id, user_name, form, domain, host, url_hash, outcome, reason, "
+                    "msg_text, card_title, card_desc, card_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (now, str(group_id), str(user_id), str(user_name or "")[:64], it.get("form", "text"), it["domain"],
-                     it["host"], it["url_hash"], result, str(reason or "")[:200]))
+                     it["host"], it["url_hash"], result, str(reason or "")[:200], msg, *card))
                 ids.append(int(cur.lastrowid or 0))
                 if conn.execute("SELECT 1 FROM lk_urls WHERE url_hash=?", (it["url_hash"],)).fetchone() is None:
                     conn.execute("INSERT INTO lk_urls(url_hash, url, url_key, host, domain, first_ts) VALUES(?,?,?,?,?,?)",
                                  (it["url_hash"], it["url"], it["key"], it["host"], it["domain"], now))
                     if it.get("state") != "block":
                         fresh.append(it["url_hash"])
+                # 链接本身记下最近一次的消息原文和卡片内容（不随发送记录清理）
+                if msg:
+                    conn.execute("UPDATE lk_urls SET sample_text=? WHERE url_hash=?", (msg, it["url_hash"]))
+                if any(card):
+                    conn.execute("UPDATE lk_urls SET card_title=?, card_desc=?, card_source=? WHERE url_hash=?",
+                                 (*card, it["url_hash"]))
             conn.commit()
         if fresh and self._lk_title_mode() == "auto":
             self._lk_queue_titles(fresh)
@@ -557,7 +636,7 @@ class LinkGuardMixin:
 
     def _lk_stats(self, days: int = 7, keyword: str = "", group_id: str = "", by: str = "domain",
                   page: int = 1, page_size: int = 50, sort: str = "count") -> Tuple[List[dict], int]:
-        """按域名（或「域名 + 人」）汇总最近 days 天。keyword 匹配域名、链接、标题、QQ 号、昵称。"""
+        """按域名（或「域名 + 人」）汇总最近 days 天。keyword 匹配域名、链接、消息原文、卡片内容、标题、QQ 号、昵称。"""
         self._lk_init_db()
         days = min(max(int(days or 7), 1), self._lk_store_days())
         where, args = ["s.ts>=?"], [int(time.time()) - days * 86400]
@@ -567,8 +646,9 @@ class LinkGuardMixin:
         keyword = str(keyword or "").strip()
         if keyword:
             like = f"%{keyword}%"
-            where.append("(s.domain LIKE ? OR u.url LIKE ? OR u.title LIKE ? OR s.user_id=? OR s.user_name LIKE ?)")
-            args += [like, like, like, keyword, like]
+            where.append("(s.domain LIKE ? OR u.url LIKE ? OR u.title LIKE ? OR s.msg_text LIKE ? OR s.card_title LIKE ? "
+                         "OR s.card_desc LIKE ? OR s.user_id=? OR s.user_name LIKE ?)")
+            args += [like, like, like, like, like, like, keyword, like]
         group_by = "s.domain, s.user_id" if by == "user" else "s.domain"
         cond = " AND ".join(where)
         join = "FROM lk_sends s LEFT JOIN lk_urls u ON u.url_hash = s.url_hash"
@@ -583,7 +663,7 @@ class LinkGuardMixin:
                 f"COUNT(DISTINCT s.url_hash) AS urls, COUNT(DISTINCT s.host) AS hosts, "
                 f"COUNT(DISTINCT s.group_id) AS groups, COUNT(DISTINCT s.user_id) AS users, "
                 f"MAX(s.ts) AS last_ts, MIN(s.ts) AS first_ts, MAX(s.user_id) AS user_id, MAX(s.user_name) AS user_name, "
-                f"MAX(u.title) AS title "
+                f"MAX(CASE WHEN u.card_title != '' THEN u.card_title ELSE u.title END) AS title "
                 f"{join} WHERE {cond} GROUP BY {group_by} ORDER BY {order} LIMIT ? OFFSET ?",
                 args + [page_size, (page - 1) * page_size]).fetchall()
         return [{
@@ -595,13 +675,14 @@ class LinkGuardMixin:
         } for r in rows], total
 
     def _lk_detail(self, domain: str, user_id: str = "", limit: int = 100) -> dict:
-        """某个域名：它下面的每个链接（次数、标题、名单状态）、所在的群、最近的发送记录。"""
+        """某个域名：它下面的每个链接（次数、消息原文 / 卡片内容、标题、名单状态）、所在的群、最近的发送记录。"""
         self._lk_init_db()
         domain = str(domain or "").strip().lower()
         uwhere, uargs = ("AND s.user_id=?", [str(user_id)]) if user_id else ("", [])
         with self._storage._connect() as conn:
             urls = conn.execute(
                 f"SELECT u.url_hash, u.url, u.url_key, u.host, u.title, u.title_state, u.title_error, u.final_host, "
+                f"u.sample_text, u.card_title, u.card_desc, u.card_source, "
                 f"COUNT(*) AS total, COUNT(DISTINCT s.user_id) AS users, COUNT(DISTINCT s.group_id) AS groups, "
                 f"SUM(s.outcome='rule') AS ruled, MAX(s.ts) AS last_ts FROM lk_sends s "
                 f"JOIN lk_urls u ON u.url_hash = s.url_hash WHERE s.domain=? {uwhere} "
@@ -619,7 +700,9 @@ class LinkGuardMixin:
             url_items.append({
                 "url_hash": r["url_hash"], "url": r["url"], "key": r["url_key"], "host": r["host"], "title": r["title"],
                 "title_state": r["title_state"], "title_label": TITLE_STATE_LABEL.get(r["title_state"], r["title_state"]),
-                "title_error": r["title_error"], "final_host": r["final_host"], "total": int(r["total"] or 0),
+                "title_error": r["title_error"], "final_host": r["final_host"],
+                "sample_text": r["sample_text"], "card_title": r["card_title"], "card_desc": r["card_desc"],
+                "card_source": r["card_source"], "total": int(r["total"] or 0),
                 "users": int(r["users"] or 0), "groups": int(r["groups"] or 0), "ruled": int(r["ruled"] or 0),
                 "last_ts": int(r["last_ts"] or 0), "state": state, "entry": entry,
             })
@@ -642,6 +725,8 @@ class LinkGuardMixin:
                        for r in groups],
             "sends": [{"id": r["id"], "ts": r["ts"], "group_id": r["group_id"], "user_id": r["user_id"],
                        "user_name": r["user_name"], "form": r["form"], "url": r["url"] or "", "outcome": r["outcome"],
+                       "msg_text": r["msg_text"], "card_title": r["card_title"], "card_desc": r["card_desc"],
+                       "card_source": r["card_source"],
                        "outcome_label": OUTCOME_LABEL.get(r["outcome"], r["outcome"]), "reason": r["reason"]}
                       for r in sends],
         }
@@ -656,7 +741,8 @@ class LinkGuardMixin:
                 "COUNT(DISTINCT url_hash) AS urls, MAX(ts) AS last_ts FROM lk_sends WHERE user_id=? "
                 "GROUP BY domain ORDER BY total DESC, last_ts DESC LIMIT 100", (uid,)).fetchall()
             recent = conn.execute(
-                "SELECT s.ts, s.group_id, s.domain, s.outcome, u.url, u.title FROM lk_sends s "
+                "SELECT s.ts, s.group_id, s.domain, s.outcome, s.msg_text, u.url, "
+                "CASE WHEN s.card_title != '' THEN s.card_title ELSE u.title END AS title FROM lk_sends s "
                 "LEFT JOIN lk_urls u ON u.url_hash = s.url_hash WHERE s.user_id=? ORDER BY s.ts DESC, s.id DESC LIMIT ?",
                 (uid, min(max(int(limit), 1), 200))).fetchall()
         return {
@@ -665,6 +751,6 @@ class LinkGuardMixin:
                          "groups": int(r["groups"] or 0), "urls": int(r["urls"] or 0), "last_ts": int(r["last_ts"] or 0),
                          "state": self._lk_domain_state(r["domain"])} for r in domains],
             "recent": [{"ts": r["ts"], "group_id": r["group_id"], "domain": r["domain"], "url": r["url"] or "",
-                        "title": r["title"] or "", "outcome": r["outcome"],
+                        "title": r["title"] or "", "msg_text": r["msg_text"] or "", "outcome": r["outcome"],
                         "outcome_label": OUTCOME_LABEL.get(r["outcome"], r["outcome"])} for r in recent],
         }

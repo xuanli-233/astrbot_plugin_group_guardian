@@ -1129,7 +1129,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <div class="tab-panel" id="tab-links">
         <div class="page-header"><h1>链接管理</h1><button class="btn btn-ghost btn-sm" id="btnLkRefresh">刷新</button></div>
-        <p class="mn-intro">群消息里出现过的链接都在这里，按域名汇总：每个域名出现了多少次、谁发的、在哪些群、具体是哪些链接。可以拉黑整个域名（连同它的子域名），也可以只拉黑某一个链接；拉黑后再出现就按默认规则组撤回。小程序卡片里的链接不算（在「小程序」页）。<strong>这里的链接只显示成文字，不能点击打开</strong>，需要时用「复制」。</p>
+        <p class="mn-intro">群消息里出现过的链接都在这里，按域名汇总：每个域名出现了多少次、谁发的、在哪些群、具体是哪些链接，以及<strong>带这个链接的消息原文、链接卡片上的标题和描述</strong>（看链接是干什么的主要靠这两样，不用访问网页）。可以拉黑整个域名（连同它的子域名），也可以只拉黑某一个链接；拉黑后再出现就按默认规则组撤回。小程序卡片里的链接不算（在「小程序」页）。<strong>这里的链接只显示成文字，不能点击打开</strong>，需要时用「复制」。</p>
         <div class="split" id="lkSplit">
           <div class="card">
             <div class="card-header"><h2>域名统计</h2><span class="rules-subtle" id="lkCount"></span></div>
@@ -1138,12 +1138,12 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               <select class="input-sm" id="lkDaysSel" style="width:120px"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="3650">全部保留的</option></select>
               <select class="input-sm" id="lkGroup" style="width:180px"><option value="">所有群</option></select>
               <select class="input-sm" id="lkSort" style="width:160px"><option value="count">出现次数多的在前</option><option value="users">发送人数多的在前</option><option value="urls">不同链接多的在前</option><option value="recent">最近出现的在前</option></select>
-              <input class="input-sm" id="lkKeyword" placeholder="域名 / 链接 / 标题 / QQ号 / 昵称" style="flex:1;min-width:150px" />
+              <input class="input-sm" id="lkKeyword" placeholder="域名 / 链接 / 消息内容 / 卡片标题 / QQ号 / 昵称" style="flex:1;min-width:150px" />
             </div></div>
             <div class="split-list" id="lkTable"><div class="split-empty">加载中...</div></div>
             <div class="mn-body" style="padding-top:6px" id="lkPager"></div>
           </div>
-          <div class="split-right"><div class="card" id="lkDetail"><div class="split-empty">在左边点一个域名：看它下面有哪些链接、网页标题、谁发的、在哪些群，可以拉黑整个域名或某一个链接</div></div></div>
+          <div class="split-right"><div class="card" id="lkDetail"><div class="split-empty">在左边点一个域名：看它下面有哪些链接、带链接的消息原文、卡片上的标题和描述、谁发的、在哪些群，可以拉黑整个域名或某一个链接</div></div></div>
         </div>
         <div class="mn-grid">
           <div class="card">
@@ -1178,6 +1178,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
                 <option value="auto">自动：新链接第一次出现时后台读一次</option>
                 <option value="off">关闭</option>
               </select><button class="btn btn-primary btn-sm" id="btnLkSave">保存</button></div>
+            <p class="mn-hint">链接是什么内容，默认看详情里的「消息原文」和「卡片标题 / 描述」，这些 QQ 已经给出来了，不需要访问网页。很多页面限制浏览器、要在微信 / QQ 里登录才能打开，服务器去读标题读不到，所以读标题只是补充。</p>
             <p class="mn-hint">读标题 = 由 AstrBot 所在的服务器去访问一次这个网页。做了这些限制：只读网页开头 128KB、只取 &lt;title&gt; 里的文字，不执行脚本、不加载图片、不下载文件；只访问公网地址的 80 / 443 端口，不会被引到内网；最多跟 3 次跳转，每一跳都重新检查；不带 Cookie；标题只当普通文字保存和显示。已拉黑的链接不读。</p>
             <p class="mn-hint" style="color:var(--warning)">仍然要知道：对方网站会看到服务器的 IP 地址；「打开就生效」的一次性链接（确认、退订、签到之类）会被这次访问触发。所以默认是手动，不放心的链接不要读。</p>
           </div>
@@ -5053,12 +5054,16 @@ async function lkLoadStats() {
     sub.push(esc(mnTime(it.last_ts)));
     return '<div class="split-item" data-lk-open="' + i + '"><div class="si-main">' +
       '<div class="si-title" style="word-break:break-all">' + esc(it.domain) + ' ' + lkStateTag(it.state) + '</div>' +
-      (it.title ? '<div class="si-sub" title="读到的网页标题">「' + esc(it.title) + '」</div>' : '') +
+      (it.title ? '<div class="si-sub" title="卡片标题（没有卡片时是读到的网页标题）">「' + esc(it.title) + '」</div>' : '') +
       '<div class="si-sub">' + sub.join(' · ') + '</div></div></div>';
   }).join('') : '<div class="split-empty">' + (!d.guard_enabled ? '链接识别已关闭（下方「设置」）' : (d.store_enabled ? '这段时间没有出现链接' : '链接记录已关闭（下方「设置」）')) + '</div>';
   lkMarkSel();
   $('#lkPager').innerHTML = renderPager(LK.page, LK.pageSize, d.total || 0, 'lk') + '<span class="mn-hint">记录保留 ' + d.store_days + ' 天</span>';
   bindPager($('#lkPager'));
+}
+/* 带链接的消息原文：保留换行，太长时在框里滚动 */
+function lkMsgBox(text) {
+  return '<div style="white-space:pre-wrap;word-break:break-all;max-height:7.5em;overflow:auto;border-left:3px solid var(--border);padding:2px 0 2px 8px;margin:2px 0 4px">' + esc(text) + '</div>';
 }
 function lkMarkSel() {
   var s = LK.sel || {};
@@ -5109,14 +5114,18 @@ async function lkShowDetail(it) {
   LK.detail = { item: { domain: d.domain, user_id: it.user_id || '' }, data: d };
   var canRead = d.title_mode !== 'off';
   var urls = (d.urls || []).map(function(u, ui) {
-    var title = u.title ? '<b>' + esc(u.title) + '</b>'
-      : (u.title_state ? '<span class="mn-hint" title="' + escAttr(u.title_error || '') + '">' + esc(u.title_label) + (u.title_error ? '：' + esc(u.title_error) : '') + '</span>' : '<span class="mn-hint">标题未读取</span>');
+    var card = (u.card_title || u.card_desc || u.card_source) ? '<div><span class="mn-chip" title="链接卡片上显示的标题、来源和描述">卡片</span> ' +
+      (u.card_title ? '<b>' + esc(u.card_title) + '</b>' : '') + (u.card_source ? ' <span class="mn-hint">' + esc(u.card_source) + '</span>' : '') +
+      (u.card_desc ? '<div>' + esc(u.card_desc) + '</div>' : '') + '</div>' : '';
+    var msg = u.sample_text ? '<div class="mn-hint" style="margin-top:4px">最近一次带这个链接的消息</div>' + lkMsgBox(u.sample_text) : '';
+    var web = u.title ? '<div style="margin-top:4px"><span class="mn-hint">网页标题：</span>' + esc(u.title) + '</div>'
+      : (u.title_state ? '<div class="mn-hint" style="margin-top:4px">网页标题' + esc(u.title_label) + (u.title_error ? '：' + esc(u.title_error) : '') + '</div>' : '');
+    var title = (card + msg + web) || '<span class="mn-hint">消息里只有这个链接，没有别的文字</span>';
     var acts = '<button class="btn btn-ghost btn-sm" data-lkd-copy="' + ui + '">复制</button>' +
       (canRead && u.state !== 'block' ? '<button class="btn btn-outline btn-sm" data-lkd-title="' + ui + '">' + (u.title_state ? '重新读取' : '读取标题') + '</button>' : '') +
       (u.state === 'block' ? (u.entry === u.key ? '<button class="btn btn-outline btn-sm" data-lkd-unurl="' + ui + '">解除拉黑</button>' : '')
         : '<button class="btn btn-danger btn-sm" data-lkd-url="' + ui + '">拉黑这个链接</button>');
-    return '<tr><td style="word-break:break-all">' + title + ' ' + (u.state === 'block' ? lkStateTag('block') : '') +
-      '<div class="mn-hint" style="font-family:monospace">' + esc(u.url) + '</div>' +
+    return '<tr><td style="word-break:break-all"><div style="font-family:monospace">' + esc(u.url) + ' ' + (u.state === 'block' ? lkStateTag('block') : '') + '</div>' + title +
       (u.final_host ? '<div class="mn-hint" style="color:var(--warning)">会跳转到 ' + esc(u.final_host) + '</div>' : '') +
       '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' + acts + '</div></td>' +
       '<td style="white-space:nowrap"><strong>' + u.total + '</strong> 次<br><span class="mn-hint">' + u.users + ' 人 / ' + u.groups + ' 群</span>' +
@@ -5132,7 +5141,9 @@ async function lkShowDetail(it) {
   var sends = (d.sends || []).slice(0, 50).map(function(r) {
     return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td style="white-space:nowrap">' + esc(cuGroupName(r.group_id) || r.group_id) + '</td>' +
       '<td style="white-space:nowrap">' + mbrLink(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') + '</td>' +
-      '<td style="word-break:break-all"><span class="mn-hint">' + esc(r.url) + (r.form === 'card' ? '（卡片）' : '') + '</span></td>' +
+      '<td style="word-break:break-all">' + (r.msg_text ? lkMsgBox(r.msg_text) : '') +
+      ((r.card_title || r.card_desc) ? '<div><span class="mn-chip">卡片</span> ' + esc([r.card_source, r.card_title, r.card_desc].filter(Boolean).join(' · ')) + '</div>' : '') +
+      '<span class="mn-hint" style="font-family:monospace">' + esc(r.url) + (r.form === 'card' && !(r.card_title || r.card_desc) ? '（卡片）' : '') + '</span></td>' +
       '<td style="white-space:nowrap' + (r.outcome === 'rule' ? ';color:var(--danger)' : '') + '" title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
   }).join('');
   var unread = (d.urls || []).filter(function(u) { return !u.title_state && u.state !== 'block'; }).length;
@@ -5148,7 +5159,7 @@ async function lkShowDetail(it) {
     (canRead && unread ? '<button class="btn btn-outline btn-sm" data-lkd-titles="1">读取还没读的标题（' + Math.min(unread, 10) + ' 个）</button>' : '') + '</div>' +
     '<table class="mn-table"><tbody>' + (urls || '<tr><td>没有记录</td></tr>') + '</tbody></table>' +
     '<p class="mn-hint" style="margin:10px 0 6px">最近的记录（保留 ' + d.store_days + ' 天；点 QQ 号看群成员档案）</p>' +
-    '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>链接</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table></div>';
+    '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>消息内容与链接</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table></div>';
 }
 async function lkDetailClick(e) {
   var det = LK.detail;
