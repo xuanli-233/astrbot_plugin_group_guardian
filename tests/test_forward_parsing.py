@@ -246,6 +246,26 @@ class NestedForwardTests(unittest.TestCase):
         self.assertFalse(favorite)
         self.assertEqual(images, ["https://example.com/forward.png"])
 
+    def test_forward_cards_are_reported_for_link_tracking(self):
+        """转发里的卡片：原始数据和摊平后的文字单独交出来，链接管理据此一张卡片只算一个链接。"""
+        card = json.dumps({"app": "com.tencent.structmsg", "meta": {"news": {
+            "title": "标题", "jumpUrl": "https://m.site.com/v/1", "pcJumpUrl": "https://www.site.com/video/1",
+            "preview": "https://pic.ugcimg.cn/abc/0"}}})
+        client = _Client({"root": {"messages": [
+            {"content": [{"type": "text", "data": {"text": "看这个 a.com/x"}}]},
+            {"content": [{"type": "json", "data": {"data": card}}]},
+        ]}})
+        event = _Event([{"type": "forward", "data": {"id": "root"}}], client)
+        got = {}
+        text, _fav = asyncio.run(_Harness()._resolve_forward_messages(event, collect=got))
+        self.assertEqual(got["card_data"], [card])
+        self.assertEqual(len(got["card_texts"]), 1)
+        self.assertIn(got["card_texts"][0].strip(), text)               # 摊平的文字仍在审核文字里（关键词照常匹配）
+        rest = text.replace(got["card_texts"][0].strip(), " ")
+        self.assertIn("a.com/x", rest)
+        self.assertNotIn("site.com", rest)
+        self.assertNotIn("ugcimg", rest)
+
     def test_reply_content_is_still_ignored_inside_nodes(self):
         node = Node([Reply("quoted-slur"), Plain("actual text")], data={"uin": 123})
         event = _Event([node])

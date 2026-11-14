@@ -167,11 +167,12 @@ class ModerationMixin(ImageAuditMixin):
             return
 
         scan_forward = self._cfg("scan_forward_msg", True, group_id=group_id)
+        fw_cards = {}   # 合并转发里的卡片（原始数据 + 摊平后的文字），链接管理用
         text, image_urls, has_forward = self._parse_message_chain(event, include_forward_content=scan_forward)
         if has_forward and scan_forward:
             live_stage("解析合并转发")
             forward_text, _favorite, forward_images = await self._resolve_forward_messages(
-                event, return_images=True)
+                event, return_images=True, collect=fw_cards)
             if forward_text:
                 text = (text + "\n" + forward_text) if text else forward_text
             if forward_images:
@@ -214,18 +215,32 @@ class ModerationMixin(ImageAuditMixin):
                              + ("；白名单，放行" if i.get("_allowed") else "") for i in mp_items])
 
         # 链接（link_guard.py）：文字里的链接 + 非小程序卡片带的链接（小程序卡片的不算），在卡片文字并入之前识别
-        lk_items, lk_text = [], text
+        # 链接只从「发送者打的字 + 合并转发里的文字」里找，卡片另算（一张卡片一个链接）：卡片的原始 JSON 摊平后
+        # 混在 text 里，里面的预览图、图标、电脑端地址会被当成链接重复统计
+        lk_items, lk_text, lk_cards = [], text, []
         if cards and callable(getattr(self, "_lk_typed_text", None)):
-            # 带卡片的消息：text 里混有卡片的原始字段，链接记录里的「消息原文」只要发送者自己打的字
             typed = self._lk_typed_text(event)
             if typed is not None:
                 lk_text = typed
+        elif fw_cards.get("card_texts"):
+            for flat in fw_cards["card_texts"]:
+                if flat and flat.strip():
+                    lk_text = lk_text.replace(flat.strip(), " ")
+            card_from_data = getattr(self, "_card_from_data", None)
+            for data in (fw_cards.get("card_data") or [])[:10] if callable(card_from_data) else []:
+                try:
+                    c = card_from_data(data)
+                except Exception:
+                    c = None
+                if c and not c.get("appid") and "小程序" not in (c.get("kind") or ""):
+                    lk_cards.append(c)
         lk_extract = getattr(self, "_lk_items", None)
         if callable(lk_extract) and self._cfg("link_guard_enabled", True, group_id=group_id):
             try:
                 mp_cards = {id(i["card"]) for i in mp_items if i.get("card") is not None}
-                lk_items = lk_extract(text, [c for c in cards if id(c) not in mp_cards],
-                                      typed=lk_text if lk_text is not text else None)
+                lk_cards = [c for c in cards if id(c) not in mp_cards] + lk_cards
+                lk_items = lk_extract(lk_text, lk_cards, skip_urls=list(image_urls) + [
+                    u for c in lk_cards for u in (c.get("preview"), c.get("icon")) if u])
             except Exception as e:
                 logger.debug(f"[GroupMgr] 识别链接失败: {e}")
                 lk_items = []
@@ -939,12 +954,16 @@ class ModerationMixin(ImageAuditMixin):
                 return await self._resolve_forward_id(client, fid, depth + 1, state)
             return await self._render_forward_content(client, payload, depth + 1, state)
         if seg_type == 'json':
+            card_data = self._card_data_for_component(content, seg_type, data)
             card_text = self._extract_json_card_text(
-                self._card_data_for_component(content, seg_type, data),
+                card_data,
                 observer=state.get('text_observer'),
                 limit_callback=state.get('stream_limit_callback'),
             )
             card_text = self._limit_forward_leaf(card_text, state, observe=False)
+            # 链接管理要知道哪段文字是卡片摊平出来的（moderation._handle_message）
+            state.setdefault('card_data', []).append(card_data.get('data') if isinstance(card_data, dict) else card_data)
+            state.setdefault('card_texts', []).append(card_text)
             return card_text, self._is_qq_favorite_text(card_text)
         if seg_type == 'app':
             card_text = self._extract_app_card_text(
@@ -1065,7 +1084,9 @@ class ModerationMixin(ImageAuditMixin):
                                         nested_depth: int = 0,
                                         group_id: str = "",
                                         return_scan: bool = False,
-                                        return_images: bool = False):
+                                        return_images: bool = False,
+                                        collect: Optional[dict] = None):
+        """collect：传一个 dict 进来，解析完后填入 card_data / card_texts（转发里的卡片原始数据和摊平后的文字）。"""
         forward_ids = self._forward_ids_from_chain(event.get_messages() or [])
         if not forward_ids:
             result = ('', False)
@@ -1121,6 +1142,9 @@ class ModerationMixin(ImageAuditMixin):
                 break
         if scan is not None:
             self._finalize_stream_rule_scan(group_id, scan)
+        if collect is not None:
+            collect['card_data'] = list(state.get('card_data', []))
+            collect['card_texts'] = list(state.get('card_texts', []))
         result = ('\n'.join(all_texts), favorite)
         if return_images:
             result += (self._select_image_urls(state.get('image_urls', [])),)

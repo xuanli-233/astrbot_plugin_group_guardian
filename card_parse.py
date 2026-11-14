@@ -54,7 +54,9 @@ def parse_card(data) -> Optional[Dict]:
     out = {"app": _s(card.get("app")), "view": _s(card.get("view")), "prompt": _s(card.get("prompt")),
            "kind": "", "title": "", "desc": "", "source": "", "appid": "", "url": "", "preview": "", "icon": "",
            # 推荐名片卡片：share_type = group（群名片，分享另一个群）/ user（个人名片）；share_uin = 那个群号 / QQ 号
-           "share_type": "", "share_uin": ""}
+           "share_type": "", "share_uin": "",
+           # 卡片里除 url 以外的跳转地址（电脑端地址等）：链接管理只用来检查黑名单，不单独统计
+           "alt_urls": []}
     body = None
     if isinstance(meta.get("miniapp"), dict):
         body = meta["miniapp"]
@@ -94,6 +96,11 @@ def parse_card(data) -> Optional[Dict]:
                 break
     if body is None:
         out["kind"] = _KIND_BY_VIEW.get(out["view"], "卡片")
+    else:
+        for key in ("jumpUrl", "pcJumpUrl", "url", "qqdocurl", "musicUrl"):
+            alt = _s(body.get(key))
+            if alt and alt != out["url"] and alt not in out["alt_urls"]:
+                out["alt_urls"].append(alt)
     if out["preview"].startswith("//"):
         out["preview"] = "https:" + out["preview"]
     if not out["preview"].startswith(("http://", "https://")):
@@ -141,6 +148,7 @@ def card_text(card: Dict) -> str:
 
 class CardParseMixin:
     _card_text = staticmethod(card_text)
+    _card_from_data = staticmethod(parse_card)
 
     def _card_segments(self, event) -> List[Dict]:
         """原始消息里的 json 消息段（取协议端上报的 message 数组，最可靠）。"""

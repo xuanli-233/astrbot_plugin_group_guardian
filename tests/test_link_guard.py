@@ -259,11 +259,6 @@ class MessageAndCardTests(unittest.TestCase):
                            {"type": "text", "data": {"text": "a.com/x"}}, {"type": "image", "data": {"url": "u"}}]}
         h._get_raw_event = lambda event: raw
         self.assertEqual(h._lk_typed_text(object()), "看这个 a.com/x")
-        # 卡片的原始字段被拼进了文字：链接算卡片带的，除非发送者自己也打了
-        flat, cards = "[分享]标题 https://b.com/n/1 看 a.com/x", [{"url": "https://b.com/n/1", "title": "标题"}]
-        self.assertEqual([(i["key"], i["form"]) for i in h._lk_items(flat, cards, typed="看 a.com/x")],
-                         [("b.com/n/1", "card"), ("a.com/x", "text")])
-        self.assertEqual(h._lk_items(flat, cards, typed="看 b.com/n/1")[0]["form"], "text")
         raw["message"] = [{"type": "json", "data": {"data": "{}"}}]
         self.assertEqual(h._lk_typed_text(object()), "")               # 只有卡片：没有原文
         h._get_raw_event = lambda event: None
@@ -288,6 +283,67 @@ class MessageAndCardTests(unittest.TestCase):
         self.assertEqual((d["sends"][0]["msg_text"], d["urls"][0]["sample_text"], d["urls"][0]["card_title"]), ("", "", ""))
         h._lk_record(GID, UID, "张三", h._lk_items("新消息 old.com/2"), text="新消息 old.com/2")
         self.assertEqual(h._lk_detail("old.com")["sends"][0]["msg_text"], "新消息 old.com/2")
+
+
+class MediaAndCardDedupTests(unittest.TestCase):
+    """图片地址不算链接；一张卡片只算一个链接。"""
+
+    def test_qq_image_urls_and_image_files_are_not_links(self):
+        for text in ("https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=EhQx&rkey=CAQ",
+                     "https://gchat.qpic.cn/gchatpic_new/0/0-0-ABCDEF0123456789/0",
+                     "http://p.qlogo.cn/gh/123456/123456/100", "https://qq.ugcimg.cn/v1/abc/def",
+                     "https://thirdqq.qlogo.cn/g?b=oidb&k=x", "https://open.gtimg.cn/open/app_icon/1.png",
+                     "看图 https://example.com/a/b/Pic.JPG?x=1", "example.com/logo.webp",
+                     "[CQ:image,file=a.jpg,url=https://evil.com/x&amp;y=1]",
+                     "[CQ:json,data={\"jumpUrl\":\"https://evil.com/x\"}]"):
+            self.assertEqual(_keys(text), [], text)
+        # 普通链接照常；域名里带 qpic 字样但不是那些服务器的照常
+        self.assertEqual(_keys("[CQ:image,url=https://gchat.qpic.cn/1] 看 a.com/x 和 notqpic.cn/y"),
+                         ["a.com/x", "notqpic.cn/y"])
+        self.assertEqual(_keys("qq.com/news.html 和 a.com/png"), ["qq.com/news.html", "a.com/png"])
+
+    def test_message_images_and_card_previews_are_skipped(self):
+        h = _H()
+        cards = [{"url": "https://b.com/n/1", "title": "标题", "preview": "https://cdn.b.com/cover/1"},
+                 {"url": "https://cdn.b.com/cover/1"}, {"url": "https://gchat.qpic.cn/x/1"}]
+        items = h._lk_items("看 img.host.com/abc?size=0 和 a.com/x", cards,
+                            skip_urls=["https://img.host.com/abc?size=0", "https://cdn.b.com/cover/1", "", None])
+        self.assertEqual([(i["key"], i["form"]) for i in items], [("a.com/x", "text"), ("b.com/n/1", "card")])
+
+    def test_card_counts_once_and_alt_urls_only_checked_for_block(self):
+        import card_parse
+        raw = {"app": "com.tencent.structmsg", "view": "news", "prompt": "[分享]标题", "meta": {"news": {
+            "title": "标题", "desc": "描述", "tag": "某站", "jumpUrl": "https://m.site.com/v/1?from=qq",
+            "pcJumpUrl": "https://www.site.com/video/1", "preview": "https://pic.ugcimg.cn/abc/0",
+            "source_icon": "https://open.gtimg.cn/icon.png"}}}
+        card = card_parse.parse_card(raw)
+        self.assertEqual(card["alt_urls"], ["https://www.site.com/video/1"])
+        h = _H()
+        items = h._lk_items("", [card], skip_urls=[card["preview"], card["icon"]])
+        self.assertEqual([(i["key"], i["form"], i["state"]) for i in items], [("m.site.com/v/1?from=qq", "card", "")])
+        h._lk_record(GID, UID, "张三", items)
+        self.assertEqual(h._lk_stats()[0][0]["urls"], 1)                # 只统计一个链接
+        # 电脑端地址被拉黑：这张卡片也算命中，但仍然只记手机端那一个链接
+        h._lk_set_list("block_url", "site.com/video/1", True)
+        it = h._lk_items("", [card_parse.parse_card(raw)])[0]
+        self.assertEqual((it["key"], it["state"], it["entry"]), ("m.site.com/v/1?from=qq", "block", "site.com/video/1"))
+        self.assertNotIn("_alt", it)
+
+    def test_old_image_rows_are_purged_on_start(self):
+        h = _H()
+        now = int(time.time())
+        h._lk_init_db()
+        with h._storage._connect() as conn:                             # 以前误记的图片地址
+            for hsh, host, key in (("i1", "multimedia.nt.qq.com.cn", "multimedia.nt.qq.com.cn/download?a=1"),
+                                   ("i2", "x.com", "x.com/a.png"), ("ok", "x.com", "x.com/page")):
+                conn.execute("INSERT INTO lk_urls(url_hash, url, url_key, host, domain) VALUES(?,?,?,?,?)",
+                             (hsh, "http://" + key, key, host, link_guard.registrable_domain(host)))
+                conn.execute("INSERT INTO lk_sends(ts, group_id, user_id, domain, host, url_hash) VALUES(?,?,?,?,?,?)",
+                             (now, GID, UID, link_guard.registrable_domain(host), host, hsh))
+            conn.commit()
+        self.assertEqual(h._lk_purge_media(), 2)
+        self.assertEqual([(i["domain"], i["total"]) for i in h._lk_stats()[0]], [("x.com", 1)])
+        self.assertEqual(h._lk_purge_media(), 0)
 
 
 class TitleFetchTests(unittest.IsolatedAsyncioTestCase):

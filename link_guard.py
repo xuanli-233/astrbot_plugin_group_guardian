@@ -2,7 +2,11 @@
 """链接记录、统计、拉黑与标题预览（二次开发新增）。WebUI「链接管理」页。
 
 记录哪些链接：消息文字里的 http(s) 链接和裸域名（如 t.cn/xxx），以及「链接分享」等非小程序卡片带的链接。
-小程序卡片里的链接不算（它们在「小程序」页）；图片地址不算。
+小程序卡片里的链接不算（它们在「小程序」页）。
+图片地址不算：QQ 图片 / 头像 / 表情的地址（multimedia.nt.qq.com.cn、gchat.qpic.cn 等，见 is_media_url）、以图片后缀
+结尾的地址、这条消息里的图片和卡片预览图的地址、CQ 码（[CQ:image,url=...]，协议端用字符串格式时合并转发里会有）。
+一张卡片只算一个链接（卡片解析出来的跳转地址）：卡片的原始 JSON 里还有电脑端地址、预览图、图标等，都不单独统计；
+电脑端地址等只用来检查黑名单（card_parse 的 alt_urls）。合并转发里的卡片同样处理（moderation.py 传进来）。
 
 每次出现记一行 lk_sends（时间、群、发送者、域名、链接、处理结果、带这个链接的消息原文、卡片的标题 / 描述 / 来源），
 保留 link_store_days 天；lk_urls 记每个链接本身、最近一次带它的消息原文和卡片内容、读到的网页标题，不随记录清理。
@@ -64,6 +68,11 @@ _TRAIL = ".,;:!?)]}>'\"，。；：！？）】」』、"
 _SECOND_LEVEL = {"com", "net", "org", "gov", "edu", "ac", "co", "or", "ne", "go"}
 _HOST_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9_](?:[a-z0-9_\-]{0,61}[a-z0-9_])?\.)+[a-z][a-z0-9\-]{1,62}$")
 _IP_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+_CQ_RE = re.compile(r"\[CQ:[^\]]{0,8000}\]")
+# QQ 自己的图片 / 头像 / 表情 / 静态资源地址：消息里的图片就是这些地址，不是发送者贴的链接
+_MEDIA_HOSTS = {"multimedia.nt.qq.com.cn"}
+_MEDIA_HOST_SUFFIXES = ("qpic.cn", "qlogo.cn", "ugcimg.cn", "gtimg.cn", "gtimg.com", "idqqimg.com")
+_MEDIA_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".ico", ".svg", ".heic", ".avif")
 _TITLE_RE = re.compile(rb"<title\b[^>]*>(.*?)</title\s*>", re.I | re.S)
 _OG_RE = re.compile(rb"<meta\b[^>]*?property\s*=\s*[\"']og:title[\"'][^>]*?content\s*=\s*[\"']([^\"']*)[\"']", re.I | re.S)
 _CHARSET_RE = re.compile(rb"charset\s*=\s*[\"']?\s*([A-Za-z0-9_\-]{3,20})", re.I)
@@ -115,14 +124,26 @@ def normalize_url(raw: str) -> Optional[Dict]:
     return {"url": url[:LINK_URL_MAX], "host": host, "domain": registrable_domain(host), "key": key[:LINK_URL_MAX]}
 
 
+def is_media_url(item: Dict) -> bool:
+    """这个地址是不是图片（QQ 的图片 / 头像 / 表情服务器，或以图片后缀结尾）。item：normalize_url 的结果。"""
+    host = str(item.get("host") or "")
+    if host in _MEDIA_HOSTS or any(host == s or host.endswith("." + s) for s in _MEDIA_HOST_SUFFIXES):
+        return True
+    path = str(item.get("key") or "").split("?", 1)[0].lower()
+    return "/" in path and path.endswith(_MEDIA_EXTS)
+
+
 def extract_urls(text: str) -> List[Dict]:
-    """消息文字里的链接（http(s):// 开头的，和常见后缀的裸域名）→ [{url, host, domain, key}]，按 key 去重。"""
-    text = str(text or "")
+    """消息文字里的链接（http(s):// 开头的，和常见后缀的裸域名）→ [{url, host, domain, key}]，按 key 去重。
+
+    CQ 码整段去掉、图片地址不算（见 is_media_url）。
+    """
+    text = _CQ_RE.sub(" ", str(text or ""))
     out, seen = [], set()
 
     def add(raw):
         item = normalize_url(raw)
-        if item and item["key"] not in seen and len(out) < LINK_MAX_PER_MESSAGE:
+        if item and not is_media_url(item) and item["key"] not in seen and len(out) < LINK_MAX_PER_MESSAGE:
             seen.add(item["key"])
             out.append(item)
 
@@ -242,6 +263,25 @@ class LinkGuardMixin:
                          "reason TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(kind, value))")
             conn.commit()
         self._lk_db_ready = True
+        try:
+            self._lk_purge_media()
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 清理链接记录里的图片地址失败: {e}")
+
+    def _lk_purge_media(self) -> int:
+        """删掉以前误记成链接的图片地址（每次启动检查一次）。"""
+        with self._storage._connect() as conn:
+            bad = [r["url_hash"] for r in conn.execute("SELECT url_hash, host, url_key FROM lk_urls")
+                   if is_media_url({"host": r["host"], "key": r["url_key"]})]
+            for i in range(0, len(bad), 400):
+                part = bad[i:i + 400]
+                marks = ",".join("?" * len(part))
+                conn.execute(f"DELETE FROM lk_sends WHERE url_hash IN ({marks})", part)
+                conn.execute(f"DELETE FROM lk_urls WHERE url_hash IN ({marks})", part)
+            conn.commit()
+        if bad:
+            logger.info(f"[GroupMgr] 链接管理：清理了 {len(bad)} 个误记成链接的图片地址")
+        return len(bad)
 
     def _lk_store_days(self) -> int:
         return min(max(self._cfg_int("link_store_days", 90), 1), LINK_STORE_DAYS_MAX)
@@ -355,25 +395,30 @@ class LinkGuardMixin:
     # ------------------------------------------------------------------
     # 识别与记录
     # ------------------------------------------------------------------
-    def _lk_items(self, text: str, cards: Optional[List[Dict]] = None, typed: Optional[str] = None) -> List[Dict]:
+    def _lk_items(self, text: str, cards: Optional[List[Dict]] = None,
+                  skip_urls: Optional[List[str]] = None) -> List[Dict]:
         """一条消息里的链接：文字里的 + 非小程序卡片带的。每项附 state / entry（名单命中情况）。
 
         卡片带的链接另附 card_title / card_desc / card_source（卡片上显示的标题、描述、来源）。
-        typed：发送者自己打的字（text 里混有卡片的原始字段时传）。卡片的链接没出现在 typed 里的，form 记为 card。
+        text 应当是发送者自己打的字（和合并转发里的文字），不要把卡片的原始 JSON 拼进来：那里面的预览图、图标、
+        电脑端地址会被当成链接重复统计。一张卡片只算 url 一个链接；alt_urls 只用来检查黑名单。
+        skip_urls：这条消息里的图片、卡片预览图的地址，和它们相同的不算链接。
         """
-        typed_keys = {u["key"] for u in extract_urls(typed)} if typed is not None else None
-        items = extract_urls(text)
+        skip = set()
+        for raw in skip_urls or []:
+            n = normalize_url(raw) if raw else None
+            if n:
+                skip.add(n["key"])
+        items = [it for it in extract_urls(text) if it["key"] not in skip]
         for it in items:
             it["form"] = "text"
         seen = {it["key"]: it for it in items}
         for c in cards or []:
             item = normalize_url(c.get("url") or "")
-            if not item:
+            if not item or is_media_url(item) or item["key"] in skip:
                 continue
             if item["key"] in seen:
                 item = seen[item["key"]]      # 文字里也写了同一个链接：只补上卡片内容
-                if typed_keys is not None and item["key"] not in typed_keys:
-                    item["form"] = "card"     # 其实是从卡片的原始字段里认出来的，发送者没有打这个链接
             elif len(items) < LINK_MAX_PER_MESSAGE:
                 seen[item["key"]] = item
                 item["form"] = "card"
@@ -385,9 +430,20 @@ class LinkGuardMixin:
             item["card_desc"] = plain_text(c.get("desc"), LINK_CARD_MAX)
             source = plain_text(c.get("source"), LINK_CARD_MAX)
             item["card_source"] = source if source != title else ""
+            item["_alt"] = [u for u in (c.get("alt_urls") or []) if u][:5]
         for it in items:
             it["url_hash"] = _h(it["key"])
             it["state"], it["entry"] = self._lk_check(it)
+            # 卡片的其它跳转地址（电脑端地址等）在黑名单里：这个链接也按已拉黑处理
+            for raw in it.pop("_alt", []):
+                if it["state"]:
+                    break
+                alt = normalize_url(raw)
+                if not alt:
+                    continue
+                state, entry = self._lk_check(alt)
+                if state == "block":
+                    it["state"], it["entry"] = state, entry
         return items
 
     def _lk_typed_text(self, event) -> Optional[str]:
