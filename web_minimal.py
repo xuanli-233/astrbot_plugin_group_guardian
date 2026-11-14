@@ -156,6 +156,68 @@ class MinimalWebMixin:
             "blacklist": self._bl_entries(),
         }})
 
+    async def _web_minimal_home(self):
+        """总览页：今天的发码 / 链接 / 小程序 / 退群数量、进行中的批量任务、各项功能的运行状态。只读本地数据。"""
+        since = self._today_start()
+
+        def row(sql, args=(), n=1):
+            # 表还没建（功能没用过）或查询出错时按 0 算，总览页不因为某一项报错
+            try:
+                with self._storage._connect() as conn:
+                    got = conn.execute(sql, args).fetchone()
+                vals = [int(v or 0) for v in tuple(got)] if got else []
+            except Exception:
+                vals = []
+            return (vals + [0] * n)[:n]
+
+        codes = row("SELECT COUNT(*), SUM(outcome IN ('rule','limit')), COUNT(DISTINCT code_hash), COUNT(DISTINCT user_id) "
+                    "FROM code_sends WHERE ts>=?", (since,), 4)
+        links = row("SELECT COUNT(*), SUM(outcome='rule'), COUNT(DISTINCT domain) FROM lk_sends WHERE ts>=?", (since,), 3)
+        apps = row("SELECT COUNT(*), SUM(outcome='rule'), COUNT(DISTINCT app_key) FROM mp_sends WHERE ts>=?", (since,), 3)
+        leave = row("SELECT COUNT(*), SUM(kind='kick') FROM leave_logs WHERE ts>=?", (since,), 2)
+        batch = row("SELECT SUM(state='active'), SUM(state='paused') FROM batch_jobs WHERE state IN ('active','paused')", (), 2)
+
+        client = await self._get_client()
+        names, total, managed = {}, 0, 0
+        if client:
+            try:
+                items, _err = await self._dir_groups(client)   # 本地缓存，不会每次都调接口
+            except Exception:
+                items = []
+            for item in items:
+                gid = str(item.get("group_id"))
+                names[gid] = str(item.get("group_name") or "")
+                total += 1
+                if self._group_id_allowed(gid) and not self._is_backup_group(gid):
+                    managed += 1
+        routes = getattr(self, "_br_routes", None)
+        try:
+            route_count = len(routes()) if callable(routes) else 0
+        except Exception:
+            route_count = 0
+        return jsonify({"status": "success", "data": {
+            "codes": {"total": codes[0], "recalled": codes[1], "distinct": codes[2], "users": codes[3]},
+            "links": {"total": links[0], "recalled": links[1], "domains": links[2]},
+            "miniapps": {"total": apps[0], "recalled": apps[1], "apps": apps[2]},
+            "leave": {"total": leave[0], "kicked": leave[1], "left": max(0, leave[0] - leave[1])},
+            "batch": {"active": batch[0], "paused": batch[1]},
+            "groups": {"total": total, "managed": managed},
+            "group_names": names,
+            "blacklist": len(getattr(self, "user_black_list", []) or []),
+            "status": {
+                "client_ok": bool(client),
+                "disclaimer_agreed": bool(self.config.get("disclaimer_agreed", False)),
+                "enabled": bool(self._cfg("enabled", True)),
+                "auto_moderate": bool(getattr(self, "auto_moderate_enabled", self._cfg("auto_moderate_enabled", True))),
+                "keyword_guard": bool(self._cfg("keyword_guard_enabled", True)),
+                "wxcode": bool(self._cfg("wxcode_enabled", False)),
+                "ocr_driver": self._cfg_str("local_ocr_driver", "off").strip().lower() or "off",
+                "backup_routes": route_count,
+                "link_guard": bool(self._cfg("link_guard_enabled", True)),
+                "leave_log": bool(self._cfg("leave_log_enabled", True)),
+            },
+        }})
+
     # ------------------------------------------------------------------
     # 规则
     # ------------------------------------------------------------------

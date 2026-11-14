@@ -236,6 +236,36 @@ class MinimalWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(backup["backup"])
         self.assertEqual(data["config"]["keyword_rules"], ["旧规则"])
 
+    async def test_home_counts_today_and_reports_status(self):
+        import time
+        now = int(time.time())
+        with self.h._storage._connect() as conn:
+            conn.execute("CREATE TABLE code_sends (ts INTEGER, user_id TEXT, code_hash TEXT, outcome TEXT)")
+            conn.execute("CREATE TABLE lk_sends (ts INTEGER, domain TEXT, outcome TEXT)")
+            conn.execute("CREATE TABLE leave_logs (ts INTEGER, kind TEXT)")
+            conn.executemany("INSERT INTO code_sends VALUES(?,?,?,?)", [
+                (now, "1", "a", "pass"), (now, "2", "a", "rule"), (now, "1", "b", "limit"), (now - 3 * 86400, "9", "z", "pass")])
+            conn.executemany("INSERT INTO lk_sends VALUES(?,?,?)", [(now, "a.com", "pass"), (now, "a.com", "rule"), (now, "b.com", "pass")])
+            conn.executemany("INSERT INTO leave_logs VALUES(?,?)", [(now, "leave"), (now, "kick"), (now, "kick")])
+            conn.commit()
+        self.h.user_black_list = ["1", "2"]
+        self.h._today_start = lambda: now - 3600
+        data = (await call(self.h._web_minimal_home))["data"]
+        self.assertEqual(data["codes"], {"total": 3, "recalled": 2, "distinct": 2, "users": 2})   # 三天前的不算
+        self.assertEqual(data["links"], {"total": 3, "recalled": 1, "domains": 2})
+        self.assertEqual(data["leave"], {"total": 3, "kicked": 2, "left": 1})
+        self.assertEqual(data["miniapps"], {"total": 0, "recalled": 0, "apps": 0})                # 表还没建：按 0 算，不报错
+        self.assertEqual(data["batch"], {"active": 0, "paused": 0})
+        self.assertEqual(data["groups"], {"total": 3, "managed": 2})                              # 备份群不算管理的群
+        self.assertEqual(data["group_names"]["10001"], "一群")
+        self.assertEqual(data["blacklist"], 2)
+        st = data["status"]
+        self.assertTrue(st["client_ok"] and st["disclaimer_agreed"])
+        self.assertEqual((st["wxcode"], st["ocr_driver"], st["backup_routes"]), (False, "off", 1))
+        self.h.client = None                                                                       # QQ 没连上：照常返回
+        data = (await call(self.h._web_minimal_home))["data"]
+        self.assertEqual((data["status"]["client_ok"], data["groups"]["total"], data["codes"]["total"]), (False, 0, 3))
+
     async def test_rules_save_validates_each_rule(self):
         out = await call(self.h._web_minimal_rules_save,
                          {"key": "keyword_rules", "rules": ["加微信", "re:(a+)+", "re:[bad", "="]})

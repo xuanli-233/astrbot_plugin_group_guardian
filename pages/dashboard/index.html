@@ -232,6 +232,23 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .toast-success{background:var(--success);color:#fff}
 .toast-error{background:var(--danger);color:#fff}
 .toast-info{background:var(--primary);color:#fff}
+.toast-warning{background:var(--warning);color:#fff}
+.toast{display:flex;align-items:flex-start;gap:10px;max-width:440px;word-break:break-word;cursor:pointer}
+.toast-msg{flex:1;white-space:pre-wrap}
+.toast-x{flex-shrink:0;border:none;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;opacity:.8;padding:0}
+.toast-x:hover{opacity:1}
+.btn:focus-visible,.btn-close:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.stat-link{cursor:pointer}
+.stat-link:hover{border-color:var(--primary)}
+.stat-sub{font-size:12px;color:var(--text-muted);margin-top:2px;min-height:17px}
+.home-status{display:flex;flex-wrap:wrap;gap:8px}
+.home-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--surface);cursor:pointer}
+.home-chip:hover{border-color:var(--primary)}
+.home-chip i{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
+.home-chip.ok i{background:var(--success)}
+.home-chip.bad i{background:var(--danger)}
+.home-chip.warn i{background:var(--warning)}
+.home-chip span{color:var(--text-muted)}
 @keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
 .empty{text-align:center;color:var(--text-muted);padding:24px 0;font-size:13px}
 .lin-disclaimer-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 28px;margin-bottom:16px;transition:border-color .2s,box-shadow .2s}
@@ -311,7 +328,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .bar-chart{padding:16px 18px 12px}
 .bar-chart-inner{display:flex;align-items:flex-end;gap:4px;height:160px;padding-top:8px}
 .bar-chart-inner.horizontal{flex-direction:column;height:auto;align-items:stretch;gap:6px}
-.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;min-width:20px;position:relative;cursor:default}
+.bar-chart-inner:not(.horizontal){justify-content:center}
+.bar-col{max-width:56px;flex:1;display:flex;flex-direction:column;align-items:center;min-width:20px;position:relative;cursor:default}
 .bar-col:hover .bar-fill{opacity:.85}
 .bar-fill{width:100%;border-radius:4px 4px 0 0;transition:all .2s;min-height:2px;position:relative}
 .bar-fill.blocked{background:var(--danger)}
@@ -864,28 +882,20 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <strong>免责声明未同意</strong> — 您暂未阅读并同意免责声明，插件所有功能暂不可用。请前往 <a href="javascript:void(0)" id="goSettingsFromBanner" style="color:#1565c0;text-decoration:underline;font-weight:500">插件设置</a> 阅读并同意免责声明后使用。
         </div>
         <div class="stats-row" id="statsRow">
-          <div class="stat-card stat-primary">
-            <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
-            <div class="stat-body"><div class="stat-value" id="statTodayBlocked">--</div><div class="stat-label">今日拦截</div></div>
-          </div>
-          <div class="stat-card stat-info">
-            <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div>
-            <div class="stat-body"><div class="stat-value" id="statTodayTotal">--</div><div class="stat-label">今日审核</div></div>
-          </div>
-          <div class="stat-card stat-success">
-            <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
-            <div class="stat-body"><div class="stat-value" id="statTodayPassed">--</div><div class="stat-label">今日放行</div></div>
-          </div>
-          <div class="stat-card stat-warning">
-            <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></div>
-            <div class="stat-body"><div class="stat-value" id="statWhiteCount">--</div><div class="stat-label">白名单群</div></div>
-          </div>
+          <div class="stat-card stat-primary stat-link" data-go="records" title="点击打开对应页面"><div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div><div class="stat-body"><div class="stat-value" id="statTodayBlocked">--</div><div class="stat-label">今日撤回</div><div class="stat-sub" id="statBlockedSub"></div></div></div>
+          <div class="stat-card stat-info stat-link" data-go="codes" title="点击打开对应页面"><div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg></div><div class="stat-body"><div class="stat-value" id="homeCodes">--</div><div class="stat-label">今日发码</div><div class="stat-sub" id="homeCodesSub"></div></div></div>
+          <div class="stat-card stat-success stat-link" data-go="links" title="点击打开对应页面"><div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5zm-6 8H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-2zm-3-4h8v2H8v-2z"/></svg></div><div class="stat-body"><div class="stat-value" id="homeLinks">--</div><div class="stat-label">今日链接</div><div class="stat-sub" id="homeLinksSub"></div></div></div>
+          <div class="stat-card stat-warning stat-link" data-go="leavelog" title="点击打开对应页面"><div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg></div><div class="stat-body"><div class="stat-value" id="homeLeave">--</div><div class="stat-label">今日退群</div><div class="stat-sub" id="homeLeaveSub"></div></div></div>
         </div>
         <div class="stats-row">
-          <div class="stat-card"><div class="stat-body"><div class="stat-value" id="statBlackCount">--</div><div class="stat-label">黑名单群</div></div></div>
-          <div class="stat-card"><div class="stat-body"><div class="stat-value" id="statUserBlackCount">--</div><div class="stat-label">黑名单用户</div></div></div>
-          <div class="stat-card"><div class="stat-body"><div class="stat-value" id="statAdminCount">--</div><div class="stat-label">管理员</div></div></div>
-          <div class="stat-card"><div class="stat-body"><div class="stat-value" id="statTotalLogs">--</div><div class="stat-label">历史记录</div></div></div>
+          <div class="stat-card  stat-link" data-go="miniapps" title="点击打开对应页面"><div class="stat-body"><div class="stat-value" id="homeMp">--</div><div class="stat-label">今日小程序</div><div class="stat-sub" id="homeMpSub"></div></div></div>
+          <div class="stat-card  stat-link" data-go="kick" title="点击打开对应页面"><div class="stat-body"><div class="stat-value" id="homeBl">--</div><div class="stat-label">黑名单用户</div><div class="stat-sub" id="homeBlSub"></div></div></div>
+          <div class="stat-card  stat-link" data-go="directory" title="点击打开对应页面"><div class="stat-body"><div class="stat-value" id="homeGroups">--</div><div class="stat-label">管理的群</div><div class="stat-sub" id="homeGroupsSub"></div></div></div>
+          <div class="stat-card  stat-link" data-go="batch" title="点击打开对应页面"><div class="stat-body"><div class="stat-value" id="homeBatch">--</div><div class="stat-label">进行中的批量任务</div><div class="stat-sub" id="homeBatchSub"></div></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>运行状态</h2><span class="rules-subtle">点一项打开对应的设置页面</span></div>
+          <div class="mn-body home-status" id="homeStatus"><span class="mn-hint">加载中...</span></div>
         </div>
         <div class="card">
           <div class="card-header"><h2>今日拦截榜</h2><button class="btn btn-ghost btn-sm" id="btnRefreshTodayStats">刷新</button></div>
@@ -2151,10 +2161,27 @@ function toast(msg, type) {
   var c = $('#toastContainer');
   var t = document.createElement('div');
   t.className = 'toast toast-' + type;
-  t.textContent = msg;
+  t.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  var m = document.createElement('span');
+  m.className = 'toast-msg';
+  m.textContent = msg;
+  t.appendChild(m);
+  // 失败的提示要看得清：停留 8 秒，带 ×；成功 / 普通提示 2.5 秒。点一下立即关闭，鼠标停在上面时不消失
+  var ms = TOAST_MS[type] || 2500, timer = null;
+  var close = function() { clearTimeout(timer); t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; setTimeout(function() { t.remove(); }, 300); };
+  if (ms > 3000) {
+    var x = document.createElement('button');
+    x.className = 'toast-x'; x.type = 'button'; x.setAttribute('aria-label', '关闭'); x.textContent = '×';
+    t.appendChild(x);
+  }
+  t.addEventListener('click', close);
+  t.addEventListener('mouseenter', function() { clearTimeout(timer); });
+  t.addEventListener('mouseleave', function() { timer = setTimeout(close, 1500); });
   c.appendChild(t);
-  setTimeout(function() { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; setTimeout(function() { t.remove(); }, 300); }, 2500);
+  while (c.children.length > 5) c.removeChild(c.firstChild);   // 最多同时显示 5 条
+  timer = setTimeout(close, ms);
 }
+var TOAST_MS = { error: 8000, warning: 5000 };
 
 function esc(s) {
   var d = document.createElement('div');
@@ -2629,6 +2656,21 @@ async function postOrToast(path, body, successMsg, errorPrefix, successType) {
 // 等待用户选择的弹窗（confirmModal / promptModal）在这里登记取消回调：点右上角 ×、点遮罩、
 // 或被另一个弹窗替换时都按「取消」结束，调用方不会一直等下去
 var MODAL_ON_CLOSE = null;
+var MODAL_PREV_FOCUS = null;
+function modalIsOpen() { var o = document.getElementById('modalOverlay'); return !!(o && o.style.display !== 'none'); }
+// 弹窗的键盘操作：Esc = 取消 / 关闭；Tab 只在弹窗里循环。回车由获得焦点的按钮自己处理（确认弹窗打开时焦点在按钮上）
+function modalKeydown(e) {
+  if (!modalIsOpen()) return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeModal(); return; }
+  if (e.key !== 'Tab') return;
+  var box = document.getElementById('modal');
+  var items = $$('button, input, select, textarea, a[href], [tabindex]', box).filter(function(el) { return !el.disabled && el.offsetParent !== null; });
+  if (!items.length) return;
+  var first = items[0], last = items[items.length - 1], cur = document.activeElement;
+  if (!box.contains(cur)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && cur === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
+}
 function mnModalSettle() {
   var fn = MODAL_ON_CLOSE;
   MODAL_ON_CLOSE = null;
@@ -2636,13 +2678,23 @@ function mnModalSettle() {
 }
 function showModal(title, bodyHtml, footerHtml) {
   mnModalSettle();
+  if (!modalIsOpen()) MODAL_PREV_FOCUS = document.activeElement;
   footerHtml = footerHtml || '';
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = bodyHtml;
   $('#modalFooter').innerHTML = footerHtml;
   $('#modalOverlay').style.display = 'flex';
+  var x = document.getElementById('btnModalClose');
+  if (x) x.focus();   // 先把焦点放进弹窗（具体的弹窗再挪到自己的按钮 / 输入框上）
 }
-function closeModal() { $('#modalOverlay').style.display = 'none'; mnModalSettle(); }
+function closeModal() {
+  var wasOpen = modalIsOpen();
+  $('#modalOverlay').style.display = 'none';
+  mnModalSettle();
+  // 关闭后焦点回到打开弹窗前的位置（弹窗又被立刻打开时不动）
+  var prev = MODAL_PREV_FOCUS;
+  if (wasOpen && !modalIsOpen()) { MODAL_PREV_FOCUS = null; if (prev && prev.focus && document.contains(prev)) { try { prev.focus(); } catch (e) {} } }
+}
 
 // 通用确认弹窗：返回 Promise<boolean>。用于替代直接执行的高危操作，统一交互。
 // opts: { title, body(html), okText, cancelText, danger(bool) }
@@ -2662,6 +2714,8 @@ function confirmModal(opts) {
     MODAL_ON_CLOSE = function() { resolve(false); };
     $('#__cmCancel').addEventListener('click', function() { done(false); });
     $('#__cmOk').addEventListener('click', function() { done(true); });
+    // 回车 = 当前有焦点的按钮。普通确认默认落在「确认」上；危险操作落在「取消」上，要按 Tab 或用鼠标才能确认
+    $(opts.danger ? '#__cmCancel' : '#__cmOk').focus();
   });
 }
 
@@ -2712,12 +2766,14 @@ function navRevealActive() {
   else if (bottom + pad > nav.scrollTop + nav.clientHeight) nav.scrollTop = bottom + pad - nav.clientHeight;
 }
 
+var LAST_TAB_KEY = 'gg_last_tab';
 function switchTab(tabName) {
   $$('.nav-item').forEach(function(i) { i.classList.toggle('active', i.dataset.tab === tabName); });
   navRevealActive();
   $$('.mobile-nav-item').forEach(function(i) { i.classList.toggle('active', i.dataset.tab === tabName); });
   $$('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
   $('#tab-' + tabName).classList.add('active');
+  ls.setItem(LAST_TAB_KEY, tabName);  // 刷新页面后回到这一页
   MN_OV.nav = true;  // 切换页面：总览数据 15 秒内不重复请求
   try {
     if (tabName === 'overview') loadOverview();
@@ -2788,28 +2844,25 @@ function initTabs() {
 
 async function loadOverview() {
   var epoch = beginLoad('overview');
-  var pair = await Promise.all([safeGet('stats'), safeGet('today_stats')]);
+  var pair = await Promise.all([safeGet('stats'), safeGet('today_stats'), safeGet('minimal/home')]);
   if (!isCurrentLoad('overview', epoch)) return;
   var res = pair[0];
   var todayRes = pair[1];
+  var home = isApiError(pair[2]) ? null : (mnData(pair[2]) || null);
+  homeRender(home, isApiError(pair[2]) ? mnErr(pair[2]) : '');
+  var gname = function(gid) { var n = home && home.group_names && home.group_names[String(gid)]; return n ? n + '（' + gid + '）' : '群 ' + gid; };
   var d = res;
   if (isApiError(d)) { d = null; }
   if (d) {
     $('#statTodayBlocked').textContent = d.today_blocked != null ? d.today_blocked : '--';
-    $('#statTodayTotal').textContent = d.today_total != null ? d.today_total : '--';
-    $('#statTodayPassed').textContent = d.today_passed != null ? d.today_passed : '--';
-    $('#statWhiteCount').textContent = d.group_white_list_count != null ? d.group_white_list_count : '--';
-    $('#statBlackCount').textContent = d.group_black_list_count != null ? d.group_black_list_count : '--';
-    $('#statUserBlackCount').textContent = d.user_black_list_count != null ? d.user_black_list_count : '--';
-    $('#statAdminCount').textContent = d.admin_list_count != null ? d.admin_list_count : '--';
-    $('#statTotalLogs').textContent = d.total_logs != null ? d.total_logs : '--';
-    $('#logoVer').textContent = d.version || 'v2.8.2';
+    $('#statBlockedSub').textContent = d.total_logs != null ? '违规记录共 ' + d.total_logs + ' 条' : '';
+    if (d.version) $('#logoVer').textContent = d.version;
     var banner = $('#disclaimerBanner');
     if (banner) banner.style.display = d.disclaimer_agreed ? 'none' : 'block';
   }
   if (todayRes && !isApiError(todayRes)) {
     renderRanking('groupRanking', todayRes.group_ranking, function(item) {
-      return '<span class="ranking-name">群 ' + esc(item.group_id) + '</span><span class="ranking-count">' + item.count + '</span>';
+      return '<span class="ranking-name">' + esc(gname(item.group_id)) + '</span><span class="ranking-count">' + item.count + '</span>';
     });
     renderRanking('userRanking', todayRes.user_ranking, function(item) {
       return '<span class="ranking-name">' + esc(item.user_name || item.user_id) + '</span><span class="ranking-count">' + item.count + '</span>';
@@ -2819,6 +2872,46 @@ async function loadOverview() {
     $('#userRanking').innerHTML = '<p class="empty">' + esc(payloadFailure(todayRes, '今日统计')) + '</p>';
   }
   loadDashboard();
+}
+
+// 总览页上半部分：今天的数量（点卡片打开对应页面）和各项功能的运行状态。数据来自 minimal/home
+function homeRender(h, err) {
+  var set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  if (!h) {
+    ['homeCodes', 'homeLinks', 'homeLeave', 'homeMp', 'homeBl', 'homeGroups', 'homeBatch'].forEach(function(id) { set(id, '--'); });
+    $('#homeStatus').innerHTML = '<span class="mn-hint">' + esc(err ? '加载失败：' + err : '没有数据') + '</span>';
+    return;
+  }
+  var c = h.codes || {}, l = h.links || {}, m = h.miniapps || {}, lv = h.leave || {}, b = h.batch || {}, g = h.groups || {}, s = h.status || {};
+  set('homeCodes', c.total || 0);
+  set('homeCodesSub', c.total ? (c.distinct + ' 个不同的码 · ' + c.users + ' 人' + (c.recalled ? ' · 撤回 ' + c.recalled : '')) : (s.wxcode ? '今天还没有人发码' : '码识别没有开启'));
+  set('homeLinks', l.total || 0);
+  set('homeLinksSub', l.total ? (l.domains + ' 个域名' + (l.recalled ? ' · 撤回 ' + l.recalled : '')) : (s.link_guard ? '今天还没有出现链接' : '链接识别没有开启'));
+  set('homeLeave', lv.total || 0);
+  set('homeLeaveSub', lv.total ? ('主动退群 ' + lv.left + ' · 被踢 ' + lv.kicked) : (s.leave_log ? '今天没有人退群' : '退群记录没有开启'));
+  set('homeMp', m.total || 0);
+  set('homeMpSub', m.total ? (m.apps + ' 个小程序' + (m.recalled ? ' · 撤回 ' + m.recalled : '')) : '今天还没有出现小程序');
+  set('homeBl', h.blacklist || 0);
+  set('homeBlSub', '发言即踢、申请自动拒绝');
+  set('homeGroups', g.managed || 0);
+  set('homeGroupsSub', s.client_ok ? '机器人一共在 ' + (g.total || 0) + ' 个群' : 'QQ 没有连接，读不到群列表');
+  set('homeBatch', (b.active || 0) + (b.paused || 0));
+  set('homeBatchSub', b.paused ? '其中 ' + b.paused + ' 个已暂停' : ((b.active || 0) ? '正在排队执行' : '没有在排队的任务'));
+  var ocrName = { rapidocr: 'RapidOCR 服务', llbot: 'LLBot 自带', http: '自己的 HTTP 服务', python: 'Python 模块' };
+  var chips = [
+    [s.client_ok ? 'ok' : 'bad', 'QQ 连接', s.client_ok ? '正常' : '没有连接', 'botacct'],
+    [s.enabled ? 'ok' : 'bad', '插件总开关', s.enabled ? '开' : '关（所有功能停用）', 'settings'],
+    [s.disclaimer_agreed ? 'ok' : 'bad', '免责声明', s.disclaimer_agreed ? '已同意' : '未同意（所有功能停用）', 'settings'],
+    [s.auto_moderate ? 'ok' : 'warn', '消息拦截', s.auto_moderate ? (s.keyword_guard ? '开' : '开（关键词检查已关）') : '关', 'guard'],
+    [s.wxcode ? 'ok' : '', '码识别', s.wxcode ? '开' : '没有开启', 'services'],
+    [s.ocr_driver && s.ocr_driver !== 'off' ? 'ok' : '', '图片文字识别', s.ocr_driver && s.ocr_driver !== 'off' ? (ocrName[s.ocr_driver] || s.ocr_driver) : '没有开启', 'services'],
+    [s.backup_routes ? 'ok' : 'warn', '转发群', s.backup_routes ? s.backup_routes + ' 个' : '没有设置（撤回前不备份）', 'services'],
+    [s.link_guard ? 'ok' : '', '链接识别', s.link_guard ? '开' : '关', 'links'],
+    [s.leave_log ? 'ok' : '', '退群记录', s.leave_log ? '开' : '关', 'leavelog'],
+  ];
+  $('#homeStatus').innerHTML = chips.map(function(x) {
+    return '<div class="home-chip ' + x[0] + '" data-go="' + x[3] + '"><i></i>' + esc(x[1]) + '<span>' + esc(x[2]) + '</span></div>';
+  }).join('');
 }
 
 function renderRanking(containerId, list, renderFn) {
@@ -7494,14 +7587,11 @@ async function bqSaveDefaults() {
 }
 
 /* ---- 全局右侧批量任务栏 ---- */
-var TB = { timer: null, inflight: false, collapsed: false, jobs: [], runner: {} };
-var TB_KEY = 'gg_taskbar_collapsed';
+// 自动收起 / 展开：没有进行中（执行中 / 待手动 / 暂停）的任务时收成窄条，有任务时展开。
+// 手动点折叠按钮只管到下一次「有任务 ↔ 没任务」变化为止（TB.manual），不记到浏览器里。
+var TB = { timer: null, inflight: false, collapsed: true, jobs: [], runner: {}, manual: null, hasLive: null };
 function tbInit() {
-  var saved = null;
-  try { saved = localStorage.getItem(TB_KEY); } catch (e) { saved = null; }
-  // 没有记录时：较窄的屏幕默认折叠，避免挤占主内容
-  TB.collapsed = saved === null ? window.innerWidth < 1280 : saved === '1';
-  tbApplyCollapsed();
+  tbApplyCollapsed();   // 拿到任务列表之前先收着，免得闪一下
   bindIfExists('tbToggle', function() { tbSetCollapsed(!TB.collapsed); });
   bindIfExists('tbOpen', function() { switchTab('batch'); });
   var title = $('#taskbar .tb-title');
@@ -7516,8 +7606,7 @@ function tbInit() {
   tbPoll();
 }
 function tbSetCollapsed(v) {
-  TB.collapsed = !!v;
-  try { localStorage.setItem(TB_KEY, TB.collapsed ? '1' : '0'); } catch (e) { /* 存储不可用时只影响本次 */ }
+  TB.collapsed = TB.manual = !!v;
   tbApplyCollapsed();
   tbRender();
   if (!TB.collapsed) tbPoll();
@@ -7567,6 +7656,10 @@ function tbRender() {
   if (badge) { badge.style.display = live.length ? '' : 'none'; badge.textContent = live.length; }
   var navBadge = $('#bqNavBadge');
   if (navBadge) { navBadge.style.display = live.length ? '' : 'none'; navBadge.textContent = live.length; }
+  var hasLive = live.length > 0;
+  if (TB.hasLive !== hasLive) { TB.hasLive = hasLive; TB.manual = null; }   // 状态变了：回到自动
+  var want = TB.manual !== null ? TB.manual : !hasLive;
+  if (want !== TB.collapsed) { TB.collapsed = want; tbApplyCollapsed(); }
   if (TB.collapsed) return;
   $('#tbRunner').textContent = bqRunnerText(TB.runner);
   var s = TB.settings;
@@ -7629,10 +7722,9 @@ function tbRender() {
     });
   });
 }
-// 新建任务后立刻刷新右侧栏（并在折叠时展开，让用户看到排队情况）
+// 新建任务后立刻刷新右侧栏：有进行中的任务时会自动展开，让用户看到排队情况
 function tbJobCreated() {
-  if (TB.collapsed && window.innerWidth >= 1280) tbSetCollapsed(false);
-  else tbPoll();
+  tbPoll();
 }
 
 /* ---- 实时日志 ---- */
@@ -8744,6 +8836,7 @@ async function init() {
     var banner = $('#disclaimerBanner');
     if (banner) banner.style.display = this.checked ? 'none' : 'block';
   });
+  document.addEventListener('keydown', modalKeydown, true);
   var modalOverlay = document.getElementById('modalOverlay');
   if (modalOverlay) modalOverlay.addEventListener('click', function(e) { if (e.target === e.currentTarget) closeModal(); });
 
@@ -8827,7 +8920,16 @@ async function init() {
   // 连接状态不再直接写「已连接」，由下面第一批请求的结果决定（mnSetConn）
   if (!apiGet || !apiPost) mnSetConn(false, 'API 不可用');
 
-  loadOverview();
+  // 总览页的卡片和运行状态：点一下打开对应页面
+  var ovPanel = document.getElementById('tab-overview');
+  if (ovPanel) ovPanel.addEventListener('click', function(e) {
+    var go = e.target.closest('[data-go]');
+    if (go && document.getElementById('tab-' + go.getAttribute('data-go'))) switchTab(go.getAttribute('data-go'));
+  });
+  // 刷新页面后回到上次打开的页面（没有记录或那个页面已经不存在时显示总览）
+  var lastTab = ls.getItem(LAST_TAB_KEY);
+  if (lastTab && lastTab !== 'overview' && document.getElementById('tab-' + lastTab)) switchTab(lastTab);
+  else loadOverview();
   loadAdmins();
 }
 

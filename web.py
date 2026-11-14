@@ -700,6 +700,7 @@ class WebMixin:
                 ("/group_config/copy", self._web_copy_group_config, ["POST"], "从其他群复制配置"),
                 # 最小化插件新增功能（web_minimal.py）
                 ("/minimal/overview", self._web_minimal_overview, ["GET"], "新功能总览"),
+                ("/minimal/home", self._web_minimal_home, ["GET"], "总览页：今日数量与运行状态"),
                 ("/minimal/rules/save", self._web_minimal_rules_save, ["POST"], "保存关键词 / 葵花码规则"),
                 ("/minimal/rules/test", self._web_minimal_rules_test, ["POST"], "测试规则命中"),
                 ("/minimal/broadcast", self._web_minimal_broadcast, ["POST"], "批量发布群公告 / 待办公告"),
