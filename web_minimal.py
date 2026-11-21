@@ -81,7 +81,7 @@ MINIMAL_CONFIG_KEYS = (
     "auto_accept_invite_wl_users", "auto_accept_invite_wl_groups", "auto_msg_mask_enabled", "auto_msg_mask_value",
     "bot_notify_join_enabled", "bot_notify_friend_enabled",
     "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
-    "blacklist_scan_members_enabled",
+    "blacklist_scan_members_enabled", "owner_at_blacklist_enabled",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
     "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
@@ -1034,7 +1034,13 @@ class MinimalWebMixin:
         q = str(quart_request.args.get("q", "") or "").strip()
         if len(q) < 2 and not q.isdigit():
             return self._minimal_error("至少输入 2 个字，或输入 QQ 号")
-        data = self._mbr_search(q)
+        try:
+            limit = int(quart_request.args.get("limit", "") or 0) or 50
+        except ValueError:
+            limit = 50
+        data = self._mbr_search(q, limit=limit)
+        if data.get("error"):
+            return self._minimal_error(data["error"])
         data["coverage"] = {"groups_total": len(self._dir()["groups"]), "groups_cached": len(self._dir()["members"])}
         return jsonify({"status": "success", "data": data})
 
@@ -1219,6 +1225,33 @@ class MinimalWebMixin:
             return self._minimal_error("请填写 QQ 号")
         removed = self._bl_remove(uid, reason=str(data.get("reason") or "").strip(), **self._web_log())
         return jsonify({"status": "success", "data": {"removed": removed}})
+
+    async def _web_minimal_owner_blacklist(self):
+        return jsonify({"status": "success", "data": self._ob_group_states()})
+
+    async def _web_minimal_owner_blacklist_set(self):
+        data = await self._minimal_body()
+        err = self._ob_set_groups(self._minimal_ids(data.get("group_ids")), str(data.get("state") or ""),
+                                  **self._web_log())
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": self._ob_group_states()})
+
+    async def _web_minimal_blacklist_scan(self):
+        """按群成员缓存扫描所有群，踢出里面的黑名单用户。user_ids 不填 = 整个黑名单。"""
+        ok, msg = self._cfg_check("enabled", "踢人")
+        if not ok:
+            return self._minimal_error(msg)
+        data = await self._minimal_body()
+        users = self._minimal_ids(data.get("user_ids")) if data.get("user_ids") else None
+        client = await self._get_client()
+        if not client:
+            return self._minimal_error("无法获取QQ客户端")
+        trigger = "加入黑名单后扫描" if users is not None else "手动扫描"
+        summary, err = await self._bl_scan_all(client, users=users, trigger=trigger, log=self._web_log())
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": summary})
 
     # ------------------------------------------------------------------
     # 跨群踢人

@@ -42,6 +42,7 @@ from .link_guard import LinkGuardMixin
 from .command_center import CommandCenterMixin
 from .group_files import GroupFilesMixin
 from .member_lookup import MemberLookupMixin
+from .owner_blacklist import OwnerBlacklistMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
 from .moderation import ModerationMixin
@@ -54,7 +55,7 @@ from .web_identity import WebIdentityMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, OwnerBlacklistMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -312,6 +313,22 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
                 LeaveLogMixin._ll_track_event(self, event)
         except Exception as e:
             logger.debug(f"[GroupMgr] 记录群消息出错: {e}")
+    # 群主 @ 全群拉黑（owner_blacklist.py）：「@某人 全群拉黑 理由」；群主 / 插件管理员单独 @机器人 拿到指令帮助。
+    # 注册在审核入口之前；处理了就 stop_event，其它消息原样往下走。
+    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def _on_owner_at_blacklist(self, event: AiocqhttpMessageEvent):
+        try:
+            reply = await OwnerBlacklistMixin._ob_handle(self, event)
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 群主@拉黑处理出错: {e}")
+            return
+        if reply is None:
+            return
+        if reply:
+            yield event.plain_result(reply)
+        event.stop_event()
+
     # 消息监听注册区：审核主流程由 moderation.py 实现，这里只负责注册事件入口。
     # moderation._handle_message 是 async generator，必须用 async for/yield 转发，不能 await。
     @filter.event_message_type(filter.EventMessageType.ALL)

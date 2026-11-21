@@ -773,6 +773,9 @@ class WebMixin:
                 ("/minimal/accept/check", self._web_minimal_accept_check, ["POST"], "测试好友申请 / 进群邀请白名单"),
                 ("/minimal/blacklist/add", self._web_minimal_blacklist_add, ["POST"], "加入黑名单（带原因）"),
                 ("/minimal/blacklist/remove", self._web_minimal_blacklist_remove, ["POST"], "移出黑名单"),
+                ("/minimal/blacklist/scan", self._web_minimal_blacklist_scan, ["POST"], "扫描群里的黑名单用户并踢出"),
+                ("/minimal/owner_blacklist", self._web_minimal_owner_blacklist, ["GET"], "群主@拉黑：各群开放状态"),
+                ("/minimal/owner_blacklist/groups", self._web_minimal_owner_blacklist_set, ["POST"], "群主@拉黑：按群开放 / 关闭"),
             ]
             registered = 0
             for path, handler, methods, desc in routes:
@@ -1871,7 +1874,7 @@ class WebMixin:
         "code_limit_max": "码发送次数", "code_limit_warn_enabled": "码发送次数", "code_limit_warn_template": "码发送次数",
         "code_limit_count_by": "码发送次数", "code_store_enabled": "码发送次数",
         "blacklist_kick_on_join": "黑名单", "blacklist_scan_members_enabled": "黑名单",
-        "blacklist_native_block_enabled": "黑名单",
+        "blacklist_native_block_enabled": "黑名单", "owner_at_blacklist_enabled": "黑名单",
         "keyword_guard_enabled": "关键词撤回", "backup_enabled": "关键词撤回",
         "hit_mute_enabled": "关键词撤回", "hit_notice_enabled": "关键词撤回",
         "hit_notice_template": "关键词撤回", "wxcode_enabled": "图片识别",

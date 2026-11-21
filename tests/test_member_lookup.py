@@ -64,6 +64,39 @@ class SearchTests(unittest.TestCase):
         self.assertEqual([it["user_id"] for it in h._mbr_search("老张")["items"]], ["20001"])
         self.assertEqual(h._mbr_search("没有这个人")["total"], 0)
 
+    def test_matched_name_first(self):
+        """群名片打广告：列表显示命中的那个名字，而不是第一个群里的名片。"""
+        h = _harness()
+        h._dir()["members"]["700000002"]["20001"]["card"] = "加V看片"
+        it = h._mbr_search("加V")["items"][0]
+        self.assertEqual((it["user_id"], it["name"]), ("20001", "加V看片"))
+        self.assertEqual(it["groups"], 1)                 # 只算名字命中的群
+
+    def test_regex_search(self):
+        h = _harness()
+        h._dir()["members"]["700000002"]["30002"]["card"] = "兼职日结vx123"
+        r = h._mbr_search("re:广告|兼职")
+        self.assertEqual(sorted(it["user_id"] for it in r["items"]), ["30001", "30002"])
+        self.assertEqual(h._mbr_search("re:VX\\d+")["items"][0]["user_id"], "30002")   # 不分大小写
+        self.assertIn("正则", h._mbr_search("re:([")["error"])
+        self.assertEqual(h._mbr_search("re:")["total"], 0)
+
+    def test_flags_and_limit(self):
+        h = _harness()
+        h._user_black_set = {"30001"}
+        h._user_white_set = {"20002"}
+        for members in h._dir()["members"].values():
+            for m in members.values():
+                m["nickname"] = m.get("nickname") or "某人"
+        items = {it["user_id"]: it for it in h._mbr_search("re:.", limit=500)["items"]}
+        self.assertTrue(items["30001"]["blacklisted"])
+        self.assertTrue(items["20002"]["protected"])
+        self.assertFalse(items["20001"]["protected"])
+        h._bot_uin_cache = 20001                                   # 机器人自己不能被勾选拉黑
+        self.assertTrue(h._mbr_search("20001")["items"][0]["protected"])
+        r = h._mbr_search("re:.", limit=1)
+        self.assertEqual((len(r["items"]), r["truncated"]), (1, True))
+
 
 class ProfileTests(unittest.TestCase):
     def test_profile_lists_groups(self):

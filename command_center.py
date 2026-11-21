@@ -257,6 +257,23 @@ class CommandCenterMixin:
     # ------------------------------------------------------------------
     # /指令列表
     # ------------------------------------------------------------------
+    async def _cmd_help_lines(self, event) -> List[str]:
+        """发送者能用的指令（按分类），群主 @机器人 求帮助时用。不含开关状态。"""
+        user_id = str(self._try_get_sender_id(event) or "")
+        group_id = str(self._get_group_id(event) or "")
+        role = await self._cmd_role(event, group_id, user_id)
+        settings = self._cmd_settings()
+        lines, current = [], ""
+        for name, spec in COMMAND_SPECS.items():
+            st = settings[name]
+            if not st["enabled"] or not self._cmd_level_ok(st["level"], role):
+                continue
+            if spec["category"] != current:
+                current = spec["category"]
+                lines.append(f"【{current}】")
+            lines.append(f"/{name} {spec['desc']}")
+        return lines
+
     async def cmd_command_list(self, event):
         """列出发送者能用的指令（插件管理员看到全部及开关状态）。"""
         user_id = str(self._try_get_sender_id(event) or "")

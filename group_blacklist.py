@@ -85,6 +85,8 @@ class GroupBlacklistMixin:
             return True
         if uid in (getattr(self, "_user_white_set", None) or set()):
             return True
+        if uid == str(getattr(self, "_bot_uin_cache", 0) or ""):
+            return True   # 机器人自己（找人页批量勾选时可能选中）
         try:
             return uid in self._get_all_admin_ids()
         except Exception:
@@ -490,8 +492,13 @@ class GroupBlacklistMixin:
         task.add_done_callback(tasks.discard)
         return True
 
-    def _bl_scan_targets(self, group_id: str, uids: List[str], bot_uin: str) -> Tuple[List[str], str]:
-        """按成员缓存筛出这次要踢的人 → (QQ 号列表, 不踢的原因)。踢不动的直接跳过，不去试。"""
+    def _bl_scan_targets(self, group_id: str, uids: List[str], bot_uin: str, manual: bool = False,
+                         notes: Optional[Dict[str, str]] = None) -> Tuple[List[str], str]:
+        """按成员缓存筛出这次要踢的人 → (QQ 号列表, 不踢的原因)。踢不动的直接跳过，不去试。
+
+        manual=True（手动扫描）不管失败冷却；notes 传入时把跳过的人和原因填进去，给页面显示。
+        """
+        notes = notes if notes is not None else {}
         gid = str(group_id)
         members = (self._dir()["members"].get(gid) or {}) if callable(getattr(self, "_dir", None)) else {}
         bot = members.get(str(bot_uin)) or {}
@@ -507,20 +514,32 @@ class GroupBlacklistMixin:
         for uid in uids:
             uid = str(uid)
             m = members.get(uid)
-            if m is None or uid == str(bot_uin) or self._is_blacklist_exempt(uid):
+            if m is None or uid == str(bot_uin):
+                continue
+            if self._is_blacklist_exempt(uid):
+                notes[uid] = "插件管理员或审核白名单（豁免）"
                 continue
             role = m.get("role") or "member"
-            if role == "owner" or (role == "admin" and bot_role != "owner"):
+            if role == "owner":
+                notes[uid] = "是群主"
                 continue
-            if now - tried.get((gid, uid), 0) < self.BL_SCAN_RETRY_SECONDS:
+            if role == "admin" and bot_role != "owner":
+                notes[uid] = "是群管理员"
+                continue
+            if not manual and now - tried.get((gid, uid), 0) < self.BL_SCAN_RETRY_SECONDS:
                 continue
             out.append(uid)
         return out, ""
 
-    async def _bl_scan_group(self, client, group_id, uids: List[str], trigger: str = "") -> dict:
-        """踢出群里的黑名单用户。同一个群同时只扫一次。返回 {"kicked": [...], "failed": {...}, "skipped": 原因}。"""
+    async def _bl_scan_group(self, client, group_id, uids: List[str], trigger: str = "",
+                             manual: bool = False, log: Optional[dict] = None) -> dict:
+        """踢出群里的黑名单用户。同一个群同时只扫一次。
+
+        返回 {"kicked": [...], "failed": {uid: 原因}, "skipped": 原因, "notes": {uid: 不踢的原因}}。
+        manual=True：手动扫描，不看「黑名单成员扫描」开关和失败冷却；log 是操作记录的来源和操作人。
+        """
         gid = str(group_id)
-        result = {"kicked": [], "failed": {}, "skipped": ""}
+        result = {"kicked": [], "failed": {}, "skipped": "", "notes": {}}
         running = getattr(self, "_bl_scan_running", None)
         if running is None:
             running = self._bl_scan_running = set()
@@ -529,11 +548,11 @@ class GroupBlacklistMixin:
             return result
         running.add(gid)
         try:
-            if not self._bl_scan_enabled(gid):
+            if not (self._blacklist_feature_ready(gid) if manual else self._bl_scan_enabled(gid)):
                 result["skipped"] = "功能未开启"
                 return result
             bot_uin = str(await self._get_bot_uin(client) or "")
-            targets, why = self._bl_scan_targets(gid, uids, bot_uin)
+            targets, why = self._bl_scan_targets(gid, uids, bot_uin, manual=manual, notes=result["notes"])
             if why:
                 result["skipped"] = why
                 logger.debug(f"[GroupMgr] 群 {gid} 有黑名单用户 {', '.join(uids)}，{why}，暂不处理")
@@ -551,7 +570,7 @@ class GroupBlacklistMixin:
                           f"拉黑原因：{meta.get('reason') or '未记录'}）")
                 res = await self._kick_targets_in_group(
                     client, gid, [uid], block=block,
-                    log={"action": "黑名单成员清理", "source": "自动", "reason": reason[:200]})
+                    log={"action": "黑名单成员清理", "source": "自动", **(log or {}), "reason": reason[:200]})
                 if uid in res["kicked"]:
                     result["kicked"].append(uid)
                     tried.pop((gid, uid), None)
@@ -560,7 +579,8 @@ class GroupBlacklistMixin:
                     result["skipped"] = res["skipped"]
                     break
                 if res["absent"]:
-                    continue   # 已经不在群里了
+                    result["notes"][uid] = "已经不在群里"
+                    continue
                 tried[(gid, uid)] = time.time()
                 result["failed"][uid] = res["failed"].get(uid) or "踢人失败"
             if result["kicked"]:
@@ -584,3 +604,52 @@ class GroupBlacklistMixin:
         if not hits:
             return {"kicked": [], "failed": {}, "skipped": ""}
         return await self._bl_scan_group(client, gid, hits, trigger)
+
+    async def _bl_scan_all(self, client, users: Optional[List[str]] = None, trigger: str = "手动扫描",
+                           log: Optional[dict] = None) -> Tuple[Optional[dict], str]:
+        """手动扫描：按群成员缓存检查所有管理的群，踢出里面的黑名单用户 → (汇总, 错误)。
+
+        只读本地缓存找人，不为扫描拉成员列表；没有缓存的群列进 uncached，提示去群成员缓存页刷新。
+        users 不填 = 整个黑名单；填了只查这几个人（刚加入黑名单时用）。不看自动扫描开关和失败冷却。
+        """
+        if getattr(self, "_bl_scan_all_busy", False):
+            return None, "已有黑名单扫描在进行中，请稍后再试"
+        black = set(getattr(self, "_user_black_set", None) or set())
+        if users is not None:
+            black &= {str(u) for u in users}
+        summary = {"groups": 0, "scanned": 0, "found": 0, "kicked": [], "failed": [], "notes": [],
+                   "skipped": [], "uncached": []}
+        if not black:
+            return summary, ""
+        self._bl_scan_all_busy = True
+        try:
+            groups, err = await self._list_managed_groups(client)
+            if not groups:
+                return None, err or "没有机器人管理的群"
+            summary["groups"] = len(groups)
+            state = self._dir()
+            for gid in groups:
+                members = state["members"].get(gid)
+                if members is None:
+                    summary["uncached"].append(gid)
+                    continue
+                summary["scanned"] += 1
+                hits = [uid for uid in black if uid in members] if len(black) < len(members) else \
+                    [uid for uid in members if uid in black]
+                if not hits:
+                    continue
+                summary["found"] += len(hits)
+                res = await self._bl_scan_group(client, gid, hits, trigger, manual=True, log=log)
+                summary["kicked"] += [{"group_id": gid, "user_id": u} for u in res["kicked"]]
+                summary["failed"] += [{"group_id": gid, "user_id": u, "reason": r} for u, r in res["failed"].items()]
+                summary["notes"] += [{"group_id": gid, "user_id": u, "reason": r} for u, r in res["notes"].items()]
+                if res["skipped"]:
+                    left = [u for u in hits if u not in res["kicked"] and u not in res["failed"] and u not in res["notes"]]
+                    summary["skipped"].append({"group_id": gid, "reason": res["skipped"], "user_ids": left})
+        finally:
+            self._bl_scan_all_busy = False
+        self._record_op("黑名单扫描", **(log or {"source": "自动"}),
+                        detail=(f"查了 {summary['scanned']} 个群（{len(summary['uncached'])} 个群没有成员缓存）"
+                                + (f"，只查 {', '.join(sorted(black))[:100]}" if users is not None else "")),
+                        result=f"发现 {summary['found']} 人次，踢出 {len(summary['kicked'])}，失败 {len(summary['failed'])}")
+        return summary, ""

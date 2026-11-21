@@ -962,8 +962,11 @@ def sim_send(payload_json: str) -> str:
         return json.dumps({"ok": False, "message": "该用户不在群里（被踢出后可用「申请入群」重新加入）"})
     text = str(p.get("text") or "")
     segments = []
+    ats = p.get("at") or []
+    for qq in (ats if isinstance(ats, list) else [ats]):  # @ 某人：放在文字前面，和 QQ 里一样
+        segments.append({"type": "at", "data": {"qq": str(qq)}})
     if text:
-        segments.append({"type": "text", "data": {"text": text}})
+        segments.append({"type": "text", "data": {"text": (" " + text) if ats else text}})
     wxcodes = p.get("wxcode") or []
     for code in (wxcodes if isinstance(wxcodes, list) else [wxcodes]):  # 列表 = 一条消息多张图
         url = "mock://wxcode/" + urllib.parse.quote(str(code))
@@ -989,7 +992,10 @@ def sim_send(payload_json: str) -> str:
         if word.startswith("/") and word[1:] in COMMANDS:
             replies = _run_handler(COMMANDS[word[1:]], event, reply_gid=gid)
         else:
-            replies = _run_handler("_handle_message", event, reply_gid=gid)
+            # 群主 @ 全群拉黑 / @机器人 帮助（owner_blacklist.py）：处理了就不再审核
+            replies = _run_handler("_on_owner_at_blacklist", event, reply_gid=gid)
+            if not event.is_stopped():
+                replies += _run_handler("_handle_message", event, reply_gid=gid)
     except Exception as e:
         traceback.print_exc()
         error = f"[模拟环境] 处理出错：{type(e).__name__}: {e}"

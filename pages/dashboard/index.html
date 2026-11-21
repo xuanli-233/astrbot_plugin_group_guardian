@@ -1553,11 +1553,24 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
 
       <div class="tab-panel" id="tab-member">
         <div class="page-header"><h1>群成员查找</h1></div>
-        <p class="mn-intro">按 QQ 号、昵称或群名片在所有群里找人（只查本地群成员缓存，不调用接口；缓存不全时先到「群成员缓存」刷新）。点一个人查看：在哪些群、群等级、入群时间、群名片，以及他发过的码、小程序、上传的群文件、退群记录、违规记录和对他的操作。其它页面里带虚线的 QQ 号点一下也会打开这里。</p>
+        <p class="mn-intro">按 QQ 号、昵称或群名片在所有群里找人（只查本地群成员缓存，不调用接口；缓存不全时先到「群成员缓存」刷新）。点一个人查看：在哪些群、群等级、入群时间、群名片，以及他发过的码、小程序、上传的群文件、退群记录、违规记录和对他的操作。其它页面里带虚线的 QQ 号点一下也会打开这里。搜到的人可以勾选后批量「踢出并拉黑」（所有管理的群）或「只加入黑名单」。</p>
         <div class="split">
           <div class="card">
             <div class="card-header"><h2>找人</h2><span class="rules-subtle" id="mbrCount"></span></div>
-            <div class="mn-body" style="padding-bottom:8px"><input class="input-sm" id="mbrQuery" style="width:100%" placeholder="QQ 号（开头即可）/ 昵称 / 群名片" /></div>
+            <div class="mn-body" style="padding-bottom:8px">
+              <input class="input-sm" id="mbrQuery" style="width:100%" placeholder="QQ 号（开头即可）/ 昵称 / 群名片；re: 开头写正则" />
+              <p class="mn-hint" style="margin:6px 0 0">群名片打广告：搜广告词，或写正则如 <code>re:加[vV微]|代刷|兼职</code>（不分大小写）。勾选左边的框可以批量处理，换个词再搜时已勾选的人保留。</p>
+              <div class="mn-row" style="margin:8px 0 0;gap:6px">
+                <button class="btn btn-ghost btn-sm" id="btnMbrSelAll">全选</button>
+                <button class="btn btn-ghost btn-sm" id="btnMbrSelNone">清空</button>
+                <span class="mn-hint" id="mbrSelCount" style="flex:1;text-align:right">未勾选</span>
+              </div>
+              <div class="mn-row" style="margin:6px 0 0;gap:6px">
+                <button class="btn btn-danger btn-sm" id="btnMbrKickBlock" style="flex:1" disabled>踢出并拉黑</button>
+                <button class="btn btn-outline btn-sm" id="btnMbrBlackOnly" style="flex:1" disabled>只加入黑名单</button>
+              </div>
+              <div id="mbrBatchResult"></div>
+            </div>
             <div class="split-list" id="mbrList"><div class="split-empty">输入后自动搜索</div></div>
           </div>
           <div class="split-right">
@@ -1595,6 +1608,21 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><h2>群主 @成员 全群拉黑</h2><span class="rules-subtle" id="obCount"></span></div>
+          <div class="settings-list" id="obSwitches"></div>
+          <div class="mn-body">
+            <p class="mn-hint" style="margin-bottom:8px">群主或插件管理员在群里发「<b>@某人 全群拉黑 理由</b>」（不用加 /，可 @ 多人，理由必填）：在机器人管理的所有群踢出并 QQ 拉黑，同时加入插件黑名单，踢人进批量任务逐个执行，完成后在该群发结果。其他人发了不执行。群主或插件管理员单独 @机器人（或 @机器人 帮助）会收到能用的指令。</p>
+            <div class="mn-row" style="gap:6px">
+              <input class="input-sm" id="obFilter" style="flex:1" placeholder="按群名 / 群号筛选" />
+              <span class="mn-hint">勾选的群设为：</span>
+              <button class="btn btn-outline btn-sm" data-ob-set="on">开放</button>
+              <button class="btn btn-outline btn-sm" data-ob-set="off">关闭</button>
+              <button class="btn btn-ghost btn-sm" data-ob-set="inherit">跟随总开关</button>
+            </div>
+            <div class="log-container" id="obList" style="padding:0;max-height:360px;overflow:auto"></div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><h2>插件用户黑名单</h2><span class="rules-subtle" id="ubCount"></span></div>
           <div class="mn-body">
             <div class="mn-row">
@@ -1602,7 +1630,13 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               <input class="input-sm" id="ubReason" style="flex:1" placeholder="拉黑原因（必填）" />
               <button class="btn btn-primary btn-sm" id="btnUbAdd">加入黑名单</button>
             </div>
-            <p class="mn-hint" style="margin-bottom:8px">只加入插件黑名单（申请自动拒绝、入群即踢），不会立即踢人。要同时从群里踢出，请用上面的「批量踢人」。</p>
+            <div class="mn-row">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ubAddScan" checked />加入后马上踢出已经在群里的</label>
+              <span style="flex:1"></span>
+              <button class="btn btn-danger btn-sm" id="btnUbScan">扫描所有群的黑名单用户</button>
+            </div>
+            <p class="mn-hint" style="margin-bottom:8px">扫描按「群成员缓存」对照，不额外拉成员列表；没有缓存的群会列出来，可去群成员缓存页刷新后再扫。手动扫描不受「踢失败后 1 小时内不重试」的限制。是否同时 QQ 拉黑看「踢黑名单时 QQ 拉黑」开关。</p>
+            <div id="ubScanResult"></div>
             <div class="mn-row">
               <input class="input-sm" id="ubKeyword" style="flex:1;min-width:180px" placeholder="在黑名单里找：QQ 号 / 原因 / 来源 / 群号" />
               <select class="input-sm" id="ubSort" style="width:150px"><option value="new">最近拉黑的在前</option><option value="old">最早拉黑的在前</option><option value="uid">按 QQ 号从小到大</option></select>
@@ -2748,7 +2782,7 @@ function promptModal(opts) {
     showModal(
       opts.title || '请输入',
       '<div style="display:grid;gap:8px">' +
-      (opts.label ? '<label style="font-size:12px;color:var(--text-muted)">' + esc(opts.label) + '</label>' : '') +
+      (opts.label ? '<label style="font-size:12px;color:var(--text-muted);white-space:pre-wrap">' + esc(opts.label) + '</label>' : '') +
       inputHtml + '</div>',
       '<button class="btn btn-ghost btn-sm" id="__pmCancel">取消</button>' +
       '<button class="btn btn-primary btn-sm" id="__pmOk">' + esc(opts.okText || '确定') + '</button>'
@@ -3527,6 +3561,7 @@ var MANUAL_SETTING_KEYS = {
   blacklist_kick_on_join: true,
   blacklist_scan_members_enabled: true,
   blacklist_native_block_enabled: true,
+  owner_at_blacklist_enabled: true,
   keyword_guard_enabled: true,
   keyword_rules: true,
   backup_enabled: true,
@@ -4303,6 +4338,9 @@ var MN_SWITCHES = {
   ],
   wxSwitches: [
     { key: 'wxcode_enabled', label: '启用葵花码识别', desc: '需要先接入识别模块' }
+  ],
+  obSwitches: [
+    { key: 'owner_at_blacklist_enabled', label: '总开关', desc: '下面没有单独设置的群跟随这里；单独设为「开放」「关闭」的群不受总开关影响' }
   ],
   kickSwitches: [
     { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '一段时间内主动退群达到次数后加入插件黑名单，所有群通用（次数在下方设置）' },
@@ -6041,7 +6079,7 @@ function fltInit(resets) {
 }
 
 /* ---- 群成员查找（member_lookup.py） ---- */
-var MBR = { items: [], uid: '', profile: null, sub: 'groups' };
+var MBR = { items: [], uid: '', profile: null, sub: 'groups', sel: {} };   // sel: {QQ号: 名字}，跨搜索保留
 // 全站通用：带虚线的 QQ 号，点击打开群成员档案
 function mbrLink(uid, text) {
   uid = String(uid || '');
@@ -6068,7 +6106,7 @@ async function mbrSearch() {
   var q = $('#mbrQuery').value.trim();
   if (!q) { MBR.items = []; $('#mbrList').innerHTML = '<div class="split-empty">输入后自动搜索</div>'; $('#mbrCount').textContent = ''; return; }
   var ep = beginLoad('mbr-search');
-  var res = await safeGet('minimal/member/search', { q: q });
+  var res = await safeGet('minimal/member/search', { q: q, limit: 300 });
   if (!isCurrentLoad('mbr-search', ep)) return;
   if (isApiError(res)) { $('#mbrList').innerHTML = '<div class="split-empty">' + esc(mnErr(res)) + '</div>'; return; }
   var d = mnData(res) || {};
@@ -6081,11 +6119,62 @@ async function mbrSearch() {
 function mbrRenderList() {
   $('#mbrList').innerHTML = MBR.items.length ? MBR.items.map(function(it) {
     var roles = it.roles.map(function(r) { return '<span class="mn-chip">' + (r === 'owner' ? '群主' : '管理员') + '</span>'; }).join('');
-    return '<div class="split-item' + (it.user_id === MBR.uid ? ' on' : '') + '" data-mbr-open="' + escAttr(it.user_id) + '">' +
+    if (it.blacklisted) roles += '<span class="cb-tag blocked">已拉黑</span>';
+    if (it.protected) roles += '<span class="cb-tag allowed">豁免</span>';
+    var cb = it.protected
+      ? '<input type="checkbox" disabled title="机器人自己 / 插件管理员 / 白名单，不会被拉黑" />'
+      : '<input type="checkbox" data-mbr-sel="' + escAttr(it.user_id) + '"' + (MBR.sel[it.user_id] !== undefined ? ' checked' : '') + ' title="勾选后批量处理" />';
+    return '<div class="split-item' + (it.user_id === MBR.uid ? ' on' : '') + '" data-mbr-open="' + escAttr(it.user_id) + '">' + cb +
       dupAvatar(it, 34) + '<div class="si-main"><div class="si-title">' + esc(it.name || it.user_id) + ' ' + roles + '</div>' +
       '<div class="si-sub">' + esc(it.user_id) + ' · ' + it.groups + ' 个群' + (it.max_level ? ' · Lv.' + it.max_level : '') +
       (it.names.length > 1 ? ' · 也叫 ' + esc(it.names.slice(1, 3).join('、')) : '') + '</div></div></div>';
   }).join('') : '<div class="split-empty">没有找到</div>';
+  mbrRenderSel();
+}
+function mbrRenderSel() {
+  var ids = Object.keys(MBR.sel);
+  $('#mbrSelCount').textContent = ids.length ? '已勾选 ' + ids.length + ' 人' : '未勾选';
+  $('#btnMbrKickBlock').disabled = !ids.length;
+  $('#btnMbrBlackOnly').disabled = !ids.length;
+}
+function mbrSelAll(on) {
+  if (on) MBR.items.forEach(function(it) { if (!it.protected) MBR.sel[it.user_id] = it.name || ''; });
+  else MBR.sel = {};
+  mbrRenderList();
+}
+// 批量：block=true 踢出所有管理的群并 QQ 拉黑 + 加入插件黑名单；false 只加入插件黑名单
+async function mbrBatch(block) {
+  var ids = Object.keys(MBR.sel);
+  if (!ids.length) return;
+  var preview = ids.slice(0, 8).map(function(u) { return u + (MBR.sel[u] ? '（' + MBR.sel[u] + '）' : ''); }).join('\n') + (ids.length > 8 ? '\n……共 ' + ids.length + ' 人' : '');
+  var q = $('#mbrQuery').value.trim();
+  var reason = await promptModal({
+    title: block ? '踢出并拉黑 ' + ids.length + ' 人' : '加入黑名单 ' + ids.length + ' 人',
+    label: (block ? '在所有管理的群踢出并 QQ 拉黑，同时加入插件黑名单：\n' : '只加入插件黑名单（申请自动拒绝、入群即踢），不踢人：\n') + preview + '\n\n拉黑原因（必填）：',
+    value: q ? '群名片 / 昵称打广告：' + q : '', okText: block ? '踢出并拉黑' : '加入黑名单'
+  });
+  if (reason === null) return;
+  if (!reason) { toast('请填写拉黑原因', 'warning'); return; }
+  var box = $('#mbrBatchResult');
+  box.innerHTML = '<div class="mn-result no">处理中……</div>';
+  var res;
+  if (block) {
+    res = await safePost('minimal/kick', { user_ids: ids.join(','), block: true, reason: reason, groups: [] }, 300000);
+    if (isApiError(res)) { box.innerHTML = '<div class="mn-result err closable">' + MN_CLOSE_BTN + esc(mnErr(res)) + '</div>'; return; }
+    var d = mnData(res), extra = [];
+    if (d.blacklisted >= 0) extra.push('已加入插件黑名单 ' + d.blacklisted + ' 人（新增，立即生效）');
+    if ((d.protected || []).length) extra.push('已跳过插件管理员 / 白名单：' + d.protected.join(', '));
+    if (d.absent) extra.push('按本地缓存不在群里、未建任务：' + d.absent + ' 项');
+    box.innerHTML = mnJobCreatedHtml(d.job, extra);
+  } else {
+    res = await safePost('minimal/blacklist/add', { user_ids: ids.join(','), reason: reason });
+    if (isApiError(res)) { box.innerHTML = '<div class="mn-result err closable">' + MN_CLOSE_BTN + esc(mnErr(res)) + '</div>'; return; }
+    var a = mnData(res);
+    box.innerHTML = '<div class="mn-result ok closable">' + MN_CLOSE_BTN + esc('已加入插件黑名单 ' + (a.added || []).length + ' 人' +
+      ((a.skipped || []).length ? '；跳过 ' + a.skipped.length + ' 人（已在名单中或为管理员 / 白名单）' : '')) + '</div>';
+  }
+  MBR.sel = {};
+  mbrSearch();
 }
 async function mbrOpen(uid) {
   MBR.uid = String(uid); MBR.profile = null;
@@ -6189,6 +6278,15 @@ function mbrSubHtml(sub) {
 }
 async function mbrOnClick(e) {
   var t = e.target, v;
+  if (t.matches && t.matches('input[type=checkbox]') && t.closest('#mbrList')) {
+    var su = t.getAttribute('data-mbr-sel');
+    if (su) {
+      if (t.checked) { var it = MBR.items.filter(function(x) { return x.user_id === su; })[0]; MBR.sel[su] = it ? it.name || '' : ''; }
+      else delete MBR.sel[su];
+      mbrRenderSel();
+    }
+    return;
+  }
   if ((v = t.closest('[data-mbr-open]'))) { mbrOpen(v.getAttribute('data-mbr-open')); return; }
   if ((v = t.closest('[data-mbr-sub]'))) { MBR.sub = v.getAttribute('data-mbr-sub'); mbrRenderProfile(); return; }
   var p = MBR.profile;
@@ -6848,9 +6946,81 @@ function mnRenderBlacklist() {
     });
   });
 }
+/* ---- 群主 @成员 全群拉黑：按群开放 / 关闭（owner_blacklist.py） ---- */
+var OB = { data: null, sel: {} };
+async function obLoad() {
+  var res = await safeGet('minimal/owner_blacklist');
+  if (isApiError(res)) { $('#obList').innerHTML = '<div class="mn-empty">' + esc(mnErr(res)) + '</div>'; return; }
+  OB.data = mnData(res);
+  obRender();
+}
+function obRender() {
+  var d = OB.data;
+  if (!d) return;
+  var kw = (($('#obFilter') || {}).value || '').trim().toLowerCase();
+  var list = d.groups.filter(function(g) { return !kw || (g.group_name + ' ' + g.group_id).toLowerCase().indexOf(kw) >= 0; });
+  var on = d.groups.filter(function(g) { return g.effective; }).length;
+  $('#obCount').textContent = d.groups.length ? '开放 ' + on + ' / ' + d.groups.length + ' 个群' : '';
+  var stText = { inherit: '跟随总开关', on: '单独开放', off: '单独关闭' };
+  if (!list.length) { $('#obList').innerHTML = '<div class="mn-empty">' + (d.groups.length ? '没有符合条件的群' : '还没有群（先到「群成员缓存」刷新群列表）') + '</div>'; return; }
+  var allOn = list.every(function(g) { return OB.sel[g.group_id]; });
+  $('#obList').innerHTML = '<table class="mn-table"><thead><tr><th style="width:32px"><input type="checkbox" id="obAll"' + (allOn ? ' checked' : '') + ' title="全选当前列出的群" /></th><th>群</th><th>设置</th><th>现在</th></tr></thead><tbody>' +
+    list.map(function(g) {
+      return '<tr><td><input type="checkbox" data-ob-gid="' + escAttr(g.group_id) + '"' + (OB.sel[g.group_id] ? ' checked' : '') + ' /></td>' +
+        '<td>' + esc(g.group_name || '未命名群') + '<div class="mn-hint">' + esc(g.group_id) + '</div></td>' +
+        '<td>' + (g.state === 'inherit' ? '<span class="mn-hint">' + stText[g.state] + '</span>' : esc(stText[g.state])) + '</td>' +
+        '<td>' + (g.effective ? '<span class="cb-tag allowed">可用</span>' : '<span class="cb-tag blocked">不可用</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  $('#obAll').addEventListener('change', function(e) {
+    list.forEach(function(g) { if (e.target.checked) OB.sel[g.group_id] = true; else delete OB.sel[g.group_id]; });
+    obRender();
+  });
+  $$('[data-ob-gid]').forEach(function(cb) {
+    cb.addEventListener('change', function() { var g = cb.getAttribute('data-ob-gid'); if (cb.checked) OB.sel[g] = true; else delete OB.sel[g]; });
+  });
+}
+async function obSet(state) {
+  var ids = Object.keys(OB.sel);
+  if (!ids.length) { toast('请先勾选群', 'warning'); return; }
+  var res = await safePost('minimal/owner_blacklist/groups', { group_ids: ids, state: state });
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return; }
+  OB.data = mnData(res); OB.sel = {};
+  toast('已把 ' + ids.length + ' 个群设为' + ({ on: '开放', off: '关闭', inherit: '跟随总开关' })[state], 'success');
+  obRender();
+}
+function ubGroupName(gid) {
+  var g = mnGroups().filter(function(x) { return String(x.group_id) === String(gid); })[0];
+  return g ? mnGroupLabel(g) : '群 ' + gid;
+}
+// 扫描群里的黑名单用户（users 为 null = 整个黑名单），结果写在 #ubScanResult
+async function ubScan(users) {
+  var box = $('#ubScanResult');
+  box.innerHTML = '<div class="mn-result no">正在扫描……（每踢一人间隔一小会儿，人多时要等一等）</div>';
+  var res = await safePost('minimal/blacklist/scan', users ? { user_ids: users.join(',') } : {}, 300000);
+  if (isApiError(res)) { box.innerHTML = '<div class="mn-result err closable">' + MN_CLOSE_BTN + esc(mnErr(res)) + '</div>'; return; }
+  var d = mnData(res), lines = [];
+  var who = function(x) { return ubGroupName(x.group_id) + ' / ' + x.user_id; };
+  lines.push('查了 ' + (d.scanned || 0) + ' 个群，发现黑名单用户 ' + (d.found || 0) + ' 人次，踢出 ' + (d.kicked || []).length +
+    '，失败 ' + (d.failed || []).length);
+  if ((d.kicked || []).length) { lines.push('', '已踢出：'); d.kicked.forEach(function(x) { lines.push('· ' + who(x)); }); }
+  if ((d.failed || []).length) { lines.push('', '踢出失败：'); d.failed.forEach(function(x) { lines.push('· ' + who(x) + '：' + x.reason); }); }
+  if ((d.notes || []).length) { lines.push('', '没有踢：'); d.notes.forEach(function(x) { lines.push('· ' + who(x) + '：' + x.reason); }); }
+  if ((d.skipped || []).length) {
+    lines.push('', '跳过的群：');
+    d.skipped.forEach(function(x) { lines.push('· ' + ubGroupName(x.group_id) + '：' + x.reason + ((x.user_ids || []).length ? '（' + x.user_ids.join(', ') + '）' : '')); });
+  }
+  if ((d.uncached || []).length) {
+    lines.push('', (d.uncached.length) + ' 个群没有成员缓存，没查：' + d.uncached.slice(0, 10).map(ubGroupName).join('、') +
+      (d.uncached.length > 10 ? ' 等' : '') + '。可去「群成员缓存」页刷新后再扫');
+  }
+  var cls = (d.failed || []).length ? 'err' : ((d.skipped || []).length || (d.uncached || []).length) ? 'no' : 'ok';
+  box.innerHTML = '<div class="mn-result ' + cls + ' closable">' + MN_CLOSE_BTN + esc(lines.join('\n')) + '</div>';
+}
 async function loadKick() {
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('kickSwitches');
+  mnRenderSwitches('obSwitches');
+  obLoad();
   mnRenderSwitches('leaveRecallSwitches');
   mnRenderSwitches('leaveFilesSwitches');
   mnRenderSwitches('joinLockSwitches');
@@ -8453,7 +8623,21 @@ function initMinimalPages() {
     var d = mnData(res);
     $('#ubAdd').value = ''; $('#ubReason').value = '';
     toast('已加入 ' + (d.added || []).length + ' 人' + ((d.skipped || []).length ? '，跳过 ' + d.skipped.join(', ') + '（已在名单中或为管理员 / 白名单）' : ''), 'success');
+    // 已在名单中的人（skipped 里非豁免的）也一起扫：重复拉黑通常就是想再踢一遍
+    if ($('#ubAddScan').checked && ((d.added || []).length || (d.skipped || []).length)) {
+      await ubScan((d.added || []).concat(d.skipped || []));
+    }
     loadKick();
+  });
+  $$('[data-ob-set]').forEach(function(b) { b.addEventListener('click', function() { obSet(b.getAttribute('data-ob-set')); }); });
+  bindIfExists('obFilter', obRender, 'input');
+  // 总开关保存后，「跟随总开关」的群可用状态跟着变
+  bindIfExists('obSwitches', function() { setTimeout(obLoad, 800); }, 'change');
+  bindIfExists('btnUbScan', async function() {
+    var n = ((MN.overview && MN.overview.blacklist) || []).length;
+    if (!n) { toast('黑名单为空', 'warning'); return; }
+    if (!(await mnConfirm('按群成员缓存检查所有群，把里面的 ' + n + ' 个黑名单用户中在群的人踢出？', { title: '扫描黑名单用户' }))) return;
+    await ubScan(null);
   });
 
   bindIfExists('btnDupReload', loadDup);
@@ -8570,6 +8754,10 @@ function initMinimalPages() {
   bindAutoFilter(['mbrQuery'], mbrSearch);
   var mbrTab = document.getElementById('tab-member');
   if (mbrTab) mbrTab.addEventListener('click', mbrOnClick);
+  bindIfExists('btnMbrSelAll', function() { mbrSelAll(true); });
+  bindIfExists('btnMbrSelNone', function() { mbrSelAll(false); });
+  bindIfExists('btnMbrKickBlock', function() { mbrBatch(true); });
+  bindIfExists('btnMbrBlackOnly', function() { mbrBatch(false); });
   bindIfExists('btnGfAll', function() { mnSetGroupChecks('#gfGroups', true); });
   bindIfExists('btnGfNone', function() { mnSetGroupChecks('#gfGroups', false); });
   bindIfExists('btnGfScan', gfScan);
