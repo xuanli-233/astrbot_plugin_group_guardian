@@ -108,7 +108,8 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         await self._stop_scheduler()
         # 一次性后台任务（机器人角色补查等）卸载时取消并等待收尾，避免热重载后在旧实例上继续跑
         adhoc = []
-        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks", "_jl_tasks", "_lk_tasks", "_hg_tasks"):
+        for attr in ("_bot_role_tasks", "_lr_tasks", "_ll_tasks", "_aa_tasks", "_mm_tasks", "_cb_tasks", "_cs_tasks", "_ms_tasks", "_mp_tasks", "_gf_tasks", "_jl_tasks", "_lk_tasks", "_hg_tasks",
+                     "_bl_scan_tasks", "_dir_tasks"):
             adhoc.extend(getattr(self, attr, None) or ())
         # 热路径查询合并（single_flight）中尚未完成的协议端查询
         for attr in ("_bot_role_inflight", "_member_role_inflight", "_official_bot_inflight"):
@@ -293,11 +294,16 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         async for item in self._cmd_guarded(event, "批量撤回", CommandsMixin.recall_all(self, event)):
             yield item
 
-    # 退群撤回 / 退群记录：记录每条群消息（撤回只记 ID 与时间；退群记录另存最近 N 条的文字摘要，只在内存）。
+    # 群成员缓存顺带更新（发送者身份 / 群名片 / 昵称），以及退群撤回 / 退群记录：记录每条群消息（撤回只记 ID 与时间；退群记录另存最近 N 条的文字摘要，只在内存）。
     # 注册在审核入口之前，保证被审核撤回、stop_event 的消息也已记下。功能关闭时不记录。
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     async def _on_track_group_message(self, event: AiocqhttpMessageEvent):
+        try:
+            # 群成员缓存：消息自带发送者的身份、群名片、昵称，变了就更新（group_directory.py）
+            GroupDirectoryMixin._dir_learn_from_event(self, event)
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 用消息更新群成员缓存出错: {e}")
         try:
             gid = self._get_group_id(event)
             if gid and self._cfg("leave_recall_enabled", False, group_id=gid):

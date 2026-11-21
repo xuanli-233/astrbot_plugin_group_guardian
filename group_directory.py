@@ -13,6 +13,13 @@ get_group_list / get_group_member_list，群一多就会集中发出大量请求
   （_dir_handle_notice），机器人踢人成功后也同步移除，所以 TTL 可以设得较长。
 - 后台：每 DIR_BACKGROUND_TICK 秒最多刷新 DIR_BACKGROUND_BATCH 个过期的群
   （directory_background_refresh_enabled），慢慢补齐，不集中请求。
+- 成员身份（群主 / 管理员 / 成员）：通知会实时更新，所以缓存过了有效期也仍然可信，在
+  _dir_role_trust_seconds（默认 24 小时，或成员有效期的 4 倍）内直接用，不调接口；每条群消息自带的
+  发送者身份、群名片、昵称顺带写进缓存（_dir_learn_from_event，只有变了才写库）；不得不调
+  get_group_member_info 时把结果也写回缓存（_dir_learn_member）。命中 / 调接口次数见 _dir_stats。
+- 黑名单成员扫描：每次从协议端拉到某个群的成员列表后，交给 group_blacklist._bl_scan_schedule
+  检查里面有没有黑名单用户并踢出。机器人进新群后 DIR_JOIN_FETCH_DELAY 秒拉一次该群成员；
+  机器人被设为管理员时按缓存再扫一遍。
 """
 import asyncio
 import time
@@ -24,6 +31,11 @@ from astrbot.api import logger
 class GroupDirectoryMixin:
     DIR_BACKGROUND_TICK = 300
     DIR_BACKGROUND_BATCH = 2
+    # 机器人进新群后等几秒再拉成员列表（协议端刚进群时列表可能还没同步好）
+    DIR_JOIN_FETCH_DELAY = 5
+    # 成员身份在缓存里至少可信这么久（过了成员有效期也照用：任免管理员有通知实时更新）
+    DIR_ROLE_TRUST_MIN = 86400
+    DIR_ROLES = ("owner", "admin", "member")
 
     # ------------------------------------------------------------------
     # 存储
@@ -263,8 +275,11 @@ class GroupDirectoryMixin:
             self._dir_save_groups(groups, now)
             return list(groups.values()), ""
 
-    async def _dir_members(self, client, gid, force: bool = False) -> Optional[Dict[str, dict]]:
-        """某群成员 {QQ号: 成员信息}。拉取失败且没有缓存时返回 None。"""
+    async def _dir_members(self, client, gid, force: bool = False, trigger: str = "") -> Optional[Dict[str, dict]]:
+        """某群成员 {QQ号: 成员信息}。拉取失败且没有缓存时返回 None。
+
+        trigger：这次为什么拉取（黑名单成员扫描的操作记录里写明），不填 = 刷新群成员。
+        """
         gid = str(gid)
         state = self._dir()
         if not force and self._dir_members_fresh(gid):
@@ -308,18 +323,105 @@ class GroupDirectoryMixin:
             if bot_uin and bot_uin in members:
                 group["bot_role"] = members[bot_uin]["role"]
             await self._dir_offload(self._dir_save_members, gid, members, now, old)
+            # 拉到最新成员：检查有没有黑名单用户（机器人后进的群，入群即踢管不到早就在里面的人）
+            scan = getattr(self, "_bl_scan_schedule", None)
+            if callable(scan):
+                try:
+                    scan(client, gid, members, trigger or "刷新群成员")
+                except Exception as e:
+                    logger.debug(f"[GroupMgr] 安排黑名单成员扫描失败({gid}): {e}")
             return members
 
     def _dir_cached_member(self, gid, uid) -> Optional[dict]:
         return (self._dir()["members"].get(str(gid)) or {}).get(str(uid))
 
+    def _dir_role_trust_seconds(self) -> int:
+        return max(self._dir_member_ttl() * 4, self.DIR_ROLE_TRUST_MIN)
+
+    def _dir_count(self, key: str, n: int = 1) -> None:
+        """本次运行的计数（WebUI「群成员缓存」页显示）：role_hits 身份查询命中缓存 / role_api 调接口查身份 /
+        learned 从消息、查询结果补进缓存的成员信息。"""
+        stats = getattr(self, "_dir_stats", None)
+        if stats is None:
+            stats = self._dir_stats = {"role_hits": 0, "role_api": 0, "learned": 0}
+        stats[key] = stats.get(key, 0) + n
+
     def _dir_member_role(self, gid, uid) -> str:
-        """缓存未过期时返回成员角色，否则返回空串（调用方再走接口）。"""
+        """成员身份。这个群的成员缓存在可信期内、且里面有这个人时返回身份，否则返回空串（调用方再走接口）。
+
+        不要求缓存没过期：任免管理员、入群、退群都有通知实时改缓存，过期只说明很久没整体拉过列表。
+        """
         gid = str(gid)
-        if not self._dir_members_fresh(gid):
-            return ""
-        member = self._dir_cached_member(gid, uid)
-        return member["role"] if member else ""
+        state = self._dir()
+        ts = state["members_ts"].get(gid, 0)
+        member = None
+        if ts and time.time() - ts < self._dir_role_trust_seconds():
+            member = (state["members"].get(gid) or {}).get(str(uid))
+        if member and member.get("role"):
+            self._dir_count("role_hits")
+            return member["role"]
+        return ""
+
+    def _dir_learn_member(self, gid, uid, role=None, card=None, nickname=None, join_time=None,
+                          title=None, level=None) -> bool:
+        """把零散得到的成员信息（消息里的发送者、单个成员查询结果）补进缓存。返回是否有变化。
+
+        只补已经整体缓存过成员的群（没缓存过的群，下次整体拉取）；值没变时什么也不做，不写库。
+        """
+        gid, uid = str(gid or ""), str(uid or "")
+        if not gid or not uid.isdigit():
+            return False
+        state = self._dir()
+        members = state["members"].get(gid)
+        if members is None:
+            return False
+        fields = {}
+        if role in self.DIR_ROLES:
+            fields["role"] = role
+        for key, value in (("card", card), ("nickname", nickname), ("title", title)):
+            if value is not None:
+                fields[key] = str(value)
+        if join_time:
+            try:
+                fields["join_time"] = int(join_time)
+            except (TypeError, ValueError):
+                pass
+        if level is not None and self._dir_level(level):
+            fields["level"] = self._dir_level(level)
+        member = members.get(uid)
+        if member is None:
+            member = {"user_id": uid, "nickname": "", "card": "", "role": "member", "title": "",
+                      "join_time": 0, "last_sent_time": 0, "level": 0}
+        elif all(member.get(k) == v for k, v in fields.items()):
+            return False
+        member.update(fields)
+        members[uid] = member
+        self._dir_bump()
+        if gid in state["groups"]:
+            state["groups"][gid]["member_count"] = max(len(members), int(state["groups"][gid].get("member_count") or 0))
+        self._dir_count("learned")
+        self._dir_save_member_row(gid, uid, member)
+        return True
+
+    def _dir_learn_from_event(self, event) -> bool:
+        """群消息自带发送者的身份、群名片、昵称：顺带更新缓存，省掉之后的身份查询。"""
+        raw = self._get_raw_event(event) if callable(getattr(self, "_get_raw_event", None)) else None
+        if not isinstance(raw, dict) or raw.get("post_type") != "message" or raw.get("message_type") != "group":
+            return False
+        sender = raw.get("sender")
+        if not isinstance(sender, dict):
+            return False
+        return self._dir_learn_member(raw.get("group_id"), raw.get("user_id"), role=sender.get("role"),
+                                      card=sender.get("card"), nickname=sender.get("nickname"),
+                                      title=sender.get("title"), level=sender.get("level"))
+
+    def _dir_learn_info(self, gid, uid, info) -> None:
+        """get_group_member_info 的结果：计一次接口查询，并写回缓存。"""
+        self._dir_count("role_api")
+        if isinstance(info, dict):
+            self._dir_learn_member(gid, uid, role=info.get("role"), card=info.get("card"),
+                                   nickname=info.get("nickname"), join_time=info.get("join_time"),
+                                   title=info.get("title"), level=info.get("level"))
 
     def _dir_find_user(self, uid) -> List[dict]:
         """在缓存里查找某人所在的群。"""
@@ -338,6 +440,9 @@ class GroupDirectoryMixin:
     def _dir_status(self) -> dict:
         state = self._dir()
         groups = []
+        unique = set()
+        for members in state["members"].values():
+            unique.update(members)
         for gid, g in state["groups"].items():
             groups.append({
                 "group_id": gid, "group_name": g.get("group_name", ""),
@@ -352,6 +457,14 @@ class GroupDirectoryMixin:
             "min_interval_ms": self._cfg_int("directory_min_interval_ms", 1500),
             "api_calls": getattr(self, "_dir_api_calls", 0),
             "refreshing": self._dir_refresh_progress(),
+            # 群成员总数：member_count 是 QQ 报的群人数（拉过成员的群为实际成员数），各群相加；
+            # unique_members 是已缓存成员去重后的人数（同一个人在多个群只算一次）
+            "total_members": sum(int(g.get("member_count") or 0) for g in groups),
+            "cached_members": sum(g["members_cached"] for g in groups),
+            "cached_groups": sum(1 for g in groups if g["members_cached"]),
+            "unique_members": len(unique),
+            "role_trust_seconds": self._dir_role_trust_seconds(),
+            "stats": dict(getattr(self, "_dir_stats", None) or {"role_hits": 0, "role_api": 0, "learned": 0}),
         }
 
     # ------------------------------------------------------------------
@@ -421,6 +534,8 @@ class GroupDirectoryMixin:
         if kind == "group_increase":
             if uid == self_id:
                 self._dir()["groups_ts"] = 0  # 机器人进了新群：下次读取时刷新群列表
+                # 立即拉一次成员：顺带检查群里有没有黑名单用户（他们早于机器人进群，不会有入群通知）
+                self._dir_spawn(self._dir_fetch_new_group(event, gid))
                 return
             self._dir_upsert_member(gid, uid, role="member", join_time=int(time.time()))
         elif kind == "group_decrease":
@@ -430,8 +545,54 @@ class GroupDirectoryMixin:
                 self._dir_remove_member(gid, uid)
         elif kind == "group_admin":
             self._dir_upsert_member(gid, uid, role="admin" if raw.get("sub_type") == "set" else "member")
+            if uid == self_id and raw.get("sub_type") == "set":
+                # 机器人刚成为管理员：之前因为不是管理员没踢的黑名单用户，现在可以踢了
+                self._dir_spawn(self._dir_scan_after_admin(event, gid))
         elif kind == "group_card":
             self._dir_upsert_member(gid, uid, card=str(raw.get("card_new") or ""))
+
+    def _dir_spawn(self, coro) -> None:
+        tasks = getattr(self, "_dir_tasks", None)
+        if tasks is None:
+            tasks = self._dir_tasks = set()
+        try:
+            task = asyncio.get_running_loop().create_task(coro)
+        except RuntimeError:
+            coro.close()
+            return
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    def _dir_scan_wanted(self, gid: str) -> bool:
+        """有黑名单用户、且这个群开着黑名单成员扫描时才值得为它专门拉一次成员。"""
+        ready = getattr(self, "_bl_scan_enabled", None)
+        return bool(getattr(self, "_user_black_set", None)) and callable(ready) and ready(gid)
+
+    async def _dir_fetch_new_group(self, event, gid: str) -> None:
+        try:
+            if not self._dir_scan_wanted(gid):
+                return
+            await asyncio.sleep(self.DIR_JOIN_FETCH_DELAY)
+            client = await self._get_client(event)
+            if client:
+                await self._dir_members(client, gid, force=True, trigger="机器人进群")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 进群后拉取群 {gid} 成员失败: {e}")
+
+    async def _dir_scan_after_admin(self, event, gid: str) -> None:
+        try:
+            if not self._dir_scan_wanted(gid):
+                return
+            client = await self._get_client(event)
+            scan = getattr(self, "_bl_scan_cached", None)
+            if client and callable(scan):
+                await scan(client, gid, trigger="机器人成为管理员")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 成为管理员后扫描群 {gid} 黑名单用户失败: {e}")
 
     # ------------------------------------------------------------------
     # 批量刷新（WebUI 与后台）

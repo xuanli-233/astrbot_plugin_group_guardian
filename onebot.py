@@ -329,6 +329,7 @@ class OneBotMixin:
                 )
                 if ok and isinstance(info, dict):
                     role = info.get('role', '') or ""
+                    self._learn_member_info(group_id, user_id, info)
                 elif error:
                     logger.debug(f"[GroupMgr] 获取群成员信息失败: {error}")
         except Exception as e:
@@ -345,8 +346,31 @@ class OneBotMixin:
             self._admin_role_cache[cache_key] = (role, now)
         return role
 
+    def _learn_member_info(self, group_id, user_id, info) -> None:
+        """单个成员查询的结果写回群成员缓存（group_directory），下次不必再查。"""
+        learn = getattr(self, "_dir_learn_info", None)
+        if callable(learn):
+            try:
+                learn(group_id, user_id, info)
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 成员信息写回缓存失败({group_id}/{user_id}): {e}")
+
+    def _event_sender_role(self, event, group_id: str, user_id: str) -> str:
+        """这条群消息就是 user_id 在 group_id 发的：OneBot 消息事件自带发送者身份（sender.role），直接用。"""
+        getter = getattr(self, "_get_raw_event", None)
+        raw = getter(event) if callable(getter) and event is not None else None
+        if not isinstance(raw, dict) or raw.get("post_type") != "message":
+            return ""
+        if str(raw.get("group_id", "")) != str(group_id) or str(raw.get("user_id", "")) != str(user_id):
+            return ""
+        sender = raw.get("sender")
+        role = sender.get("role") if isinstance(sender, dict) else ""
+        return role if role in ("owner", "admin", "member") else ""
+
     async def _get_member_role(self, event: AstrMessageEvent, group_id: str, user_id: str) -> str:
         """获取成员在群里的角色（member/admin/owner），带缓存。
+
+        查的就是这条消息的发送者时，用消息自带的 sender.role（不调接口，也是最新的）。
 
         缓存存"角色字符串"而非"是否管理员"，使 F5 授权配置变更后无需等缓存过期即可反映。
         同一成员的并发查询合并为一次；缓存过期但未太旧时先返回旧值并后台刷新。
@@ -354,6 +378,10 @@ class OneBotMixin:
         """
         cache_key = f"{group_id}:{user_id}"
         now = time.time()
+        sender_role = self._event_sender_role(event, group_id, user_id)
+        if sender_role:
+            self._admin_role_cache[cache_key] = (sender_role, now)
+            return sender_role
         if len(self._admin_role_cache) > self.MEMBER_ROLE_CACHE_MAX:
             self._admin_role_cache = {
                 k: v for k, v in self._admin_role_cache.items()
@@ -434,6 +462,7 @@ class OneBotMixin:
                 group_id=gid, user_id=uid, no_cache=False,
             )
             if ok and isinstance(info, dict):
+                self._learn_member_info(group_id, user_id, info)
                 return info.get("role", "") or ""
             if error:
                 logger.debug(f"[GroupMgr] 查询群成员角色失败({group_id}/{user_id}): {error}")

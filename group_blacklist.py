@@ -11,6 +11,12 @@
                                   leave_auto_blacklist_days 天内退群达到 leave_auto_blacklist_times 次才拉黑，按退群记录计次）
   group_increase                  黑名单用户被邀请入群 → 立即踢出并原生拉黑（blacklist_kick_on_join）
 
+黑名单成员扫描（blacklist_scan_members_enabled，默认开）：入群即踢只能踢「机器人在群里时」进来的人。
+机器人后进的群（新建的群、刚被拉进去的群），黑名单用户早就在里面了，收不到入群通知。所以每次从协议端
+拉到某个群的成员列表（group_directory._dir_members 刷新成功）后，后台检查一遍里面有没有黑名单用户，
+有就踢出（按 blacklist_native_block_enabled 决定是否 QQ 拉黑）。机器人进新群时立即拉一次成员列表，
+机器人被设为管理员时再按缓存扫一遍（刚进群时往往还不是管理员，踢不了）。见 _bl_scan_*。
+
 QQ 原生群黑名单只能在踢人那一刻附带（set_group_kick 的 reject_add_request=true），
 已经不在群里的人无法再原生拉黑，所以「退群拉黑」靠插件用户黑名单 + 加群申请自动拒绝
 + 入群即踢 三层来实现。
@@ -37,6 +43,8 @@ class GroupBlacklistMixin:
     KICK_TARGETS_MAX = 200
     # 两次 set_group_kick 之间的间隔，防止协议端限频/风控
     KICK_INTERVAL = 0.3
+    # 黑名单成员扫描：同一个人在同一个群踢失败后，这么久之内不再重试（避免每次刷新都记一条失败）
+    BL_SCAN_RETRY_SECONDS = 3600
 
     # ------------------------------------------------------------------
     # 参数解析与名单
@@ -453,3 +461,126 @@ class GroupBlacklistMixin:
         reason = result["skipped"] or result["failed"].get(user_id) or "成员列表中未找到"
         logger.warning(f"[GroupMgr] 黑名单用户 {user_id} 入群 {group_id}，踢出失败: {reason}")
         return False
+
+    # ------------------------------------------------------------------
+    # 黑名单成员扫描：群成员缓存刷新后，踢出已经在群里的黑名单用户
+    # ------------------------------------------------------------------
+    def _bl_scan_enabled(self, group_id: str) -> bool:
+        return (self._blacklist_feature_ready(group_id)
+                and bool(self._cfg("blacklist_scan_members_enabled", True, group_id=group_id)))
+
+    def _bl_scan_schedule(self, client, group_id, members: Optional[Dict[str, dict]], trigger: str = "") -> bool:
+        """成员列表里有黑名单用户时，在后台开始踢（不拖住调用方）。返回是否安排了扫描。
+
+        由 group_directory._dir_members 在拉到最新成员列表后调用（此时还持有该群的刷新锁，
+        所以这里只建任务；任务里读成员缓存，不会再去拉列表）。
+        """
+        black = getattr(self, "_user_black_set", None) or set()
+        if not black or not members or client is None:
+            return False
+        gid = str(group_id)
+        hits = [uid for uid in members if uid in black]
+        if not hits or not self._bl_scan_enabled(gid):
+            return False
+        tasks = getattr(self, "_bl_scan_tasks", None)
+        if tasks is None:
+            tasks = self._bl_scan_tasks = set()
+        task = asyncio.create_task(self._bl_scan_group(client, gid, hits, trigger))
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        return True
+
+    def _bl_scan_targets(self, group_id: str, uids: List[str], bot_uin: str) -> Tuple[List[str], str]:
+        """按成员缓存筛出这次要踢的人 → (QQ 号列表, 不踢的原因)。踢不动的直接跳过，不去试。"""
+        gid = str(group_id)
+        members = (self._dir()["members"].get(gid) or {}) if callable(getattr(self, "_dir", None)) else {}
+        bot = members.get(str(bot_uin)) or {}
+        bot_role = bot.get("role") or ((self._dir()["groups"].get(gid) or {}).get("bot_role", "")
+                                       if callable(getattr(self, "_dir", None)) else "")
+        if bot_role not in ("admin", "owner"):
+            return [], "机器人不是管理员"
+        tried = getattr(self, "_bl_scan_tried", None)
+        if tried is None:
+            tried = self._bl_scan_tried = {}
+        now = time.time()
+        out = []
+        for uid in uids:
+            uid = str(uid)
+            m = members.get(uid)
+            if m is None or uid == str(bot_uin) or self._is_blacklist_exempt(uid):
+                continue
+            role = m.get("role") or "member"
+            if role == "owner" or (role == "admin" and bot_role != "owner"):
+                continue
+            if now - tried.get((gid, uid), 0) < self.BL_SCAN_RETRY_SECONDS:
+                continue
+            out.append(uid)
+        return out, ""
+
+    async def _bl_scan_group(self, client, group_id, uids: List[str], trigger: str = "") -> dict:
+        """踢出群里的黑名单用户。同一个群同时只扫一次。返回 {"kicked": [...], "failed": {...}, "skipped": 原因}。"""
+        gid = str(group_id)
+        result = {"kicked": [], "failed": {}, "skipped": ""}
+        running = getattr(self, "_bl_scan_running", None)
+        if running is None:
+            running = self._bl_scan_running = set()
+        if gid in running:
+            result["skipped"] = "正在扫描"
+            return result
+        running.add(gid)
+        try:
+            if not self._bl_scan_enabled(gid):
+                result["skipped"] = "功能未开启"
+                return result
+            bot_uin = str(await self._get_bot_uin(client) or "")
+            targets, why = self._bl_scan_targets(gid, uids, bot_uin)
+            if why:
+                result["skipped"] = why
+                logger.debug(f"[GroupMgr] 群 {gid} 有黑名单用户 {', '.join(uids)}，{why}，暂不处理")
+                return result
+            block = bool(self._cfg("blacklist_native_block_enabled", True, group_id=gid))
+            meta_all = (getattr(self, "_bl_meta_all", lambda: {})() or {})
+            tried = self._bl_scan_tried
+            for i, uid in enumerate(targets):
+                if i:
+                    await asyncio.sleep(self.KICK_INTERVAL)
+                if uid not in (getattr(self, "_user_black_set", None) or set()):
+                    continue   # 扫描期间被移出了黑名单
+                meta = meta_all.get(uid) or {}
+                reason = (f"群成员中发现黑名单用户（{trigger or '刷新群成员'}；"
+                          f"拉黑原因：{meta.get('reason') or '未记录'}）")
+                res = await self._kick_targets_in_group(
+                    client, gid, [uid], block=block,
+                    log={"action": "黑名单成员清理", "source": "自动", "reason": reason[:200]})
+                if uid in res["kicked"]:
+                    result["kicked"].append(uid)
+                    tried.pop((gid, uid), None)
+                    continue
+                if res["skipped"]:
+                    result["skipped"] = res["skipped"]
+                    break
+                if res["absent"]:
+                    continue   # 已经不在群里了
+                tried[(gid, uid)] = time.time()
+                result["failed"][uid] = res["failed"].get(uid) or "踢人失败"
+            if result["kicked"]:
+                logger.info(f"[GroupMgr] 群 {gid} 里的黑名单用户已踢出: {', '.join(result['kicked'])}（{trigger}）")
+            if result["failed"]:
+                logger.warning(f"[GroupMgr] 群 {gid} 里的黑名单用户踢出失败: {result['failed']}")
+            return result
+        finally:
+            running.discard(gid)
+
+    async def _bl_scan_cached(self, client, group_id, trigger: str = "") -> dict:
+        """按现有成员缓存扫描一个群（不拉列表）。没缓存时先拉一次——拉到后 _dir_members 会自己安排扫描。"""
+        gid = str(group_id)
+        members = self._dir()["members"].get(gid) if callable(getattr(self, "_dir", None)) else None
+        if members is None:
+            if callable(getattr(self, "_dir_members", None)):
+                await self._dir_members(client, gid, force=True, trigger=trigger)
+            return {"kicked": [], "failed": {}, "skipped": "已重新拉取成员列表"}
+        black = getattr(self, "_user_black_set", None) or set()
+        hits = [uid for uid in members if uid in black]
+        if not hits:
+            return {"kicked": [], "failed": {}, "skipped": ""}
+        return await self._bl_scan_group(client, gid, hits, trigger)

@@ -542,6 +542,12 @@
         "default": true,
         "hint": "黑名单用户通过邀请等方式绕过申请进群时，入群当下立即踢出，不必等其发言"
     },
+    "blacklist_scan_members_enabled": {
+        "description": "刷新群成员时踢出已在群里的黑名单用户",
+        "type": "bool",
+        "default": true,
+        "hint": "每次从 QQ 拉到某个群的成员列表后，检查里面有没有黑名单用户并踢出。用于机器人后进的群（新建的群、刚被拉进的群）：黑名单用户早于机器人进群，收不到入群通知。机器人进新群时立即拉一次成员，被设为管理员时再扫一遍；群主、管理员踢不了的跳过"
+    },
     "blacklist_native_block_enabled": {
         "description": "踢出黑名单用户时同时使用 QQ 群黑名单",
         "type": "bool",

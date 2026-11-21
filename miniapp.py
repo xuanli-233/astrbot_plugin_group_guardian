@@ -40,7 +40,7 @@ MP_MAX_PER_MESSAGE = 5
 MP_TEXT_MAX = 300
 MP_STORE_DAYS_MAX = 3650
 MP_LIST_MAX = 1000
-OUTCOME_LABEL = {"pass": "放行", "rule": "已撤回", "allow": "白名单放行"}
+OUTCOME_LABEL = {"pass": "放行", "rule": "已撤回", "notify": "仅提醒", "allow": "白名单放行"}
 
 
 def extract_links(text: str) -> List[Dict]:

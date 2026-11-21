@@ -53,7 +53,7 @@ LINK_CARD_MAX = 200              # 卡片标题 / 描述 / 来源各自的长度
 LINK_LIST_MAX = 2000
 LINK_STORE_DAYS_MAX = 3650
 LIST_KINDS = {"block_domain": "拉黑域名", "block_url": "拉黑链接", "allow_domain": "白名单域名"}
-OUTCOME_LABEL = {"pass": "放行", "rule": "已撤回", "allow": "白名单"}
+OUTCOME_LABEL = {"pass": "放行", "rule": "已撤回", "notify": "仅提醒", "allow": "白名单"}
 TITLE_STATE_LABEL = {"": "未读取", "ok": "已读取", "fail": "读取失败", "skip": "不是网页"}
 
 # 常见后缀：只用来识别「没写 http://」的裸域名，避免把「1.5」「a.b」当成链接
@@ -465,7 +465,7 @@ class LinkGuardMixin:
         ids, fresh = [], []
         with self._storage._connect() as conn:
             for it in items:
-                result = "allow" if it.get("state") == "allow" and outcome != "rule" else outcome
+                result = "allow" if it.get("state") == "allow" and outcome not in ("rule", "notify") else outcome
                 msg = message_snippet(text, it) if text else ""
                 card = [str(it.get(k) or "") for k in ("card_title", "card_desc", "card_source")]
                 cur = conn.execute(

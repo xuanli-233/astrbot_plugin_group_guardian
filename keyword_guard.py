@@ -213,7 +213,13 @@ class KeywordGuardMixin:
 
         action：命中的规则组的处理方式（rule_groups.py）；不传时用默认组的（码黑名单、码超限、解不出的码等），
         没有规则组（单独测试本模块）时用原配置 hit_mute_enabled / hit_notice_enabled。
+
+        规则组关掉「撤回」（action.recall = False）时只抄送到转发群提醒，消息留在群里，不发群内提示
+        （提示文字写的是「已撤回」）；禁言、踢人照规则组设置。只看传进来的 action：不传 action 的
+        （码黑名单、码超限、解不出的码、已拉黑的链接）总是撤回。处理结果里不出现「撤回」二字，
+        这样审核统计不会把它算成拦截；self._last_hit_notify 告诉调用方这次是「只提醒」。
         """
+        recall_on = not (action and action.get("recall", True) is False)
         if action is None and callable(getattr(self, "_rg_default_action", None)):
             try:
                 action = self._rg_default_action()
@@ -233,13 +239,17 @@ class KeywordGuardMixin:
             notice_on = bool(self._cfg("hit_notice_enabled", False, group_id=group_id))
             template = self._cfg_str("hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id)
         self._last_hit_reason = reason
+        self._last_hit_notify = not recall_on
         backed_up = await self._backup_message(
             event, group_id, user_id, user_name, reason, extra_text=extra_text,
             kind="keyword" if kind == "groupcard" else kind,   # 群名片命中归到「关键词命中」这一类转发
+            **({} if recall_on else {"notify_only": True}),
         )
-        msg_id = self._event_message_id(event)
-        recall_result = await self._recall_msg(event, msg_id) if msg_id else None
-        recalled = recall_result is True
+        recalled = False
+        if recall_on:
+            msg_id = self._event_message_id(event)
+            recall_result = await self._recall_msg(event, msg_id) if msg_id else None
+            recalled = recall_result is True
 
         # 规则组设了「命中后踢人」：只踢符合条件的人（见 _hg_kick_check），踢了就不用再禁言
         kicked, kick_note = "", ""
@@ -258,21 +268,27 @@ class KeywordGuardMixin:
             if muted and hasattr(self, "_schedule_unban"):
                 self._schedule_unban(group_id, user_id, duration)
 
-        parts = ["撤回" if recalled else "命中（撤回失败）"]
+        if recall_on:
+            parts = ["撤回" if recalled else "命中（撤回失败）"]
+        else:
+            parts = ["仅提醒"]
         if muted:
             parts.append("禁言")
         if kicked:
             parts.append(kicked)
         if backed_up:
-            parts.append("已备份")
+            parts.append("已备份" if recall_on else "已抄送")
+        elif not recall_on:
+            parts.append("没有抄送成功")   # 没有收这类内容的转发群，或发送失败
         if kick_note:
             reason = f"{reason}；{kick_note}"
         action = "+".join(parts)
         live_set("hit", action, reason)
         logger.info(f"[GroupMgr] {reason}: {user_name}({user_id}) in {group_id} -> {action}")
+        op = {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回", "miniapp": "小程序撤回",
+              "link": "链接撤回", "groupcard": "群名片撤回"}.get(kind, "关键词撤回")
         self._record_op(
-            {"wxcode": "葵花码撤回", "code_limit": "码发送超限撤回", "miniapp": "小程序撤回",
-             "link": "链接撤回", "groupcard": "群名片撤回"}.get(kind, "关键词撤回"),
+            op if recall_on else op[:-2] + "提醒",
             source="自动", group_id=group_id,
             target=user_id, reason=reason, result=action,
             detail=(f"{user_name}：" if user_name else "") + (text or "")[:200]
@@ -504,7 +520,8 @@ class KeywordGuardMixin:
                     )
                     log_rule = getattr(self, "_cs_log_rule", None)
                     if callable(log_rule) and texts:
-                        log_rule(group_id, user_id, user_name, texts, collected)
+                        log_rule(group_id, user_id, user_name, texts, collected,
+                                 outcome="notify" if getattr(self, "_last_hit_notify", False) else "rule")
                 elif texts and callable(getattr(self, "_cl_enforce", None)):
                     # 没命中规则：记录码；同一个码在时间窗口内发送次数超限也撤回（code_limit.py）
                     limited, notice = await self._cl_enforce(
@@ -515,7 +532,8 @@ class KeywordGuardMixin:
                 # 图片看板：撤回之后再在后台生成缩略图。没命中的留到 OCR 之后一起生成
                 if reason:
                     if callable(board_schedule) and collected:
-                        board_schedule(collected, group_id, user_id, user_name, text, reason)
+                        board_schedule(collected, group_id, user_id, user_name, text, reason,
+                                       **({"notify": True} if getattr(self, "_last_hit_notify", False) else {}))
                     return True, notice
                 board_pending = collected or None
             else:
@@ -535,7 +553,8 @@ class KeywordGuardMixin:
                     )
                     log_rule = getattr(self, "_cs_log_rule", None)
                     if callable(log_rule):
-                        log_rule(group_id, user_id, user_name, texts, None)
+                        log_rule(group_id, user_id, user_name, texts, None,
+                                 outcome="notify" if getattr(self, "_last_hit_notify", False) else "rule")
                     return True, notice
                 if texts and callable(getattr(self, "_cl_enforce", None)):
                     limited, notice = await self._cl_enforce(
@@ -572,7 +591,8 @@ class KeywordGuardMixin:
                 items = board_pending or [{"url": d["url"], "data": d.get("data"), "scan": None}
                                           for d in details if d.get("url")]
                 if items:
-                    board_schedule(items, group_id, user_id, user_name, text, reason, ocr=ocr)
+                    board_schedule(items, group_id, user_id, user_name, text, reason, ocr=ocr,
+                                   **({"notify": True} if rule and getattr(self, "_last_hit_notify", False) else {}))
             if rule:
                 return True, notice
         elif callable(board_schedule) and board_pending:

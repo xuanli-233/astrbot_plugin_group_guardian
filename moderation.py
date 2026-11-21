@@ -264,6 +264,7 @@ class ModerationMixin(ImageAuditMixin):
         hit_guards = getattr(self, "_run_hit_guards", None)
         if callable(hit_guards):
             self._last_hit_reason = ""
+            self._last_hit_notify = False   # 命中的规则组关掉了撤回：只抄送提醒（keyword_guard._execute_hit_action）
             lk_hit = next((i for i in lk_items if i.get("state") == "block"), None)
             # 群名片（分享别的群）：规则组的「群名片」规则（rule_groups._rg_match_card）
             gc_group, gc_rule = None, None
@@ -298,16 +299,18 @@ class ModerationMixin(ImageAuditMixin):
                                                        mp_items=mp_items)
             else:
                 handled, hit_notice = await hit_guards(event, group_id, user_id, user_name, text, image_urls)
+            # 记录里的结果：rule = 命中并撤回；notify = 命中但只抄送提醒（消息还在群里）；pass = 没命中
+            outcome = ("notify" if getattr(self, "_last_hit_notify", False) else "rule") if handled else "pass"
             if lk_items:
                 try:
-                    self._lk_record(group_id, user_id, user_name, lk_items, "rule" if handled else "pass",
+                    self._lk_record(group_id, user_id, user_name, lk_items, outcome,
                                     reason=getattr(self, "_last_hit_reason", "") if handled else "",
                                     text=lk_text)
                 except Exception as e:
                     logger.debug(f"[GroupMgr] 记录链接失败: {e}")
             if mp_items:
                 try:
-                    self._mp_record(group_id, user_id, user_name, mp_items, "rule" if handled else "pass",
+                    self._mp_record(group_id, user_id, user_name, mp_items, outcome,
                                     reason=getattr(self, "_last_hit_reason", "") if handled else "")
                 except Exception as e:
                     logger.debug(f"[GroupMgr] 记录小程序失败: {e}")

@@ -81,6 +81,7 @@ MINIMAL_CONFIG_KEYS = (
     "auto_accept_invite_wl_users", "auto_accept_invite_wl_groups", "auto_msg_mask_enabled", "auto_msg_mask_value",
     "bot_notify_join_enabled", "bot_notify_friend_enabled",
     "batch_interval_seconds", "batch_jitter_seconds", "batch_default_mode", "batch_notify_enabled", "blacklist_kick_on_join",
+    "blacklist_scan_members_enabled",
     "blacklist_native_block_enabled", "kick_enabled", "send_announcement_enabled", "set_group_name_enabled",
     "auto_moderate_enabled",
     "directory_group_ttl", "directory_member_ttl", "directory_min_interval_ms",
@@ -541,13 +542,16 @@ class MinimalWebMixin:
         started = _time.time()
         texts, note, info = await self._recognize_bytes("local_ocr", driver, image)
         elapsed = int((_time.time() - started) * 1000)
-        rule, _action = self._hg_ocr(texts)
+        rule, action = self._hg_ocr(texts)
         guard = bool(self._cfg("keyword_guard_enabled", True))
+        # 命中的规则组关掉了撤回：只抄送到转发群提醒
+        notify_only = bool(rule) and guard and bool(action) and action.get("recall", True) is False
         return jsonify({"status": "success", "data": {
             "driver": driver, "texts": texts, "note": note, "elapsed_ms": elapsed,
             "service_ms": info.get("ms"), "cached": bool(info.get("cached")),
             "failed": bool(info.get("failed")), "skipped": bool(info.get("skipped")),
-            "hit": rule or "", "guard_enabled": guard, "would_recall": bool(rule) and guard,
+            "hit": rule or "", "guard_enabled": guard, "would_recall": bool(rule) and guard and not notify_only,
+            "notify_only": notify_only, "rule_group": (action or {}).get("group", ""),
         }})
 
     # ------------------------------------------------------------------

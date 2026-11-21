@@ -39,7 +39,9 @@ CODE_STORE_TTL_MAX_HOURS = 8760
 CODE_LIMIT_TEXT_MAX = 300
 CODE_IMAGE_THUMB = 96
 DEFAULT_WARN = "[群管] {name}，同一个码 {hours} 小时内只能发 {max} 次，这条已撤回"
-OUTCOME_LABEL = {"pass": "放行", "limit": "超限撤回", "rule": "规则撤回", "allow": "白名单放行"}
+# notify：命中规则但规则组关掉了撤回，只抄送提醒（不计入撤回次数）
+OUTCOME_LABEL = {"pass": "放行", "limit": "超限撤回", "rule": "规则撤回", "notify": "规则提醒（未撤回）",
+                 "allow": "白名单放行"}
 
 
 def _compress_image(data: bytes, max_bytes: int) -> Tuple[bytes, str, Tuple[int, int]]:
@@ -315,14 +317,14 @@ class CodeLimitMixin:
         return self._cl_process(group_id, user_id, texts, now)[0]
 
     def _cs_log_rule(self, group_id: str, user_id: str, user_name: str, texts: List[str],
-                     collected: Optional[list] = None) -> None:
-        """命中码内容规则被撤回的消息：只做记录（不计次）。"""
+                     collected: Optional[list] = None, outcome: str = "rule") -> None:
+        """命中码内容规则的消息：只做记录（不计次）。outcome：rule 已撤回 / notify 只抄送提醒。"""
         if not self._cs_enabled(group_id):
             return
         allowed = getattr(self, "_code_allowed", None)
         codes = [(h, t) for h, t in self._cl_unique(texts) if not (callable(allowed) and allowed(t))]
         try:
-            rows = self._cl_record(group_id, user_id, codes, int(time.time()), "rule", user_name)
+            rows = self._cl_record(group_id, user_id, codes, int(time.time()), outcome, user_name)
         except Exception as e:
             logger.debug(f"[GroupMgr] 记录码失败: {e}")
             return

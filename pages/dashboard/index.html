@@ -433,6 +433,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
     .mn-row label{font-size:12px;color:var(--text-secondary)}
     .mn-hint{font-size:12px;color:var(--text-muted);line-height:1.6}
+    .dir-totals{display:flex;gap:28px;flex-wrap:wrap;margin:2px 0 10px}
+    .dir-totals div{display:flex;flex-direction:column}
+    .dir-totals b{font-size:22px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.3}
+    .dir-totals span{font-size:12px;color:var(--text-muted)}
+    .rg-notify-hint{margin:0 0 8px;padding:6px 10px;border-radius:6px;background:var(--warning-light);color:var(--text)}
     .mn-rule-list{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
     .mn-rule{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px}
     .mn-rule:last-child{border-bottom:none}
@@ -520,6 +525,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .mp-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
     .mp-item{display:flex;gap:8px;border:1px solid var(--border);border-radius:var(--radius);padding:8px;min-width:0;background:var(--surface)}
     .mp-item.rule{border-color:var(--danger);background:var(--danger-light)}
+    .mp-item.notify{border-color:var(--warning);background:var(--warning-light)}
     .mp-item img{width:56px;height:56px;object-fit:cover;border-radius:4px;flex-shrink:0;background:var(--bg)}
     .mp-item .noimg{width:56px;height:56px;border:1px dashed var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)}
     .mp-item .info{min-width:0;font-size:12px;display:flex;flex-direction:column;gap:2px}
@@ -653,6 +659,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .lv-badge.running{background:var(--primary-light);color:var(--primary)}
     .lv-badge.hit,.lv-badge.error{background:var(--danger-light);color:var(--danger)}
     .lv-badge.pass{background:var(--success-light);color:var(--success)}
+    .lv-badge.notify{background:var(--warning-light);color:var(--warning)}
     .lv-badge.skip{background:var(--info-light);color:var(--text-muted)}
     .lv-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:lvPulse 1s ease-in-out infinite}
     @keyframes lvPulse{50%{opacity:.25}}
@@ -716,6 +723,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
 .bs-card{border:1px solid var(--bs-border);border-radius:8px;padding:8px;display:flex;gap:8px;min-width:0;background:var(--bg);cursor:pointer}
 .bs-card:hover{border-color:var(--primary)}
 .bs-card.hit{border-color:var(--bs-bad);background:var(--danger-light)}
+.bs-card.notify{border-color:var(--warning);background:var(--warning-light)}.bs-card.notify .res{color:var(--warning)}
 .bs-card.new{animation:bsFlash 1.6s ease-out}
 @keyframes bsFlash{0%{box-shadow:0 0 0 3px var(--bs-pass)}100%{box-shadow:0 0 0 0 transparent}}
 .bs-card img{width:64px;height:64px;object-fit:contain;background:#fff;border-radius:4px;flex-shrink:0}
@@ -3517,6 +3525,7 @@ var MANUAL_SETTING_KEYS = {
   wxcode_allow_codes: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
+  blacklist_scan_members_enabled: true,
   blacklist_native_block_enabled: true,
   keyword_guard_enabled: true,
   keyword_rules: true,
@@ -4299,6 +4308,7 @@ var MN_SWITCHES = {
     { key: 'leave_auto_blacklist_enabled', label: '退群自动拉黑', desc: '一段时间内主动退群达到次数后加入插件黑名单，所有群通用（次数在下方设置）' },
     { key: 'blacklist_reject_join_enabled', label: '黑名单申请自动拒绝', desc: '黑名单用户的加群申请自动拒绝（不需要开入群审核）' },
     { key: 'blacklist_kick_on_join', label: '黑名单入群即踢', desc: '黑名单用户被邀请进群时立即踢出' },
+    { key: 'blacklist_scan_members_enabled', label: '踢出已在群里的黑名单用户', desc: '每次刷新群成员缓存后检查有没有黑名单用户并踢出，管住机器人后进的群（新建的群里早就在的人）；机器人进新群、被设为管理员时会马上检查一次' },
     { key: 'blacklist_native_block_enabled', label: '踢黑名单时 QQ 拉黑', desc: '踢出黑名单用户时勾选「拒绝此人再次加群」' }
   ],
   acceptSwitches: [
@@ -4565,11 +4575,13 @@ function rgAppBuild(r) {
   return cond ? (r.app || '*') + ' | ' + cond : r.app;
 }
 var RG_KICK_TEXT = { kick: '踢出本群', block: '踢出并拉黑' };
-function rgActionText(a) {
-  var parts = ['撤回'];
+// forceRecall：码黑名单等用默认组处理方式的命中总是撤回，不看默认组的「撤回」开关
+function rgActionText(a, forceRecall) {
+  var recall = forceRecall || a.recall !== false;
+  var parts = [recall ? '撤回' : '不撤回，只抄送提醒'];
   if (a.kick) parts.push((Number(a.kick_days) > 0 ? '入群 ' + a.kick_days + ' 天内' : '') + RG_KICK_TEXT[a.kick]);
   if (a.mute) parts.push((a.kick ? '否则' : '') + '禁言 ' + rgMinutesText(a.mute_minutes));
-  if (a.notice) parts.push('提示');
+  if (a.notice && recall) parts.push('提示');
   return parts.join(' + ');
 }
 // 「引流广告」预设：勤工俭学 / 兼职拉群这类广告的常见写法 + 分享别的群的名片；刚进群的直接踢出并拉黑
@@ -4582,7 +4594,7 @@ function rgPresetDraft() {
       { type: 'regex', value: '群里?一会.{0,4}满' }
     ],
     codes: [], apps: [], cards: { group_card: 'others', allow: '' },
-    action: { mute: true, mute_minutes: 10080, notice: false, notice_template: '', kick: 'block', kick_days: 7 } };
+    action: { recall: true, mute: true, mute_minutes: 10080, notice: false, notice_template: '', kick: 'block', kick_days: 7 } };
 }
 function rgMinutesText(m) { m = Number(m); return m % 1440 === 0 ? (m / 1440) + ' 天' : (m % 60 === 0 ? (m / 60) + ' 小时' : m + ' 分钟'); }
 function rgScopeText(g) {
@@ -4639,7 +4651,7 @@ function rgToDraft(g) {
     id: g.id, is_default: g.is_default, name: g.name, enabled: g.enabled, scope: (g.scope || []).slice(),
     keywords: g.keywords.map(mnRuleParse), codes: g.code_rules.map(rgCodeParse), apps: g.apps.map(rgAppParse),
     cards: { group_card: (g.cards || {}).group_card || '', allow: ((g.cards || {}).allow || []).join(' ') },
-    action: Object.assign({ mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 }, g.action)
+    action: Object.assign({ recall: true, mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 }, g.action)
   };
 }
 async function rgSelect(id, silent) {
@@ -4649,7 +4661,7 @@ async function rgSelect(id, silent) {
     RG.sel = 'new';
     RG.draft = id === 'preset' ? rgPresetDraft() : { id: 0, is_default: false, name: '', enabled: true, scope: [], keywords: [{ type: 'contains', value: '' }], codes: [], apps: [],
       cards: { group_card: '', allow: '' },
-      action: { mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 } };
+      action: { recall: true, mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 } };
     RG.dirty = true;
   } else {
     var g = RG.groups.filter(function(x) { return x.id === Number(id); })[0];
@@ -4685,7 +4697,7 @@ function rgRenderEditor() {
   var d = RG.draft, box = $('#rgEditor');
   if (!d) { box.innerHTML = '<div class="split-empty">在左边选一个规则组</div>'; return; }
   var others = rgOrdered().filter(function(g) { return !g.is_default; }), idx = others.map(function(g) { return g.id; }).indexOf(d.id);
-  var all = !d.scope.length, m = Number(d.action.mute_minutes) || 30;
+  var all = !d.scope.length, m = Number(d.action.mute_minutes) || 30, recall = d.action.recall !== false;
   var muteOpts = RG_MUTE_PRESETS.indexOf(m) >= 0 ? RG_MUTE_PRESETS : RG_MUTE_PRESETS.concat([m]).sort(function(a, b) { return a - b; });
   box.innerHTML =
     '<div class="card-header"><h2>' + (d.id ? '编辑：' + esc(d.name) : '新建规则组') + ' <span class="rg-dirty" id="rgDirtyMark"' + (RG.dirty ? '' : ' style="display:none"') + '>未保存</span></h2>' +
@@ -4711,17 +4723,20 @@ function rgRenderEditor() {
     '<input class="input-sm" style="flex:1;min-width:200px" data-rg-f="card_allow" value="' + escAttr(d.cards.allow) + '"' + (d.cards.group_card ? '' : ' disabled') + ' placeholder="另外允许分享的群号，空格分隔（可不填）" /></div>' +
     '<p class="mn-hint">正常成员很少往群里发别的群的名片，这是引流广告最明显的特征。分享机器人所在的群（你自己的其它群）不算。</p></div>' +
     '<div class="rg-sec"><h3>命中后</h3>' +
-    '<div class="mn-row"><span>撤回（总是）</span><label style="margin-left:8px">然后</label>' +
+    '<div class="mn-row"><label><input type="checkbox" data-rg-f="recall"' + (recall ? ' checked' : '') + ' /> 撤回消息</label><label style="margin-left:8px">然后</label>' +
     '<select class="input-sm" style="width:250px" data-rg-f="kick">' +
     [['', '不踢人'], ['kick', '踢出本群'], ['block', '踢出并拉黑（所有管理的群 + 黑名单）']].map(function(o) { return '<option value="' + o[0] + '"' + ((d.action.kick || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
     (d.action.kick ? '<span>只踢入群不满</span><input type="number" min="0" max="3650" class="input-sm" style="width:70px" data-rg-f="kick_days" value="' + escAttr(d.action.kick_days) + '" /><span>天的人</span><span class="mn-hint">0 = 不看入群时间</span>' : '') + '</div>' +
+    (recall ? '' : '<p class="mn-hint rg-notify-hint">不撤回：消息留在群里，只把它抄送到勾选了对应类别（关键词命中、二维码 / 葵花码命中、小程序命中）的转发群，标题写「命中提醒（未撤回）」，由管理员看情况处理。' +
+      '没有设置转发群，或「撤回前备份」关着时，就只记在违规记录和操作记录里。群内提示不会发（提示写的是「已撤回」）；下面的踢人、禁言照常。' +
+      (d.is_default ? '码黑名单、解不出的码、码发送超限、已拉黑的链接这些用默认组处理方式的命中仍然撤回。' : '') + '</p>') +
     (d.action.kick ? '<p class="mn-hint" style="margin:0 0 8px">' + (d.action.kick === 'block' ? '踢出并拉黑：加入插件黑名单，在本群踢出并勾选「拒绝再次加群」，再把他从其它管理的群里踢出。' : '') +
       '被踢后会触发「退群后处理」里开启的退群撤回、退群删文件、踢人后暂停加群。<b>不会踢</b>：群主、管理员、插件管理员、白名单用户；入群时间超过上面的天数或查不到入群时间的人——这些情况按下面的禁言处理。</p>' : '') +
     '<div class="mn-row"><span>' + (d.action.kick ? '没有踢的时候' : '') + '</span>' +
     '<label><input type="checkbox" data-rg-f="mute"' + (d.action.mute ? ' checked' : '') + ' /> 同时禁言</label>' +
     '<select class="input-sm" style="width:110px" data-rg-f="mute_minutes"' + (d.action.mute ? '' : ' disabled') + '>' + muteOpts.map(function(x) { return '<option value="' + x + '"' + (x === m ? ' selected' : '') + '>' + rgMinutesText(x) + '</option>'; }).join('') + '<option value="custom">自定义…</option></select></div>' +
-    '<div class="mn-row" style="margin:0"><label><input type="checkbox" data-rg-f="notice"' + (d.action.notice ? ' checked' : '') + ' /> 群内提示</label>' +
-    '<input class="input-sm" style="flex:1" maxlength="200" data-rg-f="notice_template" value="' + escAttr(d.action.notice_template) + '"' + (d.action.notice ? '' : ' disabled') + ' placeholder="留空用默认：[群管] {name} 的消息含违规内容，已撤回" /></div>' +
+    '<div class="mn-row" style="margin:0"><label' + (recall ? '' : ' title="不撤回时不发群内提示"') + '><input type="checkbox" data-rg-f="notice"' + (d.action.notice ? ' checked' : '') + (recall ? '' : ' disabled') + ' /> 群内提示</label>' +
+    '<input class="input-sm" style="flex:1" maxlength="200" data-rg-f="notice_template" value="' + escAttr(d.action.notice_template) + '"' + (d.action.notice && recall ? '' : ' disabled') + ' placeholder="留空用默认：[群管] {name} 的消息含违规内容，已撤回" /></div>' +
     '<p class="mn-hint">提示里可用 {name} 昵称、{uid} QQ号、{group} 群号；同一个人 60 秒内连续命中只禁言 / 提示一次。</p></div>' +
     '<div class="rg-sec"><h3>生效的群</h3><div class="mn-row"><label><input type="radio" name="rgScope" value="all"' + (all ? ' checked' : '') + ' /> 所有群</label><label><input type="radio" name="rgScope" value="some"' + (all ? '' : ' checked') + ' /> 只在勾选的群（' + d.scope.length + ' 个）</label></div>' +
     '<div id="rgScopeBox" style="' + (all ? 'display:none' : '') + '"><div class="gp-grid" id="rgScopeGroups" style="max-height:240px">' +
@@ -4744,6 +4759,7 @@ function rgField(path, el) {
     if (p[2] === 'type' || p[2] === 'ttype') rgRenderEditorKeep();
   } else if (path === 'name') d.name = v;
   else if (path === 'enabled') d.enabled = v;
+  else if (path === 'recall') { d.action.recall = v; rgRenderEditorKeep(); }
   else if (path === 'mute') { d.action.mute = v; rgRenderEditorKeep(); }
   else if (path === 'card_mode') { d.cards.group_card = v; rgRenderEditorKeep(); }
   else if (path === 'card_allow') d.cards.allow = v;
@@ -4870,7 +4886,7 @@ async function rgTest() {
   var line = function(label, r, filled) {
     if (!filled) return '';
     var g = r ? RG.groups.filter(function(x) { return x.name === r.group; })[0] : null;
-    return r ? '<div class="mn-result ok">' + label + '：命中「' + esc(r.group) + '」的规则「' + esc(r.rule) + '」，处理方式：' + esc(g ? rgActionText(g.action) : '撤回') + '</div>'
+    return r ? '<div class="mn-result ok">' + label + '：命中「' + esc(r.group) + '」的规则「' + esc(r.rule) + '」，处理方式：' + esc(g ? rgActionText(g.action, r.rule === '已拉黑的码') : '撤回') + '</div>'
       : '<div class="mn-result no">' + label + '：不会命中</div>';
   };
   out.innerHTML = line('消息文字', d.text, data.text.trim()) + line('码内容', d.code, data.code.trim()) +
@@ -4936,8 +4952,9 @@ function mnOcrTestFile() {
     }
     if (texts.length) lines.push(d.hit ? '命中规则：' + d.hit : '没有命中规则组里的关键词');
     if (d.hit && !d.guard_enabled) lines.push('「关键词撤回」现在是关着的，所以不会处理');
-    lines.push(d.would_recall ? '结论：群里发这张图会被撤回并转发' : '结论：群里发这张图会放行');
-    box.innerHTML = '<div class="mn-result ' + (d.failed || d.would_recall ? 'err' : 'ok') + '">' + esc(lines.join('\n')) + '</div>';
+    lines.push(d.notify_only ? '结论：命中「' + (d.rule_group || '') + '」，这个规则组设置了不撤回，群里发这张图不会撤回，只抄送到转发群提醒'
+      : d.would_recall ? '结论：群里发这张图会被撤回并转发' : '结论：群里发这张图会放行');
+    box.innerHTML = '<div class="mn-result ' + (d.failed || d.would_recall || d.notify_only ? 'err' : 'ok') + '">' + esc(lines.join('\n')) + '</div>';
   };
   reader.readAsDataURL(file);
 }
@@ -5237,7 +5254,7 @@ async function lkShowDetail(it) {
       '<td style="word-break:break-all">' + (r.msg_text ? lkMsgBox(r.msg_text) : '') +
       ((r.card_title || r.card_desc) ? '<div><span class="mn-chip">卡片</span> ' + esc([r.card_source, r.card_title, r.card_desc].filter(Boolean).join(' · ')) + '</div>' : '') +
       '<span class="mn-hint" style="font-family:monospace">' + esc(r.url) + (r.form === 'card' && !(r.card_title || r.card_desc) ? '（卡片）' : '') + '</span></td>' +
-      '<td style="white-space:nowrap' + (r.outcome === 'rule' ? ';color:var(--danger)' : '') + '" title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
+      '<td style="white-space:nowrap' + (r.outcome === 'rule' ? ';color:var(--danger)' : r.outcome === 'notify' ? ';color:var(--warning)' : '') + '" title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
   }).join('');
   var unread = (d.urls || []).filter(function(u) { return !u.title_state && u.state !== 'block'; }).length;
   var acts = (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-lkd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-lkd-act="allow">加白名单</button>') +
@@ -5425,7 +5442,7 @@ async function mpShowDetail(it) {
   var groups = (d.groups || []).map(function(g) { return '<span class="mn-chip">' + esc(mpGroupName(g.group_id)) + '：' + g.total + ' 次 / ' + g.users + ' 人</span>'; }).join('');
   var sends = (d.sends || []).slice(0, 50).map(function(r) {
     return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td style="white-space:nowrap">' + esc(mpGroupName(r.group_id)) + '</td><td style="white-space:nowrap">' + mbrLink(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') + '</td>' +
-      '<td>' + (r.form === 'link' ? '链接' : '卡片') + '</td><td' + (r.outcome === 'rule' ? ' style="color:var(--danger)"' : '') + ' title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
+      '<td>' + (r.form === 'link' ? '链接' : '卡片') + '</td><td' + (r.outcome === 'rule' ? ' style="color:var(--danger)"' : r.outcome === 'notify' ? ' style="color:var(--warning)"' : '') + ' title="' + escAttr(r.reason || '') + '">' + esc(r.outcome_label) + '</td></tr>';
   }).join('');
   var acts = (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-mpd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-mpd-act="allow">加白名单</button>') +
     (d.state === 'block' ? '<button class="btn btn-outline btn-sm" data-mpd-act="unblock">解除拉黑</button>' : '<button class="btn btn-danger btn-sm" data-mpd-act="block">整个拉黑</button>');
@@ -5497,13 +5514,13 @@ function mpRenderFeed(enabled) {
   if (!MP.feed.length) { $('#mpFeed').innerHTML = '<div class="mn-empty" style="grid-column:1/-1">' + (enabled ? '还没有记录。群里有人发小程序卡片或 #小程序:// 链接后会出现在这里。' : '小程序记录已关闭（上面「记录」里打开）。') + '</div>'; return; }
   $('#mpFeed').innerHTML = MP.feed.map(function(x) {
     var img = x.preview || x.icon;
-    var html = '<div class="mp-item' + (x.outcome === 'rule' ? ' rule' : '') + '" data-mpf="' + escAttr(x.id) + '" title="点击看这个小程序的详情" style="cursor:pointer' + (x._new ? ';animation:fadeIn .6s' : '') + '">' +
+    var html = '<div class="mp-item' + (x.outcome === 'rule' ? ' rule' : x.outcome === 'notify' ? ' notify' : '') + '" data-mpf="' + escAttr(x.id) + '" title="点击看这个小程序的详情" style="cursor:pointer' + (x._new ? ';animation:fadeIn .6s' : '') + '">' +
       (img ? '<img alt="预览" src="' + escAttr(img) + '" />' : '<span class="noimg">' + (x.form === 'link' ? '链接' : '卡片') + '</span>') +
       '<div class="info"><div class="t"><b>' + esc(x.name) + '</b></div>' +
       '<div class="t mn-hint">' + esc(mnTime(x.ts)) + ' · ' + esc((MP.names || {})[x.group_id] || mpGroupName(x.group_id)) + '</div>' +
       '<div class="t mn-hint">' + mbrLink(x.user_id, x.user_name ? x.user_name + '（' + x.user_id + '）' : x.user_id) + '</div>' +
       '<div class="c">' + esc((x.title ? x.title + ' ' : '') + x.content).slice(0, 120) + '</div>' +
-      '<div class="t"' + (x.outcome === 'rule' ? ' style="color:var(--danger)"' : '') + ' title="' + escAttr(x.reason || '') + '">' + esc(x.outcome_label) + (x.outcome === 'rule' && x.reason ? '：' + esc(x.reason) : '') + '</div></div></div>';
+      '<div class="t"' + (x.outcome === 'rule' ? ' style="color:var(--danger)"' : x.outcome === 'notify' ? ' style="color:var(--warning)"' : '') + ' title="' + escAttr(x.reason || '') + '">' + esc(x.outcome_label) + ((x.outcome === 'rule' || x.outcome === 'notify') && x.reason ? '：' + esc(x.reason) : '') + '</div></div></div>';
     x._new = false;
     return html;
   }).join('');
@@ -6283,12 +6300,12 @@ async function csShowDetail(it) {
   var people = {};
   var sends = (d.sends || []).map(function(r) {
     people[r.user_id] = true;
-    var bad = r.outcome === 'limit' || r.outcome === 'rule';
+    var bad = r.outcome === 'limit' || r.outcome === 'rule', warn = r.outcome === 'notify';
     return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td>' +
       '<td style="white-space:nowrap"><a href="javascript:void(0)" data-cs-group="' + escAttr(r.group_id) + '" title="只看这个群的码">' + esc(cuGroupName(r.group_id) || r.group_id) + '</a></td>' +
       '<td>' + mbrLink(r.user_id) + (r.user_name ? ' <span class="mn-hint">' + esc(r.user_name) + '</span>' : '') +
       (CS.sel.user_id ? '' : ' <a href="javascript:void(0)" class="mn-hint" data-csd-user="' + escAttr(r.user_id) + '" title="只看这个人发的">只看他</a>') + '</td>' +
-      '<td' + (bad ? ' style="color:var(--danger)"' : '') + '>' + esc(r.outcome_label) + '</td></tr>';
+      '<td' + (bad ? ' style="color:var(--danger)"' : warn ? ' style="color:var(--warning)"' : '') + '>' + esc(r.outcome_label) + '</td></tr>';
   }).join('');
   var acts = '<button class="btn btn-ghost btn-sm" data-csd-act="copy">复制</button>' +
     (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-csd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-csd-act="allow">加白名单</button>') +
@@ -7880,7 +7897,7 @@ async function bsPollFeed() {
 function bsRenderFeed() {
   var ff = ($('#bsFeedFilter') || {}).value || '';
   var all = BS.ids.slice().reverse().map(function(id) { return BS.map[id]; }).filter(function(e) {
-    return e && (e.codes || []).length && (!ff || (ff === 'hit' ? e.outcome === 'hit' : e.outcome !== 'hit'));
+    return e && (e.codes || []).length && (!ff || (ff === 'hit' ? e.outcome === 'hit' && !e.notify : e.outcome !== 'hit'));
   }).slice(0, 24);
   if (!all.length && ff) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">最近没有' + (ff === 'hit' ? '被撤回' : '放行') + '的码</div>'; BS.first = false; return; }
   if (!all.length) { $('#bsFeed').innerHTML = '<div class="bs-empty" style="grid-column:1/-1">还没有识别到码。图片看板需要开启（「实时日志 → 图片看板」设置）。</div>'; BS.first = false; return; }
@@ -7889,9 +7906,9 @@ function bsRenderFeed() {
     var isNew = !BS.first && !BS.seen[e.id];
     BS.seen[e.id] = true;
     var img = c.crop || e.orig;
-    var res = e.outcome === 'hit' ? ('已撤回' + (e.reason ? '：' + e.reason : '')) : '放行';
+    var res = e.outcome === 'hit' ? ((e.notify ? '仅提醒（未撤回）' : '已撤回') + (e.reason ? '：' + e.reason : '')) : '放行';
     var more = e.codes.length > 1 ? ' 等 ' + e.codes.length + ' 个码' : '';
-    return '<div class="bs-card' + (e.outcome === 'hit' ? ' hit' : '') + (isNew ? ' new' : '') + '"' + (c.decoded ? ' data-bs-card="' + escAttr(e.id) + '" title="点击看这个码的详情"' : '') + '>' +
+    return '<div class="bs-card' + (e.outcome === 'hit' ? (e.notify ? ' notify' : ' hit') : '') + (isNew ? ' new' : '') + '"' + (c.decoded ? ' data-bs-card="' + escAttr(e.id) + '" title="点击看这个码的详情"' : '') + '>' +
       (img ? '<img alt="码" src="' + escAttr(img) + '" />' : '') +
       '<div class="info"><div class="who">' + esc(liveTime(e.ts)) + ' · ' + esc(BS.names[e.group_id] || e.group_id) + '</div>' +
       '<div class="who">' + mbrLink(e.user_id, e.user_name ? e.user_name + '（' + e.user_id + '）' : e.user_id) + '</div>' +
@@ -8033,7 +8050,7 @@ function cbOcrHtml(e) {
 function cbCardHtml(e) {
   var gname = CB.names[e.group_id];
   var outcome = e.outcome === 'hit'
-    ? '<span class="lv-badge hit">命中处理</span>' : '<span class="lv-badge pass">放行</span>';
+    ? (e.notify ? '<span class="lv-badge notify" title="规则组设置了不撤回，只抄送到转发群提醒">仅提醒</span>' : '<span class="lv-badge hit">命中处理</span>') : '<span class="lv-badge pass">放行</span>';
   var head = '<span>' + esc(liveTime(e.ts)) + '</span><b>' + esc(gname || e.group_id) + '</b>' +
     '<span>' + mbrLink(e.user_id, e.user_name ? e.user_name + '（' + e.user_id + '）' : e.user_id) + '</span>' +
     (e.image_count > 1 ? '<span>图 ' + e.image_index + '/' + e.image_count + '</span>' : '') +
@@ -8302,16 +8319,31 @@ async function loadDirectory(fromPoll) {
   var d = mnData(res);
   var checked = {}; $$('#dirTable input[type=checkbox]:checked').forEach(function(cb) { checked[cb.value] = true; });
   var prog = d.refreshing;
-  $('#dirSummary').innerHTML = '群列表' + (d.groups_updated_at ? '更新于 ' + esc(mnTime(d.groups_updated_at)) + (d.groups_fresh ? '' : '（已过期）') : '尚未缓存') +
-    ' · 本次运行共调用列表接口 ' + d.api_calls + ' 次' + (prog ? ' · <strong>正在刷新：' + prog.done + ' / ' + prog.total + '</strong>' : '');
+  var st = d.stats || {}, gs = d.groups || [], fmt = function(n) { return Number(n || 0).toLocaleString(); };
+  var rh = Number(st.role_hits || 0), ra = Number(st.role_api || 0);
+  $('#dirSummary').innerHTML =
+    '<div class="dir-totals">' +
+      '<div><b>' + fmt(gs.length) + '</b><span>个群</span></div>' +
+      '<div title="各群人数相加（同一个人在几个群就算几次）。成员拉取过的群按实际成员数，没拉取过的按 QQ 群列表报的人数"><b>' + fmt(d.total_members) + '</b><span>群成员总数（各群相加）</span></div>' +
+      '<div title="已缓存的成员里去掉重复：同一个 QQ 号在多个群只算一次"><b>' + fmt(d.unique_members) + '</b><span>不同的人（已缓存，去重）</span></div>' +
+      '<div><b>' + fmt(d.cached_groups) + ' / ' + fmt(gs.length) + '</b><span>个群已缓存成员（' + fmt(d.cached_members) + ' 人）</span></div>' +
+    '</div>' +
+    '群列表' + (d.groups_updated_at ? '更新于 ' + esc(mnTime(d.groups_updated_at)) + (d.groups_fresh ? '' : '（已过期）') : '尚未缓存') +
+    ' · 本次运行调用列表接口 ' + fmt(d.api_calls) + ' 次' +
+    ' · 查成员身份：用缓存 ' + fmt(rh) + ' 次，调接口 ' + fmt(ra) + ' 次' +
+    (st.learned ? ' · 从消息 / 查询补进缓存 ' + fmt(st.learned) + ' 次' : '') +
+    (prog ? ' · <strong>正在刷新：' + prog.done + ' / ' + prog.total + '</strong>' : '') +
+    '<br>成员身份（群主 / 管理员）有通知实时更新，缓存过期后 ' + Math.round((d.role_trust_seconds || 86400) / 3600) + ' 小时内仍直接使用；群消息里自带的发送者身份、群名片也会顺带更新缓存。';
   var roles = { owner: '群主', admin: '管理员', member: '普通成员', '': '未知' };
-  $('#dirTable').innerHTML = (d.groups || []).length ? '<table class="mn-table"><thead><tr><th></th><th>群</th><th>机器人身份</th><th>已缓存成员</th><th>成员更新时间</th></tr></thead><tbody>' +
+  $('#dirTable').innerHTML = (d.groups || []).length ? '<table class="mn-table"><thead><tr><th></th><th>群</th><th>机器人身份</th><th style="text-align:right">群人数</th><th>已缓存成员</th><th>成员更新时间</th></tr></thead><tbody>' +
     d.groups.map(function(g) {
+      var cnt = Number(g.member_count || 0), cached = Number(g.members_cached || 0);
       return '<tr data-gsearch="' + escAttr(mnGroupSearchKey(g.group_id, g.group_name)) + '"><td><input type="checkbox" value="' + escAttr(g.group_id) + '"' + (checked[g.group_id] ? ' checked' : '') + ' /></td>' +
         '<td>' + mnGroupCell(g.group_id, g.group_name) + '</td><td>' + esc(roles[g.bot_role] || g.bot_role) + '</td>' +
-        '<td>' + (g.members_cached ? g.members_cached + ' 人' : '<span class="mn-hint">未缓存</span>') + '</td>' +
+        '<td style="text-align:right;font-variant-numeric:tabular-nums">' + (cnt ? fmt(cnt) + ' 人' : '<span class="mn-hint">—</span>') + '</td>' +
+        '<td>' + (cached ? fmt(cached) + ' 人' + (cnt && cached < cnt ? ' <span class="mn-hint" title="QQ 报的群人数比缓存多：可能有人刚进群，刷新这个群可补齐">（少 ' + fmt(cnt - cached) + '）</span>' : '') : '<span class="mn-hint">未缓存</span>') + '</td>' +
         '<td>' + (g.members_updated_at ? esc(mnTime(g.members_updated_at)) + (g.members_fresh ? '' : ' <span style="color:var(--warning)">（已过期）</span>') : '<span class="mn-hint">—</span>') + '</td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="empty">还没有缓存群列表，点「只刷新群列表」开始</p>';
+    }).join('') + '</tbody><tfoot><tr><td></td><td><b>合计</b></td><td></td><td style="text-align:right;font-variant-numeric:tabular-nums"><b>' + fmt(d.total_members) + ' 人</b></td><td><b>' + fmt(d.cached_members) + ' 人</b> <span class="mn-hint">去重后 ' + fmt(d.unique_members) + ' 人</span></td><td></td></tr></tfoot></table>' : '<p class="empty">还没有缓存群列表，点「只刷新群列表」开始</p>';
   mnGroupFilter('#dirTable');
   clearTimeout(DIR_POLL);
   if (prog && $('#tab-directory').classList.contains('active')) DIR_POLL = setTimeout(function() { loadDirectory(true); }, 2000);

@@ -79,10 +79,11 @@ class MessageBackupMixin:
     # ------------------------------------------------------------------
     async def _backup_message(self, event: AstrMessageEvent, group_id: str, user_id: str,
                               user_name: str, reason: str, extra_text: str = "",
-                              kind: str = "keyword") -> bool:
+                              kind: str = "keyword", notify_only: bool = False) -> bool:
         """把违规消息备份到收 kind 这类内容的所有群。必须在撤回之前调用。返回是否至少发成功一个群。
 
         kind：keyword / wxcode / code_limit / miniapp（见 backup_routes.BACKUP_KINDS）。
+        notify_only：规则组关掉了撤回，这次只是抄送提醒（标题写明「未撤回」，消息还在群里）。
         """
         if not self._cfg("backup_enabled", True):
             return False
@@ -92,7 +93,10 @@ class MessageBackupMixin:
         client = await self._get_client(event)
         if not client:
             return False
-        label = "葵花码命中转发" if kind == "wxcode" else "违规消息备份"
+        if notify_only:
+            label = ("葵花码" if kind == "wxcode" else "违规消息") + "命中提醒（未撤回）"
+        else:
+            label = "葵花码命中转发" if kind == "wxcode" else "违规消息备份"
         header = self._backup_header(group_id, user_id, user_name, reason, extra_text, label)
         bot_uin = await self._get_bot_uin(client) if hasattr(self, "_get_bot_uin") else 0
         header_node = {"type": "node", "data": {

@@ -7,13 +7,15 @@
   code_rules 码内容正则（与原 wxcode_regex_rules 相同），匹配解出的二维码 / 葵花码内容
   apps       小程序：一行一个，写 appid（wx 开头）或小程序名（包含即命中），卡片和 #小程序:// 链接都算；
              「小程序 | 标题条件」只拦这个小程序里标题符合条件的，「* | 标题条件」对任何小程序都按标题拦
-  action     命中后：撤回（总是）+ 可选禁言 mute_minutes 分钟 + 可选群内提示（模板为空用全局模板）
+  action     命中后：撤回（recall，默认开；关掉 = 只抄送到转发群提醒，消息留在群里）+ 可选禁言 mute_minutes 分钟
+             + 可选群内提示（模板为空用全局模板；不撤回时不发）
   scope      生效的群（空 = 所有群）
 多个组按 sort 从小到大依次检查，第一个命中的组决定处理方式。
 
 默认组（is_default=1）不能删除：第一次启动时由原配置 keyword_rules、wxcode_regex_rules、hit_mute_enabled、
 moderation_ban_duration、hit_notice_enabled、hit_notice_template 迁移生成，升级后行为不变。
-码黑名单（码管理里「拉黑」的码）、解不出的码按「撤回」处理、码发送超限这些不属于任何组的撤回，用默认组的处理方式。
+码黑名单（码管理里「拉黑」的码）、解不出的码按「撤回」处理、码发送超限这些不属于任何组的撤回，用默认组的处理方式
+（禁言、提示、踢人），但总是撤回：默认组的「撤回」开关只管它自己的规则。
 迁移之后 keyword_rules / wxcode_regex_rules 不再参与匹配（保留在配置里，不删除）。
 """
 import json
@@ -84,6 +86,7 @@ class RuleGroupMixin:
         except (TypeError, ValueError):
             seconds = 1800
         action = {
+            "recall": True,
             "mute": bool(cfg.get("hit_mute_enabled", False)),
             "mute_minutes": max(1, min(43200, (seconds + 59) // 60)),
             "notice": bool(cfg.get("hit_notice_enabled", False)),
@@ -123,6 +126,8 @@ class RuleGroupMixin:
                 "allow": [str(x) for x in (cards.get("allow") or []) if str(x).isdigit()],
             },
             "action": {
+                # recall：命中后撤回（默认开，老数据没有这个字段 = 撤回）；关掉 = 只抄送到转发群提醒
+                "recall": bool(action.get("recall", True)),
                 "mute": bool(action.get("mute", False)),
                 "mute_minutes": int(action.get("mute_minutes", 30) or 30),
                 "notice": bool(action.get("notice", False)),
@@ -381,7 +386,8 @@ class RuleGroupMixin:
             "name": name, "enabled": bool(data.get("enabled", True)), "scope": sorted(set(scope)),
             "keywords": keywords, "code_rules": code_rules, "apps": apps,
             "cards": {"group_card": card_mode, "allow": allow},
-            "action": {"mute": bool(action.get("mute", False)), "mute_minutes": minutes,
+            "action": {"recall": bool(action.get("recall", True)),
+                       "mute": bool(action.get("mute", False)), "mute_minutes": minutes,
                        "notice": bool(action.get("notice", False)),
                        "notice_template": str(action.get("notice_template", "") or "").strip()[:RG_TEMPLATE_MAX],
                        "kick": kick, "kick_days": kick_days},
@@ -494,7 +500,8 @@ class RuleGroupMixin:
             detail = (f"{group['name']}：关键词 {len(group['keywords'])} 条、码规则 {len(group['code_rules'])} 条、"
                       f"小程序 {len(group['apps'])} 个"
                       + (f"、群名片（{RG_CARD_MODES[group['cards']['group_card']]}）" if group["cards"]["group_card"] else "")
-                      + "；" + ("禁言 %d 分钟" % a["mute_minutes"] if a["mute"] else "不禁言")
+                      + "；" + ("撤回、" if a.get("recall", True) else "不撤回（只抄送提醒）、")
+                      + ("禁言 %d 分钟" % a["mute_minutes"] if a["mute"] else "不禁言")
                       + ("、群内提示" if a["notice"] else "")
                       + (f"、{RG_KICK_MODES[a['kick']]}"
                          + (f"（入群不满 {a['kick_days']} 天）" if a["kick_days"] else "（不看入群时间）") if a["kick"] else ""))

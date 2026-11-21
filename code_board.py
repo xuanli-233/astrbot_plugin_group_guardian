@@ -220,9 +220,10 @@ class CodeBoardMixin:
     # 生成卡片（撤回之后在后台执行）
     # ------------------------------------------------------------------
     def _cb_schedule(self, collected: List[dict], group_id: str, user_id: str, user_name: str,
-                     text: str, reason: str, ocr: Optional[Dict[str, dict]] = None) -> None:
+                     text: str, reason: str, ocr: Optional[Dict[str, dict]] = None, notify: bool = False) -> None:
         """collected：[{url, data, scan}]（scan 为 None = 这张图没做码识别）；
-        ocr：{图片地址: {texts, note, cached, ms}}，做过 OCR 时传。"""
+        ocr：{图片地址: {texts, note, cached, ms}}，做过 OCR 时传；
+        notify：命中了，但规则组关掉了撤回，只抄送提醒（卡片上显示「仅提醒」）。"""
         if not collected or not self._cfg("code_board_enabled", True):
             return
         tasks = getattr(self, "_cb_tasks", None)
@@ -231,7 +232,7 @@ class CodeBoardMixin:
 
         async def run():
             try:
-                await self._cb_build(collected, group_id, user_id, user_name, text, reason, ocr=ocr)
+                await self._cb_build(collected, group_id, user_id, user_name, text, reason, ocr=ocr, notify=notify)
             except Exception as e:
                 logger.debug(f"[GroupMgr] 生成二维码看板卡片失败: {e}")
 
@@ -286,7 +287,8 @@ class CodeBoardMixin:
                 "cached": bool(detail.get("cached")), "ms": ms if isinstance(ms, (int, float)) else None}
 
     async def _cb_build(self, collected: List[dict], group_id: str, user_id: str, user_name: str,
-                        text: str, reason: str, ocr: Optional[Dict[str, dict]] = None) -> List[dict]:
+                        text: str, reason: str, ocr: Optional[Dict[str, dict]] = None,
+                        notify: bool = False) -> List[dict]:
         preview = ""
         if self._cfg("live_log_show_text", True):
             preview = str(text or "").replace("\n", " ").strip()
@@ -328,7 +330,7 @@ class CodeBoardMixin:
                 "error": scan.get("error", "") or ("" if (data or not code_scanned) else "图片下载失败"),
                 "cached": bool(scan.get("cached")), "stopped_early": bool(scan.get("stopped_early")),
                 "over_limit": int(scan.get("over_limit") or 0),
-                "outcome": "hit" if reason else "pass", "reason": reason or "",
+                "outcome": "hit" if reason else "pass", "reason": reason or "", "notify": bool(reason and notify),
             }
             self._cb_add(entry)
             entries.append(entry)
