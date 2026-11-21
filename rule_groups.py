@@ -599,9 +599,13 @@ class RuleGroupMixin:
         g, rule = self._rg_match_text(text, group_id)
         out["text"] = {"group": g["name"], "rule": rule} if g else None
         g, rule = self._rg_match_code(code.strip(), group_id) if code.strip() else (None, None)
+        link = getattr(self, "_hg_code_link", lambda _t, _g="": None)(code.strip(), group_id) if code.strip() else None
         if not g and code.strip() and code.strip() in getattr(self, "_code_list_set", lambda _k: set())("block"):
             d = self._rg_default()
             out["code"] = {"group": d["name"] if d else "", "rule": "已拉黑的码"}
+        elif link:   # 码里的链接在链接黑名单里：先于规则组（与群里实际处理一致）
+            d = self._rg_default()
+            out["code"] = {"group": d["name"] if d else "", "rule": link}
         else:
             out["code"] = {"group": g["name"], "rule": rule} if g else None
         lookup = getattr(self, "_mp_lookup", None)  # 填 appid 也能对上按名字写的条目（反之亦然）

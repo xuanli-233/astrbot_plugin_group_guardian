@@ -20,6 +20,8 @@
   block_url     特定链接：去掉协议、www、# 后面的部分和末尾的 / 以后完全相同才撤回；以 * 结尾时按开头匹配
   allow_domain  白名单域名：不按上面两项撤回（关键词规则照常）
 命中后按默认规则组的处理方式撤回（keyword_guard._execute_hit_action，类别 link）。
+二维码 / 葵花码解出的内容里的链接同样对照这三个名单（keyword_guard._hg_code_link，在码黑名单之后、规则组之前），
+命中按「链接命中」撤回；这些链接也记进 lk_sends（form = qrcode），没命中的同样记录。
 
 读取标题（link_title_mode）：off 不读 / manual 只在页面上点「读取标题」时读（默认）/ auto 新链接第一次出现时后台读一次。
 读标题就是由 AstrBot 所在的服务器去访问一次这个网页，所以：

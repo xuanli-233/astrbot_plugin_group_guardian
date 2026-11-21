@@ -492,6 +492,8 @@ class MinimalWebMixin:
         hits = self._match_all_rules("\n".join(texts), "wxcode_regex_rules", regex_only=True) if texts else []
         if any(t.strip() in self._code_block_set() for t in texts):
             hits = ["已拉黑的码"] + hits
+        link_hits = [h for h in (self._hg_code_link(t) for t in texts) if h]
+        hits = link_hits[:3] + hits
         undecoded = self._code_undecoded([scan])
         would_recall = bool(hits) or (bool(undecoded) and self._cfg_str("code_undecoded_action", "pass") == "recall")
         return jsonify({"status": "success", "data": {

@@ -420,8 +420,52 @@ class KeywordGuardMixin:
             rule, action = self._hg_text("".join(lines), group_id)
         return rule, action
 
+    QR_LINK_PREFIX = "二维码里的链接已拉黑: "
+
+    def _hg_code_links(self, text: str, group_id: str = "") -> List[dict]:
+        """码内容里的链接（link_guard.extract_urls，带链接黑名单 / 白名单状态）。链接管理关着时为空。"""
+        lk = getattr(self, "_lk_items", None)
+        if not callable(lk) or not text or not self._cfg("link_guard_enabled", True, group_id=group_id):
+            return []
+        try:
+            return lk(text)
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 识别码内容里的链接失败: {e}")
+            return []
+
+    def _hg_code_link(self, text: str, group_id: str = "") -> Optional[str]:
+        """码内容里有已拉黑的域名 / 链接 → 命中说明，否则 None。"""
+        hit = next((i for i in self._hg_code_links(text, group_id) if i.get("state") == "block"), None)
+        return f"{self.QR_LINK_PREFIX}{hit['url'][:120]}（名单 {hit['entry']}）" if hit else None
+
+    def _hg_code_reason(self, rule: str, prefix: str) -> Tuple[str, str]:
+        """码命中说明 → (撤回原因, 类别)。码里的链接命中链接黑名单算「链接命中」（转发群按链接命中这一类发）。"""
+        if str(rule).startswith(self.QR_LINK_PREFIX):
+            return rule, "link"
+        return f"{prefix}{rule}", "wxcode"
+
+    def _hg_record_qr_links(self, group_id: str, user_id: str, user_name: str, texts: List[str],
+                            outcome: str, reason: str = "") -> None:
+        """二维码里的链接记进链接管理（形式「二维码」），和消息文字里的链接一起统计。"""
+        record = getattr(self, "_lk_record", None)
+        if not callable(record) or not texts:
+            return
+        try:
+            items, seen = [], set()
+            for t in texts:
+                for it in self._hg_code_links(t, group_id):
+                    if it["key"] not in seen and len(items) < 10:
+                        seen.add(it["key"])
+                        it["form"] = "qrcode"
+                        it["_text"] = t
+                        items.append(it)
+            for it in items:
+                record(group_id, user_id, user_name, [it], outcome, reason=reason, text=it.pop("_text"))
+        except Exception as e:
+            logger.debug(f"[GroupMgr] 记录二维码里的链接失败: {e}")
+
     def _hg_code(self, text: str, group_id: str = "") -> Tuple[Optional[str], Optional[dict]]:
-        """一个码的内容 → (命中说明, 处理方式)。白名单放行；已拉黑的码用默认组的处理方式（None）。"""
+        """一个码的内容 → (命中说明, 处理方式)。白名单放行；已拉黑的码、码里有已拉黑的链接用默认组的处理方式（None）。"""
         t = str(text or "").strip()
         allowed = getattr(self, "_code_allowed", None)
         if not t or (callable(allowed) and allowed(t)):
@@ -429,6 +473,9 @@ class KeywordGuardMixin:
         blocked = getattr(self, "_code_list_set", None)   # 只看全局码黑名单（=默认组）；拉黑到其它组的在规则组里匹配
         if callable(blocked) and t in blocked("block"):
             return "已拉黑的码", None
+        link = self._hg_code_link(t, group_id)
+        if link:
+            return link, None
         if self._hg_rule_groups():
             group, rule = self._rg_match_code(t, group_id)
             return rule, self._rg_action(group)
@@ -509,7 +556,7 @@ class KeywordGuardMixin:
                 if callable(live_lines):
                     live_detail(live_lines(scans, hit_rule=hit_rule))
                 rule, code_action = self._hg_first_code(texts, joined, group_id)
-                reason = f"码内容规则: {rule}" if rule else ""
+                reason, hit_kind = self._hg_code_reason(rule, "码内容规则: ") if rule else ("", "wxcode")
                 if not rule and self._code_undecoded(scans) and \
                         self._cfg_str("code_undecoded_action", "pass", group_id=group_id) == "recall":
                     labels = "、".join(sorted({c["label"] for c in self._code_undecoded(scans)}))
@@ -518,7 +565,7 @@ class KeywordGuardMixin:
                 if reason:
                     notice = await self._execute_hit_action(
                         event, group_id, user_id, user_name, text or "[图片]", reason,
-                        kind="wxcode", extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
+                        kind=hit_kind, extra_text=f"识别结果：\n{summary}", image_urls=image_urls,
                         action=code_action,
                     )
                     log_rule = getattr(self, "_cs_log_rule", None)
@@ -532,6 +579,11 @@ class KeywordGuardMixin:
                         collected=collected)
                     if limited:
                         reason = "同一个码发送次数超限"
+                if texts:
+                    self._hg_record_qr_links(
+                        group_id, user_id, user_name, texts,
+                        ("notify" if getattr(self, "_last_hit_notify", False) else "rule") if reason else "pass",
+                        reason=getattr(self, "_last_hit_reason", "") if reason else "")
                 # 图片看板：撤回之后再在后台生成缩略图。没命中的留到 OCR 之后一起生成
                 if reason:
                     if callable(board_schedule) and collected:
@@ -549,21 +601,28 @@ class KeywordGuardMixin:
                 live_detail([f"码内容：{t}" + (f" ← 命中规则 {r}" if r else "") for t, r in per_text]
                             or ["识别模块未返回码内容"])
                 if rule:
+                    reason, hit_kind = self._hg_code_reason(rule, "葵花码规则: ")
                     notice = await self._execute_hit_action(
-                        event, group_id, user_id, user_name, text or "[图片]", f"葵花码规则: {rule}",
-                        kind="wxcode", extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
+                        event, group_id, user_id, user_name, text or "[图片]", reason,
+                        kind=hit_kind, extra_text=f"识别内容：\n{joined}", image_urls=image_urls,
                         action=code_action,
                     )
+                    self._hg_record_qr_links(group_id, user_id, user_name, texts,
+                                             "notify" if getattr(self, "_last_hit_notify", False) else "rule",
+                                             reason=getattr(self, "_last_hit_reason", ""))
                     log_rule = getattr(self, "_cs_log_rule", None)
                     if callable(log_rule):
                         log_rule(group_id, user_id, user_name, texts, None,
                                  outcome="notify" if getattr(self, "_last_hit_notify", False) else "rule")
                     return True, notice
+                limited = False
                 if texts and callable(getattr(self, "_cl_enforce", None)):
                     limited, notice = await self._cl_enforce(
                         event, group_id, user_id, user_name, text, texts, image_urls, summary=joined)
-                    if limited:
-                        return True, notice
+                self._hg_record_qr_links(group_id, user_id, user_name, texts, "rule" if limited else "pass",
+                                         reason=getattr(self, "_last_hit_reason", "") if limited else "")
+                if limited:
+                    return True, notice
 
         if self._cfg("keyword_guard_enabled", True, group_id=group_id) and \
                 self._cfg_str("local_ocr_driver", "off", group_id=group_id) != "off":
