@@ -753,6 +753,7 @@ class WebMixin:
                 ("/minimal/member/search", self._web_minimal_member_search, ["GET"], "群成员查找"),
                 ("/minimal/member/profile", self._web_minimal_member_profile, ["GET"], "群成员档案"),
                 ("/minimal/codes/lists", self._web_minimal_codes_lists, ["GET"], "码白名单 / 黑名单"),
+                ("/minimal/rulegroups/choices", self._web_minimal_rule_group_choices, ["GET"], "快捷拉黑可选的规则组"),
                 ("/minimal/codes/list", self._web_minimal_codes_list_set, ["POST"], "码加入 / 移出白名单或黑名单"),
                 ("/minimal/leavelog/image", self._web_minimal_leavelog_image, ["GET"], "退群记录里的图片"),
                 ("/minimal/leavelog/user", self._web_minimal_leavelog_user, ["GET"], "某人的退群汇总"),

@@ -32,10 +32,16 @@ class MessageBackupMixin:
     # ------------------------------------------------------------------
     # 目标群
     # ------------------------------------------------------------------
-    def _backup_targets(self, kind: str, source_group="") -> List[int]:
-        """收 kind 这类内容的群号（backup_routes.py），去掉来源群本身。"""
+    def _backup_targets(self, kind: str, source_group="", rule_group=None) -> List[int]:
+        """收 kind 这类内容的群号（backup_routes.py），去掉来源群本身。rule_group：命中的规则组 id，
+        只订阅了部分规则组的转发群按它筛选（None = 不属于规则组）。"""
         getter = getattr(self, "_br_targets", None)
-        groups = getter(kind) if callable(getter) else []
+        if not callable(getter):
+            groups = []
+        elif rule_group is None:
+            groups = getter(kind)
+        else:
+            groups = getter(kind, rule_group)
         out: List[int] = []
         for gid in groups:
             target = self._safe_int(gid, 0)
@@ -79,15 +85,16 @@ class MessageBackupMixin:
     # ------------------------------------------------------------------
     async def _backup_message(self, event: AstrMessageEvent, group_id: str, user_id: str,
                               user_name: str, reason: str, extra_text: str = "",
-                              kind: str = "keyword", notify_only: bool = False) -> bool:
+                              kind: str = "keyword", notify_only: bool = False, rule_group=None) -> bool:
         """把违规消息备份到收 kind 这类内容的所有群。必须在撤回之前调用。返回是否至少发成功一个群。
 
         kind：keyword / wxcode / code_limit / miniapp（见 backup_routes.BACKUP_KINDS）。
         notify_only：规则组关掉了撤回，这次只是抄送提醒（标题写明「未撤回」，消息还在群里）。
+        rule_group：命中的规则组 id，转发群可以只订阅部分规则组。
         """
         if not self._cfg("backup_enabled", True):
             return False
-        targets = self._backup_targets(kind, group_id)
+        targets = self._backup_targets(kind, group_id, rule_group)
         if not targets:
             return False
         client = await self._get_client(event)

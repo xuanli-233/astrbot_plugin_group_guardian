@@ -118,7 +118,32 @@ class CodeBoardMixin:
         return self._code_list("block")
 
     def _code_block_set(self) -> set:
-        return self._code_list_set("block")
+        """所有已拉黑的码：全局码黑名单（默认组）+ 拉黑到其它规则组的。用来标注状态；匹配见 _hg_code。"""
+        base = self._code_list_set("block")
+        lister = getattr(self, "_rg_list", None)
+        active = getattr(self, "_rg_active", None)
+        if not callable(lister) or not (callable(active) and active()):
+            return base
+        try:
+            extra = [g["_codes"] for g in lister() if g.get("_codes")]
+        except Exception:
+            return base
+        return base.union(*extra) if extra else base
+
+    def _code_block_entries(self) -> List[dict]:
+        """已拉黑的码和它属于哪个规则组：[{text, group_id, group}]（全局码黑名单算默认组）。"""
+        default = None
+        rows = []
+        active = getattr(self, "_rg_active", None)
+        groups = self._rg_list() if callable(active) and active() else []
+        for g in groups:
+            if g["is_default"]:
+                default = g
+            else:
+                rows += [{"text": t, "group_id": g["id"], "group": g["name"], "enabled": g["enabled"]} for t in g["codes"]]
+        head = [{"text": t, "group_id": default["id"] if default else 0, "group": default["name"] if default else "默认组",
+                 "enabled": True} for t in self._code_block_list()]
+        return head + rows
 
     def _code_allow_list(self) -> List[str]:
         return self._code_list("allow")
@@ -133,21 +158,56 @@ class CodeBoardMixin:
         t = str(text or "").strip()
         if not t or self._code_allowed(t):
             return None
-        if t in self._code_block_set():
+        if t in self._code_list_set("block"):
             return "已拉黑的码"
         hg_code = getattr(self, "_hg_code", None)
         if callable(hg_code):  # 规则组（rule_groups.py）
             return hg_code(t)[0]
         return self._match_rules(t, "wxcode_regex_rules", regex_only=True)
 
-    def _code_set_in_list(self, kind: str, text: str, on: bool, source: str = "WebUI", operator: str = "") -> str:
-        """把一段码内容加入 / 移出黑名单或白名单。返回错误说明，成功返回空串。"""
+    def _code_set_in_list(self, kind: str, text: str, on: bool, source: str = "WebUI", operator: str = "",
+                          rule_group=0) -> str:
+        """把一段码内容加入 / 移出黑名单或白名单。返回错误说明，成功返回空串。
+
+        rule_group：拉黑到哪个规则组（空 / 默认组 = 全局码黑名单，按默认组处理）；选了别的组就存到那个组，
+        按那个组的处理方式和生效范围。一个码只在一个地方：拉黑到某组时从码黑名单和其它组移走，
+        解除拉黑 / 加白名单时从所有组移走。
+        """
         t = str(text or "").strip()
         if not t:
             return "码内容为空"
         if len(t) > CB_TEXT_MAX:
             return f"码内容过长（超过 {CB_TEXT_MAX} 字）"
         key, op_on, op_off, label = self._CODE_LISTS[kind]
+        target = None
+        if kind == "block" and on and rule_group:
+            getter = getattr(self, "_rg_get", None)
+            target = getter(rule_group) if callable(getter) else None
+            if target is None:
+                return "规则组不存在（可能已被删除）"
+            if target["is_default"]:
+                target = None
+        has_rg = callable(getattr(self, "_rg_strip_code", None))
+        moved = []
+        if target is not None:
+            # 拉黑到非默认组：组里加上，码黑名单 / 白名单 / 其它组里去掉
+            err = self._rg_add_code(target["id"], t, CB_BLOCK_MAX)
+            if err:
+                return err
+            moved = self._rg_strip_code(t, keep_gid=target["id"])
+            changed = {}
+            for k in ("block", "allow"):
+                items_k = self._code_list(k)
+                if t in items_k:
+                    changed[self._CODE_LISTS[k][0]] = [x for x in items_k if x != t]
+            if changed and not self._code_save_lists(changed, label):
+                return "保存失败"
+            self._record_op(op_on, source=source, operator=operator,
+                            detail=f"{t[:300]}（规则组：{target['name']}）")
+            return ""
+        if has_rg and not (kind == "allow" and not on):
+            # 拉黑到默认组 / 加白名单 / 解除拉黑：规则组里的同一个码都去掉
+            moved = self._rg_strip_code(t)
         items = self._code_list(kind)
         changed = {}
         if on:
@@ -161,20 +221,26 @@ class CodeBoardMixin:
                 changed[self._CODE_LISTS[other][0]] = [x for x in other_items if x != t]
         elif t in items:
             changed[key] = [x for x in items if x != t]
-        if not changed:
+        if not changed and not moved:
             return ""
+        if changed and not self._code_save_lists(changed, label):
+            return "保存失败"
+        self._record_op(op_on if on else op_off, source=source, operator=operator,
+                        detail=t[:300] + (f"（从规则组 {'、'.join(moved)} 移除）" if moved else ""))
+        return ""
+
+    def _code_save_lists(self, changed: dict, label: str) -> bool:
         for k, v in changed.items():
             self.config[k] = v
         try:
             self.config.save_config()
         except Exception as e:
             logger.warning(f"[GroupMgr] 保存{label}失败: {e}")
-            return f"保存失败：{e}"
-        self._record_op(op_on if on else op_off, source=source, operator=operator, detail=t[:300])
-        return ""
+            return False
+        return True
 
-    def _code_set_blocked(self, text: str, block: bool, source: str = "WebUI", operator: str = "") -> str:
-        return self._code_set_in_list("block", text, block, source=source, operator=operator)
+    def _code_set_blocked(self, text: str, block: bool, source: str = "WebUI", operator: str = "", rule_group=0) -> str:
+        return self._code_set_in_list("block", text, block, source=source, operator=operator, rule_group=rule_group)
 
     def _code_set_allowed(self, text: str, allow: bool, source: str = "WebUI", operator: str = "") -> str:
         return self._code_set_in_list("allow", text, allow, source=source, operator=operator)

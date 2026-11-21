@@ -62,7 +62,7 @@ class _H(rule_groups.RuleGroupMixin, keyword_guard.KeywordGuardMixin):
         self.logs.append(action)
 
     async def _backup_message(self, event, group_id, user_id, user_name, reason, extra_text="", kind="keyword",
-                              notify_only=False):
+                              notify_only=False, rule_group=None):
         self.backups.append((kind, notify_only))
         return self.backup_ok
 
@@ -194,7 +194,7 @@ class _B(message_backup.MessageBackupMixin):
     def _cfg(self, key, default=True, group_id=None):
         return default
 
-    def _backup_targets(self, kind, group_id):
+    def _backup_targets(self, kind, group_id, rule_group=None):
         return [999]
 
     async def _get_client(self, event=None):

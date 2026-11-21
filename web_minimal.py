@@ -633,6 +633,7 @@ class MinimalWebMixin:
             "routes": self._br_routes(),
             "kinds": [{"id": k, "name": n, "short": BACKUP_KIND_SHORT.get(k, n), "desc": d} for k, n, d in BACKUP_KINDS],
             "backup_enabled": self._cfg("backup_enabled", True),
+            "rule_groups": self._rg_choices(),
         }
 
     async def _web_minimal_backup_routes(self):
@@ -874,7 +875,7 @@ class MinimalWebMixin:
             err = self._mp_set_allowed(str(data.get("app_key") or ""), on, **self._web_log())
         elif kind == "block":
             entry = str(data.get("entry") or data.get("app_key") or "")
-            err = self._rg_add_app(entry, **self._web_log()) if on else self._rg_remove_app(entry, **self._web_log())
+            err = self._rg_add_app(entry, group_id=data.get("rule_group") or 0, **self._web_log()) if on                 else self._rg_remove_app(entry, **self._web_log())
         else:
             return self._minimal_error("kind 只能是 allow 或 block")
         if err:
@@ -1050,18 +1051,27 @@ class MinimalWebMixin:
             return self._minimal_error("QQ 号不对")
         return jsonify({"status": "success", "data": self._mbr_profile(uid)})
 
+    def _code_lists_payload(self) -> dict:
+        return {"allow": self._code_allow_list(), "block": sorted(self._code_block_set()),
+                "block_entries": self._code_block_entries()}
+
     async def _web_minimal_codes_lists(self):
-        return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})
+        return jsonify({"status": "success", "data": self._code_lists_payload()})
+
+    async def _web_minimal_rule_group_choices(self):
+        """快捷拉黑（小程序 / 码）时选规则组用。"""
+        return jsonify({"status": "success", "data": {"groups": self._rg_choices()}})
 
     async def _web_minimal_codes_list_set(self):
         data = await self._minimal_body()
         kind = str(data.get("kind") or "")
         if kind not in ("allow", "block"):
             return self._minimal_error("kind 只能是 allow 或 block")
-        err = self._code_set_in_list(kind, str(data.get("text") or ""), bool(data.get("on", True)), **self._web_log())
+        err = self._code_set_in_list(kind, str(data.get("text") or ""), bool(data.get("on", True)),
+                                     rule_group=data.get("rule_group") or 0, **self._web_log())
         if err:
             return self._minimal_error(err)
-        return jsonify({"status": "success", "data": {"allow": self._code_allow_list(), "block": self._code_block_list()}})
+        return jsonify({"status": "success", "data": self._code_lists_payload()})
 
     async def _web_minimal_leavelog_user(self):
         uid = str(quart_request.args.get("user_id", "") or "").strip()
@@ -1159,7 +1169,8 @@ class MinimalWebMixin:
         snap["wxcode_enabled"] = bool(self._cfg("wxcode_enabled", False))
         snap["ocr_enabled"] = (self._cfg_str("local_ocr_driver", "off").strip().lower() not in ("", "off")
                                and bool(self._cfg("keyword_guard_enabled", True)))
-        snap["blocked"] = self._code_block_list()
+        snap["blocked"] = sorted(self._code_block_set())
+        snap["blocked_entries"] = self._code_block_entries()
         snap["allowed"] = self._code_allow_list()
         names = {}
         try:
@@ -1173,10 +1184,11 @@ class MinimalWebMixin:
         data = await self._minimal_body()
         text = str(data.get("text") or "")
         block = bool(data.get("block", True))
-        err = self._code_set_blocked(text, block, **self._web_log())
+        err = self._code_set_blocked(text, block, rule_group=data.get("rule_group") or 0, **self._web_log())
         if err:
             return self._minimal_error(err)
-        return jsonify({"status": "success", "data": {"blocked": self._code_block_list(), "block": block}})
+        return jsonify({"status": "success", "data": {"blocked": sorted(self._code_block_set()), "block": block,
+                                                      "blocked_entries": self._code_block_entries()}})
 
     async def _web_minimal_livelog(self):
         """实时日志：?since=上次的 seq&epoch=上次的 epoch，只返回变化的记录（live_log.py）。"""

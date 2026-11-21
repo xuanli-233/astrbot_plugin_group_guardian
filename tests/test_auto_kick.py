@@ -99,7 +99,7 @@ class _H(rule_groups.RuleGroupMixin, keyword_guard.KeywordGuardMixin):
     async def _get_client(self, event=None):
         return object()
 
-    async def _backup_message(self, event, group_id, user_id, user_name, reason, extra_text="", kind="keyword"):
+    async def _backup_message(self, event, group_id, user_id, user_name, reason, extra_text="", kind="keyword", **_kw):
         self.backups.append(kind)
         return True
 

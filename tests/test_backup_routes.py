@@ -91,9 +91,9 @@ ROUTES = ["500:keyword,wxcode,manual_recall", "600:wxcode,bot_join", "700:leave_
 class ParseTests(unittest.TestCase):
     def test_parse_and_format(self):
         r = backup_routes.parse_route("500：wxcode，keyword,bad,keyword")
-        self.assertEqual({"group_id": "500", "kinds": ["keyword", "wxcode"]}, r)  # 去重、按固定顺序
+        self.assertEqual({"group_id": "500", "kinds": ["keyword", "wxcode"], "rule_groups": []}, r)  # 去重、按固定顺序
         self.assertEqual("500:keyword,wxcode", backup_routes.format_route(r))
-        self.assertEqual({"group_id": "8", "kinds": []}, backup_routes.parse_route("8"))
+        self.assertEqual({"group_id": "8", "kinds": [], "rule_groups": []}, backup_routes.parse_route("8"))
         self.assertIsNone(backup_routes.parse_route("abc:keyword"))
         self.assertEqual(["keyword"], backup_routes.parse_route({"group_id": 9, "kinds": "keyword"})["kinds"])
 
@@ -108,7 +108,7 @@ class ParseTests(unittest.TestCase):
 
     def test_duplicate_group_lines_are_merged(self):
         h = _H(backup_routes=["500:keyword", "500:bot_join"])
-        self.assertEqual([{"group_id": "500", "kinds": ["keyword", "bot_join"]}], h._br_routes())
+        self.assertEqual([{"group_id": "500", "kinds": ["keyword", "bot_join"], "rule_groups": []}], h._br_routes())
 
     def test_legacy_config(self):
         h = _H(backup_group_id="500", wxcode_forward_group_id="600", backup_routes=[])

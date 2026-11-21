@@ -568,6 +568,15 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .rg-presets{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
     .rg-presets .btn{font-size:12px;padding:3px 8px}
     .rg-dirty{color:var(--warning);font-size:12px;font-weight:500}
+    .qb-what{font-size:12px;word-break:break-all;background:var(--surface-2, var(--surface));border:1px solid var(--border);border-radius:6px;padding:6px 8px;margin-bottom:8px;max-height:84px;overflow:auto}
+    .qb-list{display:grid;gap:4px;max-height:320px;overflow:auto}
+    .qb-rg{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer}
+    .qb-rg:hover{border-color:var(--primary)}
+    .qb-rg.off{opacity:.65}
+    .qb-rg input{margin-top:3px}
+    .qb-rg .qb-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .qb-rg .qb-title{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+    .qb-rg .qb-title .mn-chip{margin:0}
     .mn-chip{display:inline-block;font-size:12px;line-height:18px;padding:0 6px;margin:2px;border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);background:var(--surface)}
     .cb-code{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
     .cb-code:first-child{border-top:none}
@@ -1837,7 +1846,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         </div>
 
         <div id="cbView" style="display:none">
-          <p class="mn-intro">每张经过识别的群图片一张卡片：原图上用编号框标出每个码（红 = 命中规则，绿 = 已解出，橙 = 解不出），下面逐个列出码的裁剪图和识别内容，再下面是<strong>图片文字识别（OCR）</strong>认出的文字、命中了哪条关键词规则（没认出来时写明原因）。只开了文字识别、没开码识别的图片也会出现在这里。「拉黑该码」后，任何群里再解出完全相同内容的码都会按命中处理（撤回 + 备份）；「解除拉黑」即恢复。图片只在内存里保留最近几十张，重启清空。</p>
+          <p class="mn-intro">每张经过识别的群图片一张卡片：原图上用编号框标出每个码（红 = 命中规则，绿 = 已解出，橙 = 解不出），下面逐个列出码的裁剪图和识别内容，再下面是<strong>图片文字识别（OCR）</strong>认出的文字、命中了哪条关键词规则（没认出来时写明原因）。只开了文字识别、没开码识别的图片也会出现在这里。「拉黑该码」时选一个规则组，之后解出完全相同内容的码按那个组的处理方式拦（只在它生效的群里）；已拉黑的码可以「换组」或「解除拉黑」。图片只在内存里保留最近几十张，重启清空。</p>
           <div id="cbNotice" class="mn-banner" style="display:none"></div>
           <div class="card">
             <div class="card-header"><h2>识别记录</h2>
@@ -4731,6 +4740,28 @@ function rgRowsHtml(kind) {
       '<input class="input-sm v" data-rg-f="app:' + i + ':tvalue" value="' + escAttr(r.tvalue) + '"' + (r.ttype ? '' : ' disabled') + ' placeholder="' + (r.ttype ? '例如 考研' : '整个小程序都拦') + '" />' + del + '</div>';
   }).join('');
 }
+function rgCodesNote(d) {
+  if (!d.id) return '';
+  if (d.is_default) return '<p class="mn-hint" style="margin-top:6px">在图片看板 / 码管理「拉黑该码」时选了默认组的码，存在码管理的「已拉黑的码」里，也按这个组处理。</p>';
+  var g = RG.groups.filter(function(x) { return x.id === d.id; })[0], n = g && g.codes ? g.codes.length : 0;
+  return '<p class="mn-hint" style="margin-top:6px">拉黑到这个组的码：<b>' + n + '</b> 个（内容完全相同才命中；在图片看板 / 码管理「拉黑该码」时选这个组）' +
+    (n ? ' · <a href="javascript:void(0)" data-rg-act="codes">查看 / 解除</a>' : '') + '</p>';
+}
+function rgShowCodes(d) {
+  var g = RG.groups.filter(function(x) { return x.id === d.id; })[0], codes = (g && g.codes) || [];
+  showModal('拉黑到「' + d.name + '」的码（' + codes.length + '）',
+    '<div style="max-height:420px;overflow:auto">' + codes.map(function(t, i) {
+      return '<div class="mn-rule"><span class="mn-val" style="word-break:break-all">' + esc(t) + '</span><button class="btn btn-ghost btn-sm" data-rgc-un="' + i + '">解除拉黑</button></div>';
+    }).join('') + '</div>', '<button class="btn btn-primary btn-sm" id="rgCodesClose">关闭</button>');
+  $('#rgCodesClose').addEventListener('click', closeModal);
+  $$('[data-rgc-un]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var t = codes[Number(btn.getAttribute('data-rgc-un'))];
+      closeModal();
+      if (await codeListSet('block', t, false)) rgLoad();
+    });
+  });
+}
 function rgRenderEditor() {
   var d = RG.draft, box = $('#rgEditor');
   if (!d) { box.innerHTML = '<div class="split-empty">在左边选一个规则组</div>'; return; }
@@ -4751,7 +4782,7 @@ function rgRenderEditor() {
     '<div class="rg-sec"><h3>码内容 <span class="n">' + d.codes.length + ' 条 · 匹配二维码 / 葵花码解出的内容</span></h3>' +
     '<div class="rg-rows">' + rgRowsHtml('code') + '</div>' +
     '<div class="rg-presets"><button class="btn btn-outline btn-sm" data-rg-add="code">＋ 添加码规则</button>' +
-    RG_CODE_PRESETS.map(function(p, i) { return '<button class="btn btn-ghost btn-sm" data-rg-preset="code:' + i + '">＋ ' + esc(p[0]) + '</button>'; }).join('') + '</div></div>' +
+    RG_CODE_PRESETS.map(function(p, i) { return '<button class="btn btn-ghost btn-sm" data-rg-preset="code:' + i + '">＋ ' + esc(p[0]) + '</button>'; }).join('') + '</div>' + rgCodesNote(d) + '</div>' +
     '<div class="rg-sec"><h3>小程序 <span class="n">' + d.apps.length + ' 条 · 卡片和 #小程序:// 链接都算；可以只拦某个小程序里标题符合条件的</span></h3>' +
     '<div class="rg-rows">' + rgRowsHtml('app') + '</div><datalist id="rgAppList">' + rgAppOptions() + '</datalist>' +
     '<div class="rg-presets"><button class="btn btn-outline btn-sm" data-rg-add="app">＋ 添加小程序</button><span class="mn-hint">小程序名包含即命中；在「小程序」页详情里也可以「按这个标题拉黑」</span></div></div>' +
@@ -4883,6 +4914,7 @@ async function rgOnClick(e) {
   if ((v = t.closest('[data-rg-act]'))) {
     var act = v.getAttribute('data-rg-act'), d2 = RG.draft;
     if (act === 'save') { rgSave(); return; }
+    if (act === 'codes') { rgShowCodes(d2); return; }
     if (act === 'revert') { RG.dirty = false; if (RG.sel === 'new') { RG.sel = null; RG.draft = null; rgRenderList(); rgRenderEditor(); var f = rgOrdered()[0]; if (f) rgSelect(f.id, true); } else rgSelect(RG.sel, true); return; }
     if (act === 'paste') {
       var txt = await promptModal({ title: '批量粘贴关键词', label: '每行一条。普通文字 = 包含；= 开头 = 完全相同；re: 开头 = 正则。', multiline: true, okText: '添加' });
@@ -4890,7 +4922,8 @@ async function rgOnClick(e) {
       return;
     }
     if (act === 'del') {
-      if (!await mnConfirm('删除规则组「' + d2.name + '」？组里的规则会一起删除。', { danger: true, okText: '删除' })) return;
+      var gd = RG.groups.filter(function(x) { return x.id === d2.id; })[0], nc = gd && gd.codes ? gd.codes.length : 0;
+      if (!await mnConfirm('删除规则组「' + d2.name + '」？组里的规则' + (nc ? '和拉黑到这个组的 ' + nc + ' 个码' : '') + '会一起删除。只订阅了这个组的转发群就收不到它的命中了。', { danger: true, okText: '删除' })) return;
       var r1 = await safePost('minimal/rulegroups/delete', { id: d2.id });
       if (isApiError(r1)) { toast(mnErr(r1), 'error'); return; }
       RG.groups = (mnData(r1) || {}).groups || RG.groups; RG.dirty = false; RG.sel = null; RG.draft = null;
@@ -5036,10 +5069,70 @@ function mnCodeTestFile() {
   reader.readAsDataURL(file);
 }
 
+/* ---- 快捷拉黑（小程序 / 码）时选规则组：命中后按那个组的处理方式和生效范围；记住上次选的组 ---- */
+var QB_RG_KEY = 'gg_quick_rg';
+function rgActionText(g) {
+  var p = [g.recall === false ? '不撤回，只抄送提醒' : '撤回'];
+  if (g.kick) p.push(g.kick === 'block' ? '踢出并拉黑' : '踢出本群');
+  if (g.mute) p.push('禁言 ' + rgMinutesText(g.mute_minutes));
+  return p.join(' + ');
+}
+function rgTags(g) {
+  return (g.is_default && g.name !== '默认组' ? '<span class="mn-chip">默认组</span>' : '') +
+    (g.enabled ? '' : '<span class="mn-chip" style="color:var(--danger)">已停用</span>');
+}
+async function rgChoices() {
+  var res = await safeGet('minimal/rulegroups/choices');
+  if (isApiError(res)) { toast(mnErr(res), 'error'); return null; }
+  return (mnData(res) || {}).groups || [];
+}
+// opts: { title, what（要拉黑的内容，纯文本）, okText, current（已在的组 id）, hint }。返回选中的规则组 id，取消返回 null
+async function rgPickModal(opts) {
+  opts = opts || {};
+  var groups = await rgChoices();
+  if (!groups) return null;
+  if (!groups.length) { toast('还没有规则组', 'error'); return null; }
+  var byId = {}; groups.forEach(function(g) { byId[g.id] = g; });
+  var def = groups.filter(function(g) { return g.is_default; })[0] || groups[0];
+  var pick = byId[Number(ls.getItem(QB_RG_KEY) || 0)] || def;
+  var rows = groups.map(function(g) {
+    var tags = rgTags(g) + (opts.current && g.id === opts.current ? '<span class="mn-chip" style="color:var(--primary)">现在在这个组</span>' : '');
+    return '<label class="qb-rg' + (g.enabled ? '' : ' off') + '"><input type="radio" name="qbRg" value="' + g.id + '"' + (g.id === pick.id ? ' checked' : '') + ' />' +
+      '<span class="qb-main"><span class="qb-title"><b>' + esc(g.name) + '</b>' + tags + '</span>' +
+      '<span class="mn-hint">命中后：' + esc(rgActionText(g)) + ' · 生效：' + esc(rgScopeText(g)) + '</span></span></label>';
+  }).join('');
+  var what = String(opts.what || '');
+  return new Promise(function(resolve) {
+    showModal(opts.title || '选择规则组',
+      (what ? '<div class="qb-what">' + esc(what.length > 200 ? what.slice(0, 200) + '…' : what) + '</div>' : '') +
+      '<p class="mn-hint" style="margin:0 0 6px">' + esc(opts.hint || '加到哪个规则组？以后命中时按这个组的处理方式，只在它生效的群里拦。') + '</p>' +
+      '<div class="qb-list">' + rows + '</div>' +
+      '<p class="mn-hint" id="qbWarn" style="color:var(--warning);min-height:18px;margin:6px 0 0"></p>' +
+      '<p class="mn-hint" style="margin:2px 0 0">想要别的处理方式（例如只禁言、踢人），先到「拦截规则 → 规则组」新建一个组。</p>',
+      '<button class="btn btn-ghost btn-sm" id="__qbCancel">取消</button><button class="btn btn-danger btn-sm" id="__qbOk">' + esc(opts.okText || '拉黑') + '</button>');
+    var warn = function() {
+      var el = $('input[name="qbRg"]:checked'), g = el && byId[Number(el.value)];
+      $('#qbWarn').textContent = g && !g.enabled ? '这个组已停用：选了也不会拦，要到规则组里启用它。' : '';
+    };
+    var done = function(v) { MODAL_ON_CLOSE = null; closeModal(); resolve(v); };
+    MODAL_ON_CLOSE = function() { resolve(null); };
+    $$('input[name="qbRg"]').forEach(function(r) { r.addEventListener('change', warn); r.addEventListener('dblclick', function() { $('#__qbOk').click(); }); });
+    $('#__qbCancel').addEventListener('click', function() { done(null); });
+    $('#__qbOk').addEventListener('click', function() {
+      var el = $('input[name="qbRg"]:checked');
+      if (!el) return;
+      ls.setItem(QB_RG_KEY, el.value);
+      done({ id: Number(el.value), name: byId[Number(el.value)].name });
+    });
+    warn();
+    var cur = $('input[name="qbRg"]:checked'); if (cur) cur.focus();
+  });
+}
+
 /* ---- 转发群（backup_routes.py）：多个群，每个群勾选收哪些内容 ---- */
-var BR = { routes: [], kinds: [], dirty: false, enabled: true };
+var BR = { routes: [], kinds: [], dirty: false, enabled: true, rgs: [] };
 function brFrom(list) {
-  return (list || []).map(function(r) { return { group_id: String(r.group_id), kinds: (r.kinds || []).slice() }; });
+  return (list || []).map(function(r) { return { group_id: String(r.group_id), kinds: (r.kinds || []).slice(), rule_groups: (r.rule_groups || []).slice() }; });
 }
 async function brLoad() {
   var res = await safeGet('minimal/backup_routes');
@@ -5047,6 +5140,7 @@ async function brLoad() {
   var d = mnData(res) || {};
   BR.routes = brFrom(d.routes);
   BR.kinds = d.kinds || [];
+  BR.rgs = d.rule_groups || [];
   BR.enabled = d.backup_enabled !== false;
   brSetDirty(false);
   brRender();
@@ -5063,21 +5157,78 @@ function brRender() {
   add.innerHTML = '<option value="">选择要添加的群</option>' + mnGroups().filter(function(g) { return !used[String(g.group_id)]; })
     .map(function(g) { return '<option value="' + escAttr(g.group_id) + '">' + esc(mnGroupLabel(g)) + '</option>'; }).join('');
   $('#brHint').innerHTML = (BR.enabled ? '' : '<span style="color:var(--danger)">「撤回前备份」开关已关闭：违规消息和撤回都不会备份，只会推送机器人进群 / 加好友。</span><br>') +
-    '同一类内容会发到所有勾选它的群，各发一份。转发群本身不参与审核。点表头可以整列全选 / 全不选。';
+    '同一类内容会发到所有勾选它的群，各发一份。转发群本身不参与审核。点表头可以整列全选 / 全不选。<br>' +
+    '「订阅规则组」：只想让某个群收部分规则组的命中（例如只收「引流广告」组），点它选组；码发送超限、指令撤回、退群撤回、机器人通知不属于规则组，只看勾选的类别。';
   if (!BR.routes.length) { box.innerHTML = '<p class="empty">还没有转发群：违规消息不会备份，机器人通知也不会推送。在下面选一个群添加。</p>'; return; }
   box.innerHTML = '<table class="mn-table"><thead><tr><th>群</th>' +
     BR.kinds.map(function(k) {
       return '<th style="text-align:center;cursor:pointer;white-space:normal;min-width:64px" data-br-col="' + escAttr(k.id) + '" title="' + escAttr(k.desc + '（点击整列全选 / 全不选）') + '">' + esc(k.short || k.name) + '</th>';
-    }).join('') + '<th></th></tr></thead><tbody>' +
+    }).join('') + '<th style="white-space:nowrap" title="命中规则组的那几类内容，只收选中的规则组">订阅规则组</th><th></th></tr></thead><tbody>' +
     BR.routes.map(function(r, i) {
       return '<tr><td style="white-space:nowrap">' + esc(brGroupName(r.group_id)) + '<br><span class="mn-hint">' + esc(r.group_id) + '</span></td>' +
         BR.kinds.map(function(k) {
           return '<td style="text-align:center"><input type="checkbox" data-br-row="' + i + '" data-br-kind="' + escAttr(k.id) + '"' +
             (r.kinds.indexOf(k.id) >= 0 ? ' checked' : '') + ' title="' + escAttr(k.name) + '" /></td>';
         }).join('') +
+        '<td style="white-space:nowrap">' + brRgCell(r, i) + '</td>' +
         '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-br-all="' + i + '">全选</button>' +
         '<button class="btn btn-ghost btn-sm" data-br-del="' + i + '" style="color:var(--danger)">移除</button></td></tr>';
     }).join('') + '</tbody></table>';
+}
+var BR_RG_KINDS = ['keyword', 'wxcode', 'miniapp', 'link'];
+function brRgCell(r, i) {
+  var hasRgKind = r.kinds.some(function(k) { return BR_RG_KINDS.indexOf(k) >= 0; });
+  var names = {}; BR.rgs.forEach(function(g) { names[g.id] = g.name; });
+  var known = r.rule_groups.filter(function(id) { return names[id]; });
+  var label, title;
+  if (!r.rule_groups.length) { label = '全部'; title = '收所有规则组的命中'; }
+  else if (!known.length) { label = '<span style="color:var(--danger)">已删除的组</span>'; title = '订阅的规则组都被删了：规则组的命中一条都不会收到'; }
+  else {
+    label = esc(known.slice(0, 2).map(function(id) { return names[id]; }).join('、')) + (known.length > 2 ? ' 等 ' + known.length + ' 个' : '');
+    title = '只收：' + known.map(function(id) { return names[id]; }).join('、');
+  }
+  return '<button class="btn btn-outline btn-sm" data-br-rg="' + i + '" title="' + escAttr(title + '（点击修改）') + '"' + (hasRgKind ? '' : ' disabled') + '>' +
+    (hasRgKind ? label : '—') + '</button>';
+}
+async function brPickRg(i) {
+  var r = BR.routes[i];
+  if (!r) return;
+  if (!BR.rgs.length) { toast('还没有规则组', 'error'); return; }
+  var sel = {}; r.rule_groups.forEach(function(id) { sel[id] = 1; });
+  var all = !r.rule_groups.length;
+  var ok = await new Promise(function(resolve) {
+    showModal('订阅规则组：' + brGroupName(r.group_id) + '（' + r.group_id + '）',
+      '<p class="mn-hint" style="margin:0 0 8px">这个群收到的关键词 / 二维码 / 小程序 / 链接命中，只要哪些规则组的？（码黑名单、已拉黑的链接按默认组算）</p>' +
+      '<label class="qb-rg"><input type="radio" name="brRgMode" value="all"' + (all ? ' checked' : '') + ' /><span class="qb-main"><b>所有规则组</b><span class="mn-hint">以后新建的组也收</span></span></label>' +
+      '<label class="qb-rg"><input type="radio" name="brRgMode" value="some"' + (all ? '' : ' checked') + ' /><span class="qb-main"><b>只收勾选的规则组</b></span></label>' +
+      '<div class="qb-list" id="brRgList" style="margin-left:22px">' + BR.rgs.map(function(g) {
+        return '<label class="qb-rg' + (g.enabled ? '' : ' off') + '"><input type="checkbox" class="br-rg-ck" value="' + g.id + '"' + (sel[g.id] ? ' checked' : '') + ' />' +
+          '<span class="qb-main"><span class="qb-title"><b>' + esc(g.name) + '</b>' + rgTags(g) + '</span>' +
+          '<span class="mn-hint">' + esc(rgActionText(g)) + ' · 生效：' + esc(rgScopeText(g)) + '</span></span></label>';
+      }).join('') + '</div>',
+      '<button class="btn btn-ghost btn-sm" id="__brRgCancel">取消</button><button class="btn btn-primary btn-sm" id="__brRgOk">确定</button>');
+    var sync = function() {
+      var some = $('input[name="brRgMode"]:checked').value === 'some';
+      $$('.br-rg-ck').forEach(function(c) { c.disabled = !some; });
+      $('#brRgList').style.opacity = some ? '' : '.5';
+    };
+    $$('input[name="brRgMode"]').forEach(function(x) { x.addEventListener('change', sync); });
+    $$('.br-rg-ck').forEach(function(c) { c.addEventListener('change', function() { if (c.checked) { $('input[name="brRgMode"][value="some"]').checked = true; sync(); } }); });
+    sync();
+    var done = function(v) { MODAL_ON_CLOSE = null; closeModal(); resolve(v); };
+    MODAL_ON_CLOSE = function() { resolve(null); };
+    $('#__brRgCancel').addEventListener('click', function() { done(null); });
+    $('#__brRgOk').addEventListener('click', function() {
+      if ($('input[name="brRgMode"]:checked').value === 'all') { done([]); return; }
+      var ids = $$('.br-rg-ck').filter(function(c) { return c.checked; }).map(function(c) { return Number(c.value); });
+      if (!ids.length) { toast('至少勾一个规则组，或者选「所有规则组」', 'error'); return; }
+      done(ids);
+    });
+  });
+  if (!ok) return;
+  r.rule_groups = ok.sort(function(a, b) { return a - b; });
+  brSetDirty(true);
+  brRender();
 }
 function brSetDirty(on) {
   BR.dirty = on;
@@ -5097,9 +5248,13 @@ function brOnChange(e) {
   if (cb.checked) r.kinds.push(k);
   brSortKinds(r.kinds);
   brSetDirty(true);
+  var btn = $('[data-br-rg="' + cb.getAttribute('data-br-row') + '"]');
+  if (btn) btn.parentNode.innerHTML = brRgCell(r, Number(cb.getAttribute('data-br-row')));
 }
 function brOnClick(e) {
   var col = e.target.closest('[data-br-col]'), del = e.target.closest('[data-br-del]'), all = e.target.closest('[data-br-all]');
+  var rgb = e.target.closest('[data-br-rg]');
+  if (rgb) { brPickRg(Number(rgb.getAttribute('data-br-rg'))); return; }
   if (col) {
     var k = col.getAttribute('data-br-col');
     var on = !BR.routes.every(function(r) { return r.kinds.indexOf(k) >= 0; });
@@ -5121,7 +5276,7 @@ function brAdd() {
   var gid = $('#brAddGroup').value;
   if (!gid) { toast('先选一个群', 'error'); return; }
   // 新加的群默认收所有违规 / 撤回备份；机器人进群、加好友通知需要的话再勾
-  BR.routes.push({ group_id: String(gid), kinds: BR.kinds.map(function(k) { return k.id; }).filter(function(k) { return k.indexOf('bot_') !== 0; }) });
+  BR.routes.push({ group_id: String(gid), kinds: BR.kinds.map(function(k) { return k.id; }).filter(function(k) { return k.indexOf('bot_') !== 0; }), rule_groups: [] });
   brSetDirty(true);
   brRender();
 }
@@ -5442,10 +5597,16 @@ function mpRenderAllow() {
 }
 async function mpListSet(it, act) {
   var on = act.indexOf('un') !== 0, kind = act.indexOf('allow') >= 0 ? 'allow' : 'block';
-  if (kind === 'block' && on && !await mnConfirm('拉黑小程序「' + it.name + '」？之后群里再出现它（卡片或链接）会按默认规则组撤回。')) return false;
-  var res = await safePost('minimal/miniapps/list', { kind: kind, on: on, app_key: it.app_key, entry: mpEntry(it) });
+  var body = { kind: kind, on: on, app_key: it.app_key, entry: mpEntry(it) }, picked = null;
+  if (kind === 'block' && on) {
+    picked = await rgPickModal({ title: '拉黑小程序', what: it.name + (it.appid ? '（' + it.appid + '）' : ''),
+      hint: '之后群里再出现这个小程序（卡片或 #小程序:// 链接）就按所选规则组处理。已经在别的组里的同一条会移过来。' });
+    if (!picked) return false;
+    body.rule_group = picked.id;
+  }
+  var res = await safePost('minimal/miniapps/list', body);
   if (isApiError(res)) { toast(mnErr(res), 'error'); return false; }
-  toast('已更新', 'success');
+  toast(picked ? '已拉黑到「' + picked.name + '」' : '已更新', 'success');
   return true;
 }
 // 小程序详情：显示在「小程序」右栏；从别处（大屏、成员档案、看板）点进来先跳过去
@@ -5491,7 +5652,7 @@ async function mpShowDetail(it) {
     (d.aliases && d.aliases.length ? '；链接里的名字：' + esc(d.aliases.join('、')) : '') + '</span></div></div>' +
     (it.user_id ? '<p class="mn-hint" style="margin-bottom:6px">只看 ' + mbrLink(it.user_id) + ' 发的 · <a href="javascript:void(0)" data-mpd-all="1">看所有人</a></p>' : '') +
     (groups ? '<div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">' + groups + '</div>' : '') +
-    '<p class="mn-hint" style="margin:6px 0">规则组里针对它的规则（「按这个标题拉黑」可以只拦部分标题，同一个小程序的其它内容放行）</p>' +
+    '<p class="mn-hint" style="margin:6px 0">规则组里针对它的规则（「整个拉黑」「按这个标题拉黑」时可以选规则组；按标题拉黑只拦部分标题，同一个小程序的其它内容放行）</p>' +
     '<div class="mn-rule-list" style="margin-bottom:8px">' + (rules || '<p class="mn-hint">没有，整个小程序都放行</p>') + '</div>' +
     '<p class="mn-hint" style="margin:6px 0">发过的内容（按次数）</p><table class="mn-table"><tbody>' + (contents || '<tr><td>没有记录</td></tr>') + '</tbody></table>' +
     '<p class="mn-hint" style="margin:10px 0 6px">最近的记录（保留 ' + d.store_days + ' 天；点 QQ 号看群成员档案）</p><table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>形式</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>' +
@@ -5515,8 +5676,11 @@ async function mpDetailClick(e) {
       label: '标题里含有下面的文字就撤回（建议删短到关键的几个字，例如「考研」；也可写 re:正则 或 =完全相同）。只影响这个小程序，它的其它内容照常放行。',
       value: String(c.title || '').trim().slice(0, 60), okText: '拉黑' });
     if (!kw) return;
-    var res = await safePost('minimal/miniapps/list', { kind: 'block', on: true, entry: mpEntry(det.app) + ' | ' + kw });
-    if (isApiError(res)) { toast(mnErr(res), 'error'); } else { toast('已加入默认组', 'success'); mpLoadStats(); }
+    var pk = await rgPickModal({ title: '按标题拉黑', what: det.data.name + ' | ' + kw,
+      hint: '这个小程序里标题含「' + kw + '」的内容按所选规则组处理，其它内容照常放行。' });
+    if (!pk) return;
+    var res = await safePost('minimal/miniapps/list', { kind: 'block', on: true, entry: mpEntry(det.app) + ' | ' + kw, rule_group: pk.id });
+    if (isApiError(res)) { toast(mnErr(res), 'error'); } else { toast('已加入「' + pk.name + '」', 'success'); mpLoadStats(); }
     mpShowDetail(det.app);
     return;
   }
@@ -6407,10 +6571,12 @@ async function csShowDetail(it) {
   }).join('');
   var acts = '<button class="btn btn-ghost btn-sm" data-csd-act="copy">复制</button>' +
     (d.state === 'allow' ? '<button class="btn btn-outline btn-sm" data-csd-act="unallow">移出白名单</button>' : '<button class="btn btn-outline btn-sm" data-csd-act="allow">加白名单</button>') +
-    (d.state === 'block' ? '<button class="btn btn-outline btn-sm" data-csd-act="unblock">解除拉黑</button>' : '<button class="btn btn-danger btn-sm" data-csd-act="block">拉黑</button>');
+    (d.state === 'block' ? '<button class="btn btn-ghost btn-sm" data-csd-act="block" title="改按别的规则组处理">换组</button><button class="btn btn-outline btn-sm" data-csd-act="unblock">解除拉黑</button>'
+      : '<button class="btn btn-danger btn-sm" data-csd-act="block" title="选一个规则组，按它的处理方式拦">拉黑</button>');
   box.innerHTML = '<div class="card-header"><h2>码详情</h2><div class="header-actions">' + acts + '</div></div>' +
     '<div class="mn-body split-detail-body">' +
     '<div style="word-break:break-all;margin-bottom:6px;font-weight:600">' + csTagHtml(d.state) + esc(text || '（内容未知）') + '</div>' +
+    (d.state === 'block' && CB.blockedGroup && CB.blockedGroup[text] ? '<p class="mn-hint" style="margin:-2px 0 6px">按规则组「' + esc(CB.blockedGroup[text].group) + '」处理</p>' : '') +
     (CS.sel.user_id ? '<p class="mn-hint" style="margin-bottom:6px">只看 ' + mbrLink(CS.sel.user_id) + ' 发的 · <a href="javascript:void(0)" data-csd-user="">看所有人</a></p>' : '') +
     '<p class="mn-hint" style="margin:6px 0">最近的发送记录（' + (d.sends || []).length + ' 条，' + Object.keys(people).length + ' 人；点群名只看这个群，点 QQ 号看群成员档案）</p>' +
     (sends ? '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>' : '<p class="mn-hint">发送记录已过期（保留 ' + d.ttl_hours + ' 小时）</p>') +
@@ -6534,14 +6700,17 @@ async function csLoadLists() {
   var res = await safeGet('minimal/codes/lists');
   if (isApiError(res)) return;
   var d = mnData(res);
-  codeListsApply(d.allow, d.block);
+  codeListsApply(d.allow, d.block, d.block_entries);
   csRenderLists();
 }
 function csRenderLists() {
   var render = function(kind, items, box, count) {
     $(count).textContent = items.length + ' 个';
     $(box).innerHTML = items.length ? items.map(function(t, i) {
-      return '<div class="mn-rule"><span class="mn-val" style="word-break:break-all">' + esc(t) + '</span>' +
+      var g = kind === 'block' && CB.blockedGroup ? CB.blockedGroup[t] : null;
+      return '<div class="mn-rule"><span class="mn-val" style="word-break:break-all">' + esc(t) +
+        (g && g.group ? ' <span class="mn-chip" title="命中时按这个规则组处理">' + esc(g.group) + '</span>' : '') + '</span>' +
+        (g ? '<button class="btn btn-ghost btn-sm" data-cs-move="' + i + '" title="改按别的规则组处理">换组</button>' : '') +
         '<button class="btn btn-ghost btn-sm" data-cs-list="' + kind + '" data-i="' + i + '">' + (kind === 'allow' ? '移出' : '解除') + '</button></div>';
     }).join('') : '<p class="mn-hint">空</p>';
   };
@@ -6552,6 +6721,8 @@ async function csAfterListChange() { csRenderLists(); csLoadStats(); csRefreshDe
 function csOnClick(e) {
   var v = e.target.closest('[data-cs-view]');
   if (v) { csSetView(v.getAttribute('data-cs-view')); return; }
+  var mv = e.target.closest('[data-cs-move]');
+  if (mv) { var mt = CB.blocked[Number(mv.getAttribute('data-cs-move'))]; if (mt) codeListSet('block', mt, true).then(function(ok) { if (ok) csAfterListChange(); }); return; }
   var o = e.target.closest('[data-cs-open]');
   if (o) { var it = CS.items[Number(o.getAttribute('data-cs-open'))]; if (it) csShowDetail(it); return; }
   var u = e.target.closest('[data-cu-open]');
@@ -8144,7 +8315,7 @@ async function cbPoll() {
     if (d.reset) CB.map = {};
     CB.epoch = d.epoch; CB.seq = d.seq; CB.ids = d.ids || []; CB.enabled = d.enabled !== false;
     CB.wxEnabled = d.wxcode_enabled !== false; CB.ocrEnabled = !!d.ocr_enabled;
-    codeListsApply(d.allowed || [], d.blocked || []);
+    codeListsApply(d.allowed || [], d.blocked || [], d.blocked_entries);
     Object.keys(d.group_names || {}).forEach(function(k) { if (d.group_names[k]) CB.names[k] = d.group_names[k]; });
     (d.items || []).forEach(function(e) {
       var old = CB.map[e.id];
@@ -8161,6 +8332,10 @@ async function cbPoll() {
     CB.inflight = false;
     if (cbActive()) CB.timer = setTimeout(cbPoll, 3000);
   }
+}
+function cbGroupSuffix(text) {
+  var g = CB.blockedGroup && CB.blockedGroup[String(text || '').trim()];
+  return g && g.group ? '·' + esc(g.group) : '';
 }
 function cbEntryBlocked(e) { return (e.codes || []).some(function(c) { return c.text && CB.blockedSet[c.text.trim()]; }); }
 function cbRender() {
@@ -8233,7 +8408,7 @@ function cbCardHtml(e) {
     var meta = '<span class="cb-num ' + escAttr(c.state) + '">' + c.idx + '</span>' +
       '<span>' + esc(c.label) + (c.score != null ? '（' + Number(c.score).toFixed(2) + '）' : '') + '</span>' +
       (c.code_type ? '<span>' + esc(c.code_type) + '</span>' : '') +
-      (blocked ? '<span class="cb-tag blocked">已拉黑</span>' : '') +
+      (blocked ? '<span class="cb-tag blocked">已拉黑' + cbGroupSuffix(c.text) + '</span>' : '') +
       (allowed ? '<span class="cb-tag allowed">白名单</span>' : '') +
       (c.hit ? '<span class="cb-tag">命中 ' + esc(c.hit) + '</span>' : '');
     var body = c.decoded
@@ -8244,8 +8419,9 @@ function cbCardHtml(e) {
       '<button class="btn btn-ghost btn-sm" data-cb-act="copy" data-id="' + e.id + '" data-i="' + i + '">复制</button>' +
       (allowed ? '<button class="btn btn-outline btn-sm" data-cb-act="unallow" data-id="' + e.id + '" data-i="' + i + '">移出白名单</button>'
         : '<button class="btn btn-outline btn-sm" data-cb-act="allow" data-id="' + e.id + '" data-i="' + i + '">加白名单</button>') +
-      (blocked ? '<button class="btn btn-outline btn-sm" data-cb-act="unblock" data-id="' + e.id + '" data-i="' + i + '">解除拉黑</button>'
-        : '<button class="btn btn-danger btn-sm" data-cb-act="block" data-id="' + e.id + '" data-i="' + i + '">拉黑该码</button>') +
+      (blocked ? '<button class="btn btn-ghost btn-sm" data-cb-act="block" data-id="' + e.id + '" data-i="' + i + '" title="改按别的规则组处理">换组</button>' +
+          '<button class="btn btn-outline btn-sm" data-cb-act="unblock" data-id="' + e.id + '" data-i="' + i + '">解除拉黑</button>'
+        : '<button class="btn btn-danger btn-sm" data-cb-act="block" data-id="' + e.id + '" data-i="' + i + '" title="选一个规则组，按它的处理方式拦">拉黑该码</button>') +
       (c.text.length > 120 ? '<button class="btn btn-ghost btn-sm" data-cb-act="expand" data-id="' + e.id + '" data-i="' + i + '">展开</button>' : '') +
       '</div>' : '';
     var crop = c.crop ? '<img alt="码 ' + c.idx + ' 裁剪图" src="' + escAttr(c.crop) + '" />' : '<span class="mn-hint">无图</span>';
@@ -8282,26 +8458,34 @@ async function cbCopy(text) {
   $('#cbCopyClose').addEventListener('click', closeModal);
 }
 // 码白名单 / 黑名单（看板和「码管理」共用）：同一个码只能在其中一个名单里
-function codeListsApply(allowed, blocked) {
+function codeListsApply(allowed, blocked, entries) {
   CB.allowed = allowed || []; CB.blocked = blocked || [];
+  CB.blockedEntries = entries || CB.blocked.map(function(t) { return { text: t, group: '', group_id: 0 }; });
+  CB.blockedGroup = {}; CB.blockedEntries.forEach(function(x) { CB.blockedGroup[x.text] = x; });
   CB.allowedSet = {}; CB.allowed.forEach(function(t) { CB.allowedSet[t] = true; });
   CB.blockedSet = {}; CB.blocked.forEach(function(t) { CB.blockedSet[t] = true; });
 }
 var CODE_LIST_TEXT = {
   allow: { on: ['加白名单', '把这个码加入白名单？以后解出完全相同内容的码一律放行：不按正则规则撤回、也不计发送次数。（会同时从黑名单移除）', '已加入白名单'],
            off: ['移出白名单', '把这个码移出白名单？之后按正常规则处理。', '已移出白名单'] },
-  block: { on: ['拉黑该码', '拉黑这个码？以后任何群里解出完全相同内容的码都会被撤回并备份。（会同时从白名单移除）', '已拉黑该码'],
+  block: { on: ['拉黑该码', '以后解出完全相同内容的码按所选规则组处理（只在它生效的群里拦）。会同时从白名单和其它组移除。', '已拉黑该码'],
            off: ['解除拉黑', '解除拉黑这个码？', '已解除拉黑'] }
 };
 async function codeListSet(kind, text, on, skipConfirm) {
   var t = CODE_LIST_TEXT[kind][on ? 'on' : 'off'];
   var short = text.length > 120 ? text.slice(0, 120) + '…' : text;
-  if (!skipConfirm && !(await mnConfirm(t[1] + '\n\n' + short, { title: t[0], okText: t[0], danger: kind === 'block' && on }))) return false;
-  var res = await safePost('minimal/codes/list', { kind: kind, text: text, on: on });
+  var body = { kind: kind, text: text, on: on }, picked = null;
+  if (kind === 'block' && on) {
+    var cur = CB.blockedGroup && CB.blockedGroup[text];
+    picked = await rgPickModal({ title: cur ? '改到其它规则组' : t[0], what: text, hint: t[1], current: cur ? cur.group_id : 0, okText: cur ? '移过去' : '拉黑' });
+    if (!picked) return false;
+    body.rule_group = picked.id;
+  } else if (!skipConfirm && !(await mnConfirm(t[1] + '\n\n' + short, { title: t[0], okText: t[0] }))) return false;
+  var res = await safePost('minimal/codes/list', body);
   if (isApiError(res)) { toast(mnErr(res), 'error'); return false; }
   var d = mnData(res) || {};
-  codeListsApply(d.allow, d.block);
-  toast(t[2], 'success');
+  codeListsApply(d.allow, d.block, d.block_entries);
+  toast(picked ? '已拉黑到「' + picked.name + '」' : t[2], 'success');
   return true;
 }
 async function cbSetBlocked(text, block) {
@@ -8311,7 +8495,8 @@ function cbShowBlocked() {
   if (!CB.blocked.length) { toast('还没有拉黑的码', 'info'); return; }
   showModal('已拉黑的码（' + CB.blocked.length + '）',
     '<div style="max-height:420px;overflow:auto">' + CB.blocked.map(function(t, i) {
-      return '<div class="mn-rule"><span class="mn-val">' + esc(t) + '</span><button class="btn btn-ghost btn-sm" data-cb-unblock="' + i + '">解除拉黑</button></div>';
+      var g = CB.blockedGroup && CB.blockedGroup[t];
+      return '<div class="mn-rule"><span class="mn-val">' + esc(t) + (g && g.group ? ' <span class="mn-chip">' + esc(g.group) + '</span>' : '') + '</span><button class="btn btn-ghost btn-sm" data-cb-unblock="' + i + '">解除拉黑</button></div>';
     }).join('') + '</div>', '<button class="btn btn-primary btn-sm" id="cbBlockedClose">关闭</button>');
   $('#cbBlockedClose').addEventListener('click', closeModal);
   $$('[data-cb-unblock]').forEach(function(btn) {

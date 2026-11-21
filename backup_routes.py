@@ -2,8 +2,11 @@
 """备份 / 通知转发群：可以设多个群，每个群单独选要收哪几类内容（二次开发新增）。
 
 配置 backup_routes（list，WebUI「规则 → 转发群」里维护），每项一个群：
-  "群号:类别1,类别2"     例如 "123456:keyword,wxcode,bot_join"
+  "群号:类别1,类别2"           例如 "123456:keyword,wxcode,bot_join"
+  "群号:类别1,类别2;rg=3,5"    只收规则组 3、5 命中的（规则组 id，rule_groups.py）；不写 rg = 所有规则组
 类别见 BACKUP_KINDS。同一类内容会发到所有勾选了它的群，各发一份。
+规则组筛选只管「命中规则组」的那几类（关键词 / 二维码 / 小程序 / 链接命中，含按默认组处理的码黑名单、
+已拉黑的链接）；码发送超限、指令撤回、退群撤回、机器人进群 / 加好友不属于任何规则组，照常按类别发送。
 
 旧配置兼容：从没保存过 backup_routes 时，按旧的 backup_group_id（全部类别，
 设了 wxcode_forward_group_id 时葵花码除外）和 wxcode_forward_group_id（只收葵花码）推算。
@@ -40,18 +43,40 @@ BACKUP_KIND_SHORT = {"keyword": "关键词", "wxcode": "二维码 / 葵花码", 
                      "bot_friend": "机器人加好友"}
 
 
+def _rule_group_ids(value) -> List[int]:
+    if isinstance(value, str):
+        value = value.replace("，", ",").split(",")
+    out: List[int] = []
+    for x in value or []:
+        try:
+            n = int(str(x).strip())
+        except (TypeError, ValueError):
+            continue
+        if n > 0 and n not in out:
+            out.append(n)
+    return sorted(out)
+
+
 def parse_route(entry) -> Optional[dict]:
-    """"123456:keyword,wxcode" / {"group_id", "kinds"} → {"group_id", "kinds"}；无效返回 None。"""
+    """"123456:keyword,wxcode;rg=3" / {"group_id", "kinds", "rule_groups"} → {"group_id", "kinds", "rule_groups"}；
+    无效返回 None。rule_groups 为空 = 收所有规则组。"""
     if isinstance(entry, dict):
         gid = str(entry.get("group_id") or "").strip()
         kinds = entry.get("kinds") or []
         if isinstance(kinds, str):
             kinds = kinds.split(",")
+        rgs = _rule_group_ids(entry.get("rule_groups"))
     else:
-        text = str(entry or "").strip().replace("：", ":").replace("，", ",")
+        text = str(entry or "").strip().replace("：", ":").replace("，", ",").replace("；", ";")
+        text, _semi, opts = text.partition(";")
         gid, _sep, rest = text.partition(":")
         gid = gid.strip()
         kinds = rest.split(",") if rest.strip() else []
+        rgs = []
+        for opt in opts.split(";"):
+            key, _eq, val = opt.partition("=")
+            if key.strip().lower() == "rg":
+                rgs = _rule_group_ids(val)
     if not gid.isdigit():
         return None
     seen = []
@@ -60,11 +85,12 @@ def parse_route(entry) -> Optional[dict]:
         if k in BACKUP_KIND_IDS and k not in seen:
             seen.append(k)
     seen.sort(key=BACKUP_KIND_IDS.index)
-    return {"group_id": gid, "kinds": seen}
+    return {"group_id": gid, "kinds": seen, "rule_groups": rgs}
 
 
 def format_route(route: dict) -> str:
-    return f"{route['group_id']}:{','.join(route['kinds'])}"
+    rgs = route.get("rule_groups") or []
+    return f"{route['group_id']}:{','.join(route['kinds'])}" + (f";rg={','.join(str(x) for x in rgs)}" if rgs else "")
 
 
 class BackupRoutesMixin:
@@ -96,18 +122,28 @@ class BackupRoutesMixin:
             if not route:
                 continue
             if route["group_id"] in merged:
-                kinds = merged[route["group_id"]]["kinds"]
+                old = merged[route["group_id"]]
+                kinds = old["kinds"]
                 kinds.extend(k for k in route["kinds"] if k not in kinds)
                 kinds.sort(key=BACKUP_KIND_IDS.index)
+                # 规则组筛选：有一行不筛选（收全部）就收全部，否则合并
+                old["rule_groups"] = [] if not old["rule_groups"] or not route["rule_groups"] \
+                    else sorted(set(old["rule_groups"]) | set(route["rule_groups"]))
             else:
                 merged[route["group_id"]] = route
         routes = list(merged.values())
         self._br_cache = (cache_key, routes)
         return routes
 
-    def _br_targets(self, kind: str) -> List[str]:
-        """收 kind 这类内容的所有群号。"""
-        return [r["group_id"] for r in self._br_routes() if kind in r["kinds"]]
+    def _br_targets(self, kind: str, rule_group=None) -> List[str]:
+        """收 kind 这类内容的所有群号。rule_group：这次命中的规则组 id（None = 不属于规则组，不按规则组筛选）；
+        只订阅了部分规则组的群，别的组命中的不发。"""
+        try:
+            rg = int(rule_group) if rule_group not in (None, "") else None
+        except (TypeError, ValueError):
+            rg = None
+        return [r["group_id"] for r in self._br_routes()
+                if kind in r["kinds"] and (rg is None or not r.get("rule_groups") or rg in r["rule_groups"])]
 
     def _is_backup_group(self, group_id) -> bool:
         gid = str(group_id or "").strip()
@@ -133,6 +169,7 @@ class BackupRoutesMixin:
         if len(routes) > BACKUP_ROUTES_MAX:
             return [], f"最多 {BACKUP_ROUTES_MAX} 个转发群"
         old = {r["group_id"]: r["kinds"] for r in self._br_routes()}
+        old_rg = {r["group_id"]: r.get("rule_groups") or [] for r in self._br_routes()}
         previous = {k: self.config[k] for k in (ROUTES_KEY, LEGACY_BACKUP_KEY, LEGACY_WXCODE_KEY) if k in self.config}
         self.config[ROUTES_KEY] = [format_route(r) for r in routes]
         # 改用新配置后清空旧的两项，避免以后被误用
@@ -146,15 +183,29 @@ class BackupRoutesMixin:
                     self.config.pop(k, None)
             return [], "配置持久化失败，本次修改未生效"
         new = {r["group_id"]: r["kinds"] for r in routes}
+        new_rg = {r["group_id"]: r["rule_groups"] for r in routes}
         changes = []
+        rg_names = {}
+        lister = getattr(self, "_rg_list", None)
+        if callable(lister):
+            try:
+                rg_names = {g["id"]: g["name"] for g in lister()}
+            except Exception:
+                rg_names = {}
 
         def names(kinds):
             return "、".join(BACKUP_KIND_NAMES[k] for k in kinds) or "（什么都不收）"
+
+        def rg_text(ids):
+            return "所有规则组" if not ids else "规则组 " + "、".join(rg_names.get(i, f"#{i}") for i in ids)
         for gid, kinds in new.items():
             if gid not in old:
-                changes.append(f"新增 {gid}：{names(kinds)}")
-            elif old[gid] != kinds:
-                changes.append(f"{gid}：{names(old[gid])} → {names(kinds)}")
+                changes.append(f"新增 {gid}：{names(kinds)}" + (f"（只收{rg_text(new_rg[gid])}）" if new_rg[gid] else ""))
+            else:
+                if old[gid] != kinds:
+                    changes.append(f"{gid}：{names(old[gid])} → {names(kinds)}")
+                if old_rg.get(gid, []) != new_rg[gid]:
+                    changes.append(f"{gid}：{rg_text(old_rg.get(gid, []))} → {rg_text(new_rg[gid])}")
         changes += [f"移除 {gid}" for gid in old if gid not in new]
         if changes:
             self._record_op("修改转发群", source=source, operator=operator, detail="；".join(changes)[:2000])

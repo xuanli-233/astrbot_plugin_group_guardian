@@ -240,10 +240,13 @@ class KeywordGuardMixin:
             template = self._cfg_str("hit_notice_template", "[群管] {name} 的消息含违规内容，已撤回", group_id=group_id)
         self._last_hit_reason = reason
         self._last_hit_notify = not recall_on
+        # 转发群可以只订阅部分规则组：码超限不属于任何规则组，不按规则组筛选
+        rule_group = action.get("group_id") if action and kind != "code_limit" else None
         backed_up = await self._backup_message(
             event, group_id, user_id, user_name, reason, extra_text=extra_text,
             kind="keyword" if kind == "groupcard" else kind,   # 群名片命中归到「关键词命中」这一类转发
             **({} if recall_on else {"notify_only": True}),
+            **({"rule_group": rule_group} if rule_group else {}),
         )
         recalled = False
         if recall_on:
@@ -423,8 +426,8 @@ class KeywordGuardMixin:
         allowed = getattr(self, "_code_allowed", None)
         if not t or (callable(allowed) and allowed(t)):
             return None, None
-        blocked = getattr(self, "_code_block_set", None)
-        if callable(blocked) and t in blocked():
+        blocked = getattr(self, "_code_list_set", None)   # 只看全局码黑名单（=默认组）；拉黑到其它组的在规则组里匹配
+        if callable(blocked) and t in blocked("block"):
             return "已拉黑的码", None
         if self._hg_rule_groups():
             group, rule = self._rg_match_code(t, group_id)

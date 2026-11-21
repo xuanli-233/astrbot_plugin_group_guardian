@@ -10,6 +10,8 @@
   action     命中后：撤回（recall，默认开；关掉 = 只抄送到转发群提醒，消息留在群里）+ 可选禁言 mute_minutes 分钟
              + 可选群内提示（模板为空用全局模板；不撤回时不发）
   scope      生效的群（空 = 所有群）
+  codes      已拉黑的码（完全相同的码内容），在图片看板 / 码管理「拉黑该码」时选到这个组的。
+             默认组的已拉黑码仍存在配置 wxcode_block_codes 里（码黑名单），不在这一列
 多个组按 sort 从小到大依次检查，第一个命中的组决定处理方式。
 
 默认组（is_default=1）不能删除：第一次启动时由原配置 keyword_rules、wxcode_regex_rules、hit_mute_enabled、
@@ -72,6 +74,8 @@ class RuleGroupMixin:
             cols = {r["name"] for r in conn.execute("PRAGMA table_info(rule_groups)").fetchall()}
             if "cards" not in cols:
                 conn.execute("ALTER TABLE rule_groups ADD COLUMN cards TEXT NOT NULL DEFAULT '{}'")
+            if "codes" not in cols:
+                conn.execute("ALTER TABLE rule_groups ADD COLUMN codes TEXT NOT NULL DEFAULT '[]'")
             has_default = conn.execute("SELECT 1 FROM rule_groups WHERE is_default=1").fetchone()
             if not has_default:
                 self._rg_migrate(conn)
@@ -121,6 +125,7 @@ class RuleGroupMixin:
             "is_default": bool(row["is_default"]), "scope": [str(x) for x in load(row["scope"], [])],
             "keywords": load(row["keywords"], []), "code_rules": load(row["code_rules"], []),
             "apps": load(row["apps"], []),
+            "codes": [str(x) for x in load(row["codes"], [])] if "codes" in row.keys() else [],
             "cards": {
                 "group_card": str(cards.get("group_card") or "") if str(cards.get("group_card") or "") in RG_CARD_MODES else "",
                 "allow": [str(x) for x in (cards.get("allow") or []) if str(x).isdigit()],
@@ -155,6 +160,7 @@ class RuleGroupMixin:
             g["_code"] = self._compile_rule_list(tuple(g["code_rules"]), regex_only=True)
             g["_apps"] = self._rg_compile_apps(g["apps"])
             g["_scope"] = set(g["scope"])
+            g["_codes"] = set(g["codes"])
             g["_card_allow"] = set(g["cards"]["allow"])
         self._rg_cache = groups
         return groups
@@ -171,7 +177,7 @@ class RuleGroupMixin:
 
     def _rg_default_action(self) -> Optional[dict]:
         g = self._rg_default()
-        return dict(g["action"], group=g["name"]) if g else None
+        return dict(g["action"], group=g["name"], group_id=g["id"]) if g else None
 
     # ------------------------------------------------------------------
     # 匹配
@@ -194,10 +200,12 @@ class RuleGroupMixin:
         return None, None
 
     def _rg_match_code(self, text: str, group_id: str = "") -> Tuple[Optional[dict], Optional[str]]:
-        """解出的码内容 → (命中的组, 命中的正则)。"""
+        """解出的码内容 → (命中的组, 命中的正则)。组里拉黑的码（完全相同）先于正则。"""
         if not text:
             return None, None
         for g in self._rg_applicable(group_id):
+            if text.strip() in g["_codes"]:
+                return g, "已拉黑的码"
             rule = self._match_compiled(text, g["_code"])
             if rule:
                 return g, rule
@@ -307,7 +315,7 @@ class RuleGroupMixin:
 
     @staticmethod
     def _rg_action(group: Optional[dict]) -> Optional[dict]:
-        return dict(group["action"], group=group["name"]) if group else None
+        return dict(group["action"], group=group["name"], group_id=group["id"]) if group else None
 
     # ------------------------------------------------------------------
     # 增删改
@@ -464,20 +472,91 @@ class RuleGroupMixin:
             self._rg_invalidate()
         return ""
 
-    def _rg_add_app(self, entry: str, source: str = "WebUI", operator: str = "") -> str:
-        """「拉黑小程序」：加入默认组的小程序列表。"""
+    def _rg_get(self, gid) -> Optional[dict]:
+        """按 id 取规则组；gid 为空 / 0 = 默认组。不存在返回 None。"""
+        try:
+            n = int(gid or 0)
+        except (TypeError, ValueError):
+            return None
+        if not n:
+            return self._rg_default()
+        return next((g for g in self._rg_list() if g["id"] == n), None)
+
+    def _rg_add_app(self, entry: str, source: str = "WebUI", operator: str = "", group_id=0) -> str:
+        """「拉黑小程序」：加入所选规则组（group_id 为空 = 默认组）的小程序列表。
+        其它组里完全相同的条目移走：同一条只在一个组里，处理方式不会混。"""
         entry = str(entry or "").strip()[:RG_APP_MAX_LEN]
         if not entry:
             return "小程序为空"
-        g = self._rg_default()
+        g = self._rg_get(group_id)
         if not g:
-            return "没有默认组"
-        if entry.casefold() in [a.casefold() for a in g["apps"]]:
+            return "没有默认组" if not group_id else "规则组不存在（可能已被删除）"
+        folded = entry.casefold()
+        for other in self._rg_list():
+            if other["id"] != g["id"] and folded in [a.casefold() for a in other["apps"]]:
+                data = self._rg_public(other)
+                data["apps"] = [a for a in other["apps"] if a.casefold() != folded]
+                _saved, err, _errs = self._rg_save(data, source=source, operator=operator)
+                if err:
+                    return err
+        g = self._rg_get(g["id"])
+        if folded in [a.casefold() for a in g["apps"]]:
             return ""
         data = self._rg_public(g)
         data["apps"] = g["apps"] + [entry]
         _saved, err, _errs = self._rg_save(data, source=source, operator=operator)
         return err
+
+    # ------------------------------------------------------------------
+    # 组里拉黑的码（codes 列）。默认组的在配置 wxcode_block_codes（code_board.py）
+    # ------------------------------------------------------------------
+    def _rg_write_codes(self, gid: int, codes: List[str]) -> None:
+        self._rg_init_db()
+        with self._storage._connect() as conn:
+            conn.execute("UPDATE rule_groups SET codes=?, updated_at=? WHERE id=?",
+                         (json.dumps(codes, ensure_ascii=False), int(time.time()), int(gid)))
+            conn.commit()
+        self._rg_invalidate()
+
+    def _rg_strip_code(self, text: str, keep_gid: int = 0) -> List[str]:
+        """从（除 keep_gid 以外的）所有组移除这个码，返回移除了它的组名。"""
+        t = str(text or "").strip()
+        removed = []
+        if not t or not self._rg_active():
+            return removed
+        for g in self._rg_list():
+            if g["id"] != keep_gid and t in g["_codes"]:
+                self._rg_write_codes(g["id"], [c for c in g["codes"] if c != t])
+                removed.append(g["name"])
+        return removed
+
+    def _rg_add_code(self, gid: int, text: str, limit: int) -> str:
+        g = self._rg_get(gid)
+        if not g or g["is_default"]:
+            return "规则组不存在（可能已被删除）"
+        t = str(text or "").strip()
+        if t in g["_codes"]:
+            return ""
+        if len(g["codes"]) >= limit:
+            return f"规则组「{g['name']}」拉黑的码已达上限 {limit} 个"
+        self._rg_write_codes(g["id"], g["codes"] + [t])
+        return ""
+
+    def _rg_code_owner(self, text: str) -> Optional[dict]:
+        t = str(text or "").strip()
+        if not t or not self._rg_active():
+            return None
+        return next((g for g in self._rg_list() if t in g["_codes"]), None)
+
+    def _rg_choices(self) -> List[dict]:
+        """快捷拉黑时可选的规则组（按检查顺序，默认组最后）。"""
+        out = []
+        for g in self._rg_list():
+            out.append({"id": g["id"], "name": g["name"], "enabled": g["enabled"], "is_default": g["is_default"],
+                        "scope": g["scope"], "recall": g["action"]["recall"], "mute": g["action"]["mute"],
+                        "mute_minutes": g["action"]["mute_minutes"], "kick": g["action"]["kick"],
+                        "apps": len(g["apps"]), "codes": len(g["codes"])})
+        return out
 
     def _rg_remove_app(self, entry: str, source: str = "WebUI", operator: str = "") -> str:
         """从所有组的小程序列表里移除（解除拉黑）。"""
@@ -499,6 +578,7 @@ class RuleGroupMixin:
             a = group["action"]
             detail = (f"{group['name']}：关键词 {len(group['keywords'])} 条、码规则 {len(group['code_rules'])} 条、"
                       f"小程序 {len(group['apps'])} 个"
+                      + (f"、拉黑的码 {len(group['codes'])} 个" if group.get("codes") else "")
                       + (f"、群名片（{RG_CARD_MODES[group['cards']['group_card']]}）" if group["cards"]["group_card"] else "")
                       + "；" + ("撤回、" if a.get("recall", True) else "不撤回（只抄送提醒）、")
                       + ("禁言 %d 分钟" % a["mute_minutes"] if a["mute"] else "不禁言")
@@ -519,7 +599,7 @@ class RuleGroupMixin:
         g, rule = self._rg_match_text(text, group_id)
         out["text"] = {"group": g["name"], "rule": rule} if g else None
         g, rule = self._rg_match_code(code.strip(), group_id) if code.strip() else (None, None)
-        if not g and code.strip() and code.strip() in getattr(self, "_code_block_set", lambda: set())():
+        if not g and code.strip() and code.strip() in getattr(self, "_code_list_set", lambda _k: set())("block"):
             d = self._rg_default()
             out["code"] = {"group": d["name"] if d else "", "rule": "已拉黑的码"}
         else:

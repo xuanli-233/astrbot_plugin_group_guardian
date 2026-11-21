@@ -167,7 +167,7 @@ class RuleGroupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((rule, action["group"]), ("invite", "邀请码"))
         rule, action = h._hg_code("https://x/pages/a/share", "1")
         self.assertEqual((rule, action["group"]), ("pages/.*share", "默认组"))
-        h._code_block_set = lambda: {"BAD"}
+        h._code_list_set = lambda kind: {"BAD"} if kind == "block" else set()
         self.assertEqual(h._hg_code("BAD", "1"), ("已拉黑的码", None))
         self.assertEqual(h._rg_test(code="BAD")["code"]["rule"], "已拉黑的码")
 
