@@ -6,8 +6,10 @@
     pass  放行（计入发送次数）   limit  超过次数被撤回   rule  命中码内容规则 / 已拉黑被撤回
     allow 在白名单里（放行，不计次）
   同时保存图片：原图和每个码的裁剪图存到插件数据目录 code_images/，超过 code_image_max_kb（默认 500KB）
-  先压缩；同一张图只存一份。记录和图片保留 code_store_ttl_hours 小时后自动清理（0 = 滚动窗口 × 2；
-  填了也不会短于滚动窗口，否则计次会漏算）。
+  先压缩；同一张图只存一份。记录和图片保留 code_store_ttl_hours 小时后自动清理（0 = 自动：7 天，
+  滚动窗口 × 2 更长时按它；填了也不会短于滚动窗口，否则计次会漏算）。
+  按人长期累计（code_user_stats，谁发过哪个码、几次）和码缩略图保留 code_stats_keep_days 天：
+  超过这么多天没再发过的「人 + 码 + 群」删掉（0 = 永久保留）。
 
 发送次数限制（code_limit_enabled，默认关）
   没命中规则、不在白名单的码按内容计次：code_limit_window_hours 小时（滑动窗口）内超过 code_limit_max 次，
@@ -36,6 +38,8 @@ except ImportError:  # 单元测试直接加载本文件
 CODE_LIMIT_WINDOW_MAX_HOURS = 168
 # 码记录 / 图片最长保留（小时），一年
 CODE_STORE_TTL_MAX_HOURS = 8760
+CODE_STORE_TTL_DEFAULT_HOURS = 168      # code_store_ttl_hours = 0 时：7 天
+CODE_STATS_KEEP_DAYS_MAX = 3650
 CODE_LIMIT_TEXT_MAX = 300
 CODE_IMAGE_THUMB = 96
 DEFAULT_WARN = "[群管] {name}，同一个码 {hours} 小时内只能发 {max} 次，这条已撤回"
@@ -205,13 +209,17 @@ class CodeLimitMixin:
         return bool(self._cfg("code_store_enabled", True, group_id=group_id))
 
     def _cs_ttl_hours(self) -> int:
-        """码记录 / 图片保留时长（小时）。code_store_ttl_hours = 0 时为滚动窗口 × 2；
+        """码记录 / 图片保留时长（小时）。code_store_ttl_hours = 0 时为 7 天（滚动窗口 × 2 更长时按它）；
         自定义值不短于滚动窗口（计次要读窗口内的记录），不超过 CODE_STORE_TTL_MAX_HOURS。"""
         window = min(max(self._cfg_int("code_limit_window_hours", 5), 1), CODE_LIMIT_WINDOW_MAX_HOURS)
         custom = self._cfg_int("code_store_ttl_hours", 0)
         if custom <= 0:
-            return window * 2
+            return max(CODE_STORE_TTL_DEFAULT_HOURS, window * 2)
         return min(max(custom, window), CODE_STORE_TTL_MAX_HOURS)
+
+    def _cs_stats_keep_days(self) -> int:
+        """按人累计保留天数，0 = 永久。"""
+        return min(max(self._cfg_int("code_stats_keep_days", 180), 0), CODE_STATS_KEEP_DAYS_MAX)
 
     def _cs_ttl(self) -> int:
         """码记录 / 图片保留时长（秒），见 _cs_ttl_hours。"""
@@ -488,6 +496,14 @@ class CodeLimitMixin:
                     pass
                 conn.execute("DELETE FROM code_images WHERE hash=?", (row["hash"],))
                 removed += 1
+            keep_days = self._cs_stats_keep_days()
+            if keep_days:
+                # 按人累计：很久没再发过的删掉；缩略图在没有任何人引用、也没有近期记录时删掉
+                stats_cutoff = now - keep_days * 86400
+                conn.execute("DELETE FROM code_user_stats WHERE last_ts < ?", (stats_cutoff,))
+                conn.execute("DELETE FROM code_thumbs WHERE ts < ? AND code_hash NOT IN "
+                             "(SELECT code_hash FROM code_user_stats UNION SELECT code_hash FROM code_sends)",
+                             (stats_cutoff,))
             conn.commit()
         return removed
 

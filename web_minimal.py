@@ -30,6 +30,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Optional, Tuple
 
+from astrbot.api import logger
+
 try:
     from quart import jsonify, request as quart_request
 except ImportError:  # 单元测试环境
@@ -72,7 +74,7 @@ MINIMAL_CONFIG_KEYS = (
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
     "code_limit_warn_enabled", "code_limit_warn_template", "code_limit_count_by", "code_store_enabled", "code_image_max_kb",
-    "code_store_ttl_hours",
+    "code_store_ttl_hours", "code_stats_keep_days",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
@@ -565,14 +567,56 @@ class MinimalWebMixin:
         client = await self._get_client()
         if client:
             await self._dir_groups(client)  # 群列表过期时刷新（成员不在这里批量拉取）
+        # 按「发过什么」筛选 / 排序要整表按人汇总（几十万条记录约 0.3 秒）：缓存过期时先在线程里算好，不卡消息处理
+        sent, sort = str(args.get("sent", "") or ""), str(args.get("sort", "") or "count")
+        cached = getattr(self, "_dup_act_cache", None)
+        if (sent or sort == "sends") and not (cached and time.time() - cached[0] < self.DUP_ACT_TTL):
+            import asyncio
+            await asyncio.get_running_loop().run_in_executor(None, self._dup_activity_all)
         # 6 万成员时重复的人可能上万：只返回当前页（结果在插件里缓存，翻页不重算）
         data = self._dup_page(
             min_groups=self._safe_int(args.get("min_groups", 2), 2),
             include_exempt=flag("include_exempt"), include_ignored=flag("include_ignored"),
             keyword=str(args.get("keyword", "") or ""), sort=str(args.get("sort", "") or "count"),
             page=self._safe_int(args.get("page", 1), 1), page_size=self._safe_int(args.get("page_size", 50), 50),
+            sent=str(args.get("sent", "") or ""),
         )
         return jsonify({"status": "success", "data": data})
+
+    async def _web_minimal_storage(self):
+        """存储占用（storage_admin.py）：统计在线程里做。"""
+        try:
+            data = await self._sa_offload(self._sa_report)
+        except Exception as e:
+            return self._minimal_error(f"统计失败：{e}")
+        data["busy"] = bool(getattr(self, "_sa_busy", False))
+        return jsonify({"status": "success", "data": data})
+
+    async def _web_minimal_storage_action(self):
+        data = await self._minimal_body()
+        result, err = await self._sa_run(
+            str(data.get("action") or ""), category=str(data.get("category") or ""),
+            days=self._safe_int(data.get("days", -1), -1), max_kb=self._safe_int(data.get("max_kb", 300), 300),
+            **self._web_log())
+        if err:
+            return self._minimal_error(err)
+        return jsonify({"status": "success", "data": result})
+
+    async def _web_minimal_member_sends(self):
+        """某人发过的链接 / 小程序 / 码（重复成员页的快捷浮窗）：三张表各按人查，带条数上限。"""
+        uid = str(quart_request.args.get("user_id", "") or "").strip()
+        if not uid.isdigit():
+            return self._minimal_error("QQ 号不对")
+        out = {"user_id": uid}
+        for key, name, kw in (("links", "_lk_user", {"limit": 50}), ("miniapps", "_mp_user", {"limit": 50}),
+                              ("codes", "_cu_user_detail", {"limit": 100})):
+            fn = getattr(self, name, None)
+            try:
+                out[key] = fn(uid, **kw) if callable(fn) else None
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 读取 {uid} 的{key}记录失败: {e}")
+                out[key] = None
+        return jsonify({"status": "success", "data": out})
 
     async def _web_minimal_duplicates_handle(self):
         ok, msg = self._cfg_check("enabled", "踢人")
@@ -584,7 +628,8 @@ class MinimalWebMixin:
             f = data.get("filter") if isinstance(data.get("filter"), dict) else {}
             user_ids = self._dup_matching_ids(min_groups=self._safe_int(f.get("min_groups", 2), 2),
                                               include_ignored=bool(f.get("include_ignored")),
-                                              keyword=str(f.get("keyword") or ""))
+                                              keyword=str(f.get("keyword") or ""),
+                                              sent=str(f.get("sent") or ""))
             expect = self._safe_int(data.get("expect_count"), -1)
             if expect >= 0 and expect != len(user_ids):
                 return self._minimal_error(f"符合条件的人数已变化（确认时 {expect} 人，现在 {len(user_ids)} 人），请刷新后重新确认")
@@ -734,6 +779,7 @@ class MinimalWebMixin:
             "items": items, "total": total, "by": by,
             "sort": str(args.get("sort", "") or "count") if str(args.get("sort", "") or "count") in self.CS_SORTS else "count",
             "window_hours": window, "ttl_hours": self._cs_ttl_hours(), "ttl_custom": self._cfg_int("code_store_ttl_hours", 0),
+            "stats_keep_days": self._cs_stats_keep_days(),
             "store_enabled": bool(self._cfg("code_store_enabled", True)),
         }})
 

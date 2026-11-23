@@ -12,6 +12,9 @@
   keep_one   只保留一个群（默认最早加入的群），从其余群踢出；可选在被踢的群里 QQ 原生拉黑
   kick_all   从所有群踢出；可选加入插件用户黑名单（同时 QQ 原生拉黑）
   ignore     加入忽略名单，以后不再列出（如工作人员）；可取消
+
+发送情况（_dup_activity）：每人发过多少链接（lk_sends）、小程序（mp_sends）、码（code_user_stats），其中多少被撤回 / 提醒。
+  只翻页时只查当前页的人（≤200 个 QQ，走 user_id 索引）；按「发过什么」筛选或排序时才整表按人汇总一次，缓存 60 秒。
 """
 import json
 import time
@@ -20,8 +23,23 @@ from typing import Dict, List, Optional
 from astrbot.api import logger
 
 
+DUP_SENT_FILTERS = {"any": "发过链接 / 小程序 / 码", "bad": "有被撤回或提醒的", "link": "发过链接",
+                    "miniapp": "发过小程序", "code": "发过码"}
+# (类别, 建表方法, 按人汇总的 SQL；{where} 换成 user_id 条件)
+_DUP_ACT_SQL = [
+    ("link", "_lk_init_db", "SELECT user_id, COUNT(*) AS n, SUM(outcome IN ('rule','notify')) AS bad, MAX(ts) AS last "
+                            "FROM lk_sends {where} GROUP BY user_id"),
+    ("miniapp", "_mp_init_db", "SELECT user_id, COUNT(*) AS n, SUM(outcome IN ('rule','notify')) AS bad, MAX(ts) AS last "
+                               "FROM mp_sends {where} GROUP BY user_id"),
+    ("code", "_cl_init_db", "SELECT user_id, SUM(total) AS n, SUM(ruled + limited) AS bad, MAX(last_ts) AS last "
+                            "FROM code_user_stats {where} GROUP BY user_id"),
+]
+
+
 class DuplicateMemberMixin:
     DUP_IGNORE_META_KEY = "duplicate_member_ignore"
+    DUP_ACT_TTL = 60           # 整表汇总的缓存秒数
+    DUP_ACT_CHUNK = 500        # IN (...) 每批的 QQ 数
     DUP_SCOPE_META_KEY = "duplicate_member_scope"
     DUP_AVATAR_URL = "https://q1.qlogo.cn/g?b=qq&nk={uid}&s=100"
 
@@ -131,10 +149,23 @@ class DuplicateMemberMixin:
         return out
 
     def _dup_page(self, min_groups: int = 2, include_exempt: bool = False, include_ignored: bool = False,
-                  keyword: str = "", sort: str = "count", page: int = 1, page_size: int = 50) -> dict:
-        """WebUI 用：筛选后分页。返回 {items（本页）, total, page, page_size, by_count, coverage}。"""
+                  keyword: str = "", sort: str = "count", page: int = 1, page_size: int = 50, sent: str = "") -> dict:
+        """WebUI 用：筛选后分页。返回 {items（本页，带 activity 发送情况）, total, page, page_size, by_count, coverage}。
+        sent：只看发过链接 / 小程序 / 码的（DUP_SENT_FILTERS）；sort=sends：发得多 / 被撤回多的在前。"""
         items = self._dup_filter(self._dup_all(), min_groups, include_exempt, include_ignored, keyword)
-        if sort == "recent_join":
+        need_all = sent in DUP_SENT_FILTERS or sort == "sends"
+        act_all = self._dup_activity_all() if need_all else None
+        sent_people = None
+        if act_all is not None:
+            sent_people = sum(1 for it in items if (act_all.get(it["user_id"]) or {}).get("total"))
+        if sent in DUP_SENT_FILTERS:
+            items = [it for it in items if self._dup_sent_match(act_all.get(it["user_id"]), sent)]
+        if sort == "sends":
+            def key(it):
+                a = act_all.get(it["user_id"]) or {}
+                return (-a.get("bad", 0), -a.get("total", 0), -it["count"])
+            items = sorted(items, key=key)
+        elif sort == "recent_join":
             items = sorted(items, key=lambda it: -max(g["join_time"] for g in it["groups"]))
         elif sort == "uid":
             items = sorted(items, key=lambda it: int(it["user_id"]) if it["user_id"].isdigit() else 0)
@@ -144,15 +175,94 @@ class DuplicateMemberMixin:
         page_size = min(max(int(page_size or 50), 10), 200)
         pages = max(1, (len(items) + page_size - 1) // page_size)
         page = min(max(int(page or 1), 1), pages)
-        return {"items": items[(page - 1) * page_size: page * page_size], "total": len(items), "page": page,
-                "page_size": page_size, "pages": pages,
+        shown = items[(page - 1) * page_size: page * page_size]
+        act = act_all if act_all is not None else self._dup_activity([it["user_id"] for it in shown])
+        shown = [dict(it, activity=act.get(it["user_id"])) for it in shown]   # 缓存里的条目不改
+        return {"items": shown, "total": len(items), "page": page,
+                "page_size": page_size, "pages": pages, "sent_people": sent_people,
                 "by_count": [{"count": k, "people": v} for k, v in sorted(by_count.items(), reverse=True)],
                 "coverage": self._dup_coverage()}
 
-    def _dup_matching_ids(self, min_groups: int = 2, include_ignored: bool = False, keyword: str = "") -> List[str]:
+    def _dup_matching_ids(self, min_groups: int = 2, include_ignored: bool = False, keyword: str = "",
+                          sent: str = "") -> List[str]:
         """按条件批量处理：符合筛选条件、且不是管理员 / 白名单的全部 QQ（与列表顺序一致）。"""
-        return [it["user_id"] for it in self._dup_filter(self._dup_all(), min_groups, False, include_ignored, keyword)
-                if not (it["plugin_admin"] or it["whitelisted"])]
+        items = self._dup_filter(self._dup_all(), min_groups, False, include_ignored, keyword)
+        if sent in DUP_SENT_FILTERS:
+            act = self._dup_activity_all()
+            items = [it for it in items if self._dup_sent_match(act.get(it["user_id"]), sent)]
+        return [it["user_id"] for it in items if not (it["plugin_admin"] or it["whitelisted"])]
+
+    # ------------------------------------------------------------------
+    # 发送情况（链接 / 小程序 / 码）
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _dup_act_add(out: Dict[str, dict], kind: str, row) -> None:
+        uid = str(row["user_id"] or "")
+        if not uid:
+            return
+        a = out.setdefault(uid, {"link": 0, "link_bad": 0, "miniapp": 0, "miniapp_bad": 0, "code": 0, "code_bad": 0,
+                                 "total": 0, "bad": 0, "last_ts": 0})
+        n, bad = int(row["n"] or 0), int(row["bad"] or 0)
+        a[kind] += n
+        a[kind + "_bad"] += bad
+        a["total"] += n
+        a["bad"] += bad
+        a["last_ts"] = max(a["last_ts"], int(row["last"] or 0))
+
+    def _dup_act_query(self, uids: Optional[List[str]] = None) -> Dict[str, dict]:
+        """uids=None：整表按人汇总；否则只查这些人（分批 IN，走 user_id 索引）。"""
+        out: Dict[str, dict] = {}
+        storage = getattr(self, "_storage", None)
+        if storage is None or not hasattr(storage, "_connect"):
+            return out
+        batches = [None] if uids is None else [uids[i:i + self.DUP_ACT_CHUNK]
+                                               for i in range(0, len(uids), self.DUP_ACT_CHUNK)]
+        for kind, init, sql in _DUP_ACT_SQL:
+            init_db = getattr(self, init, None)
+            if not callable(init_db):
+                continue
+            try:
+                init_db()
+                with storage._connect() as conn:
+                    for batch in batches:
+                        if batch is None:
+                            rows = conn.execute(sql.format(where=""))
+                        elif batch:
+                            rows = conn.execute(sql.format(where=f"WHERE user_id IN ({','.join('?' * len(batch))})"),
+                                                [str(u) for u in batch])
+                        else:
+                            continue
+                        for r in rows:
+                            self._dup_act_add(out, kind, r)
+            except Exception as e:
+                logger.debug(f"[GroupMgr] 统计重复成员的{kind}发送记录失败: {e}")
+        return out
+
+    def _dup_activity_all(self) -> Dict[str, dict]:
+        cached = getattr(self, "_dup_act_cache", None)
+        now = time.time()
+        if cached and now - cached[0] < self.DUP_ACT_TTL:
+            return cached[1]
+        data = self._dup_act_query(None)
+        self._dup_act_cache = (now, data)
+        return data
+
+    def _dup_activity(self, uids: List[str]) -> Dict[str, dict]:
+        """这些人的发送情况：整表缓存还新鲜就直接用，否则只查这几个人。"""
+        cached = getattr(self, "_dup_act_cache", None)
+        if cached and time.time() - cached[0] < self.DUP_ACT_TTL:
+            return {u: cached[1][u] for u in uids if u in cached[1]}
+        return self._dup_act_query(list(uids))
+
+    @staticmethod
+    def _dup_sent_match(a: Optional[dict], sent: str) -> bool:
+        if not a:
+            return False
+        if sent == "any":
+            return a["total"] > 0
+        if sent == "bad":
+            return a["bad"] > 0
+        return a.get(sent, 0) > 0
 
     def _dup_coverage(self) -> dict:
         state = self._dir()

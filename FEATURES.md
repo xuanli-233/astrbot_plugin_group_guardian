@@ -108,7 +108,7 @@
 
 ### 重复成员检测
 
-同一个 QQ 号同时在 2 个及以上「管理的群」里即为重复成员。检测范围可以在页面上勾选（meta 表键 `duplicate_member_scope`，没勾选 = 所有管理的群）。头像直接用 QQ 头像地址，不调用接口。只读本地成员缓存，不额外调用接口；页面会显示多少个群已缓存成员，没缓存的群不参与统计，可一键「刷新所有群的成员缓存」（后台逐个限速）。备份群 / 转发群、机器人自己不参与统计；插件管理员、用户白名单、在任一群是群主 / 管理员的人默认不列出，且插件管理员和白名单用户永远不会被处理。忽略名单存在 SQLite meta 表（键 `duplicate_member_ignore`）。
+同一个 QQ 号同时在 2 个及以上「管理的群」里即为重复成员。检测范围可以在页面上勾选（meta 表键 `duplicate_member_scope`，没勾选 = 所有管理的群）。头像直接用 QQ 头像地址，不调用接口。只读本地成员缓存，不额外调用接口；页面会显示多少个群已缓存成员，没缓存的群不参与统计，可一键「刷新所有群的成员缓存」（后台逐个限速）。备份群 / 转发群、机器人自己不参与统计；插件管理员、用户白名单、在任一群是群主 / 管理员的人默认不列出，且插件管理员和白名单用户永远不会被处理。忽略名单存在 SQLite meta 表（键 `duplicate_member_ignore`）。发过链接 / 小程序 / 码的人整行加底色、显示次数标签（`lk_sends` / `mp_sends` / `code_user_stats` 按人汇总），点标签弹出发送记录浮窗（`GET /minimal/member/sends`）；可按「发过什么」筛选（`sent`：any / bad / link / miniapp / code）或按发送量排序（`sort=sends`）。平时只查当前页的人；筛选 / 排序时整表汇总一次，在线程里算并缓存 60 秒。
 
 ### 操作记录与拉黑原因
 
@@ -164,6 +164,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ leave_recall.py    退群 / 被踢后撤回近期消息
 ├─ leave_files.py     退群 / 被踢后删除他上传的群文件
 ├─ join_lock.py       踢人后暂停加群：被踢后改成禁止加群几小时，到点恢复
+├─ storage_admin.py   存储管理：占用统计、删除旧记录、孤儿文件、重新压缩图片、整理数据库
 ├─ link_guard.py      链接管理：记录消息里的链接、按域名统计、域名 / 链接拉黑、安全读取网页标题
 ├─ leave_log.py       退群记录（退群前的消息、次数），退群拉黑按它计次
 ├─ auto_accept.py     自动同意好友申请 / 进群邀请
@@ -204,7 +205,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 | 10 | **规则组：小程序 → 关键词 → 葵花码 / 二维码识别 → OCR 文字**（`keyword_guard.py` + `rule_groups.py`，见第零节）。第一个命中的规则组决定处理方式；码黑名单、码发送超限、解不出的码用默认组的处理方式 | `keyword_guard_enabled` / `wxcode_enabled` / `local_ocr_driver` | 启用 / 默认关 / 关 | 备份到指定群 + 撤回，按规则组禁言（分钟）、群内提示 |
 | 10.5 | **码白名单**：`wxcode_allow_codes` 里的码（内容完全一致）一律放行，不按正则撤回、不计次；与黑名单 `wxcode_block_codes` 互斥 | — | 空 | 放行 |
 | 10.6 | **同一个码的发送次数**：解出的码没命中规则时计次，`code_limit_window_hours` 小时内超过 `code_limit_max` 次撤回（`code_limit.py`） | `code_limit_enabled`、`code_limit_scope`（global 所有群合计 / group 每群单独）、`code_limit_count_by`（code 按码 / user 按人）、`code_limit_warn_enabled` + `code_limit_warn_template` | 默认关；5 小时 3 次，按码，警告开 | 同上，另发警告 |
-| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_store_ttl_hours` 小时后自动删除（0 = `code_limit_window_hours × 2`，不短于统计窗口）；WebUI「码管理」查看。同时按 (人, 码, 群) 长期累计到 `code_user_stats`（不随上面的保留时长清理），每个码在 `code_thumbs` 留一张小缩略图，供「按人统计」使用；升级后第一次启动会把还没清理的 `code_sends` 补进累计 | `code_store_enabled`、`code_image_max_kb`、`code_store_ttl_hours` | 开；500KB；0 | — |
+| 10.7 | **码记录**：每个解出的码记一行（SQLite `code_sends`：时间、群、发送者、处理结果 放行 / 超限 / 规则 / 白名单），原图和裁剪图存到数据目录 `code_images/`（超过 `code_image_max_kb` 压缩，同一张图一份），保留 `code_store_ttl_hours` 小时后自动删除（0 = 自动：7 天，`code_limit_window_hours × 2` 更长时按它；不短于统计窗口）；WebUI「码管理」查看。同时按 (人, 码, 群) 长期累计到 `code_user_stats`（不随上面的保留时长清理；超过 `code_stats_keep_days` 天没再发过的删掉，0 = 永久），每个码在 `code_thumbs` 留一张小缩略图，供「按人统计」使用；升级后第一次启动会把还没清理的 `code_sends` 补进累计 | `code_store_enabled`、`code_image_max_kb`、`code_store_ttl_hours`、`code_stats_keep_days` | 开；500KB；0（7 天）；180 | — |
 
 每一步都会写入实时日志（`live_log.py`）。
 
@@ -313,7 +314,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 
 ## 八、WebUI 管理面板（`web.py` + `web_minimal.py` + `pages/dashboard/index.html`）
 
-侧边栏分组（`.nav-section`，点标题收起 / 展开，状态存浏览器 `gg_nav_fold`）：消息拦截（拦截规则、码管理、小程序、链接管理、识别服务与转发群）、监控与记录（实时日志、码大屏、违规记录、退群记录、操作记录）、成员管理（群成员查找、踢人与黑名单、退群后处理、重复成员、入群审核、定时解禁）、群运营（批量发布、群文件、群名任务、批量任务）、系统（机器人账号、权限管理、指令管理、多群配置、群成员缓存、设置）。筛选栏公共件：`bindAutoFilter`（改了就生效）、`gselEnhance`（可搜索下拉，`GSEL_IDS`）、`fltInit`（下拉前的文字标签 `FLT_LABELS` + 「重置」）；新加筛选下拉时在这三处登记。总览数据（`mnLoadOverview`）切换页面时缓存 15 秒，任何 POST 后作废。「总览」页上半部分（今日数量卡片 + 运行状态）来自 `GET /minimal/home`（`web_minimal._web_minimal_home`，只读本地数据库），带 `data-go` 的卡片点击后切到对应页面。当前页面记在浏览器 `gg_last_tab`，刷新后回到这一页。弹窗统一支持 Esc / Tab 循环（`modalKeydown`），确认弹窗的危险操作默认焦点在「取消」；提示消息 `toast` 失败停留 8 秒、警告 5 秒、其余 2.5 秒（`TOAST_MS`）。「拦截规则」与「识别服务与转发群」共用 `loadGuard`，「踢人与黑名单」「退群后处理」「机器人账号」共用 `loadKick`（页面标识 `guard` / `services`、`kick` / `afterleave` / `botacct`）。
+侧边栏分组（`.nav-section`，点标题收起 / 展开，状态存浏览器 `gg_nav_fold`）：消息拦截（拦截规则、码管理、小程序、链接管理、识别服务与转发群）、监控与记录（实时日志、码大屏、违规记录、退群记录、操作记录）、成员管理（群成员查找、踢人与黑名单、退群后处理、重复成员、入群审核、定时解禁）、群运营（批量发布、群文件、群名任务、批量任务）、系统（机器人账号、权限管理、指令管理、多群配置、群成员缓存、存储管理、设置）。筛选栏公共件：`bindAutoFilter`（改了就生效）、`gselEnhance`（可搜索下拉，`GSEL_IDS`）、`fltInit`（下拉前的文字标签 `FLT_LABELS` + 「重置」）；新加筛选下拉时在这三处登记。总览数据（`mnLoadOverview`）切换页面时缓存 15 秒，任何 POST 后作废。「总览」页上半部分（今日数量卡片 + 运行状态）来自 `GET /minimal/home`（`web_minimal._web_minimal_home`，只读本地数据库），带 `data-go` 的卡片点击后切到对应页面。当前页面记在浏览器 `gg_last_tab`，刷新后回到这一页。弹窗统一支持 Esc / Tab 循环（`modalKeydown`），确认弹窗的危险操作默认焦点在「取消」；提示消息 `toast` 失败停留 8 秒、警告 5 秒、其余 2.5 秒（`TOAST_MS`）。「拦截规则」与「识别服务与转发群」共用 `loadGuard`，「踢人与黑名单」「退群后处理」「机器人账号」共用 `loadKick`（页面标识 `guard` / `services`、`kick` / `afterleave` / `botacct`）。
 
 | 页面 | 内容 |
 | --- | --- |

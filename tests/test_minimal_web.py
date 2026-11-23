@@ -810,7 +810,7 @@ class DashboardWiringTests(unittest.TestCase):
                                 "livelog", "bigscreen", "records", "leavelog", "oplog",
                                 "member", "kick", "afterleave", "dup", "join", "tasks",
                                 "broadcast", "files", "names", "batch",
-                                "botacct", "perms", "commands", "groupcfg", "directory", "settings"])
+                                "botacct", "perms", "commands", "groupcfg", "directory", "storage", "settings"])
         # 每个菜单项都有对应的页面；拆出来的卡片在各自的页面里
         for tab in tabs:
             self.assertIn(f'id="tab-{tab}"', html)

@@ -215,8 +215,13 @@ class CheckTests(unittest.TestCase):
             self.assertIsNone(h._cl_check("1", "a", ["x"], now=T0 + i))
         self.assertEqual(h._cl_count(h._cl_hash("x"), 0), 5)
 
-    def test_clean_removes_rows_older_than_twice_the_window(self):
-        h = _Harness({"code_limit_window_hours": 2})
+    def test_default_ttl_is_seven_days(self):
+        self.assertEqual(_Harness({"code_limit_window_hours": 2})._cs_ttl(), 168 * HOUR)       # 0 = 自动：7 天
+        self.assertEqual(_Harness({"code_limit_window_hours": 100})._cs_ttl(), 200 * HOUR)     # 窗口 × 2 更长时按它
+        self.assertEqual(_Harness({"code_limit_window_hours": 5, "code_store_ttl_hours": 2})._cs_ttl(), 5 * HOUR)
+
+    def test_clean_removes_rows_older_than_ttl(self):
+        h = _Harness({"code_limit_window_hours": 2, "code_store_ttl_hours": 4})
         self.assertEqual(h._cs_ttl(), 4 * HOUR)
         h._cl_record("1", "a", [(h._cl_hash("old"), "old")], T0 - 5 * HOUR)
         h._cl_record("1", "a", [(h._cl_hash("new"), "new")], T0 - 3 * HOUR)
@@ -230,7 +235,7 @@ class UserStatsTests(unittest.TestCase):
     """按人长期累计（code_user_stats）：不随码记录清理，按人汇总、按人看全部码。"""
 
     def test_user_totals_survive_cleanup(self):
-        h = _Harness({"code_limit_window_hours": 2, "code_limit_max": 100})
+        h = _Harness({"code_limit_window_hours": 2, "code_limit_max": 100, "code_store_ttl_hours": 4})
         h._cl_process("1", "a", ["x"], now=T0 - 10 * HOUR, user_name="甲")
         h._cl_process("2", "a", ["x", "y"], now=T0 - 1 * HOUR, user_name="甲改名")
         h._cl_process("1", "b", ["x"], now=T0, user_name="乙")
@@ -379,6 +384,22 @@ class ImageStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h._cs_clean(now + h._cs_ttl() + 10), 2)
         self.assertFalse(any(os.path.exists(p) for p in paths))
         tmp.cleanup()
+
+
+class StatsKeepTests(unittest.TestCase):
+    """按人累计保留 code_stats_keep_days 天（默认 180，0 = 永久）。"""
+
+    def test_old_user_stats_removed(self):
+        h = _Harness({"code_limit_max": 100, "code_stats_keep_days": 30})
+        h._cl_process("1", "a", ["old"], now=T0 - 40 * 86400)
+        h._cl_process("1", "b", ["new"], now=T0 - 1 * 86400)
+        h._cs_clean(T0)
+        self.assertEqual(sorted(i["user_id"] for i in h._cu_users()[0]), ["b"])
+        h = _Harness({"code_limit_max": 100, "code_stats_keep_days": 0})
+        h._cl_process("1", "a", ["old"], now=T0 - 4000 * 86400)
+        h._cs_clean(T0)
+        self.assertEqual([i["user_id"] for i in h._cu_users()[0]], ["a"])                     # 0 = 永久
+        self.assertEqual(_Harness({})._cs_stats_keep_days(), 180)
 
 
 class DetailTests(unittest.TestCase):

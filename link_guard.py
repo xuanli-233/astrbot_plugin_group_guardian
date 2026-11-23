@@ -799,7 +799,7 @@ class LinkGuardMixin:
                 "COUNT(DISTINCT url_hash) AS urls, MAX(ts) AS last_ts FROM lk_sends WHERE user_id=? "
                 "GROUP BY domain ORDER BY total DESC, last_ts DESC LIMIT 100", (uid,)).fetchall()
             recent = conn.execute(
-                "SELECT s.ts, s.group_id, s.domain, s.outcome, s.msg_text, u.url, "
+                "SELECT s.ts, s.group_id, s.domain, s.outcome, s.msg_text, s.form, u.url, "
                 "CASE WHEN s.card_title != '' THEN s.card_title ELSE u.title END AS title FROM lk_sends s "
                 "LEFT JOIN lk_urls u ON u.url_hash = s.url_hash WHERE s.user_id=? ORDER BY s.ts DESC, s.id DESC LIMIT ?",
                 (uid, min(max(int(limit), 1), 200))).fetchall()
@@ -810,5 +810,6 @@ class LinkGuardMixin:
                          "state": self._lk_domain_state(r["domain"])} for r in domains],
             "recent": [{"ts": r["ts"], "group_id": r["group_id"], "domain": r["domain"], "url": r["url"] or "",
                         "title": r["title"] or "", "msg_text": r["msg_text"] or "", "outcome": r["outcome"],
+                        "form": r["form"] or "text",
                         "outcome_label": OUTCOME_LABEL.get(r["outcome"], r["outcome"])} for r in recent],
         }

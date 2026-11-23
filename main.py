@@ -43,6 +43,7 @@ from .command_center import CommandCenterMixin
 from .group_files import GroupFilesMixin
 from .member_lookup import MemberLookupMixin
 from .owner_blacklist import OwnerBlacklistMixin
+from .storage_admin import StorageAdminMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
 from .moderation import ModerationMixin
@@ -55,7 +56,7 @@ from .web_identity import WebIdentityMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, OwnerBlacklistMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, OwnerBlacklistMixin, StorageAdminMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):

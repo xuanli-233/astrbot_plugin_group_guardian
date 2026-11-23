@@ -568,6 +568,32 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .rg-presets{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
     .rg-presets .btn{font-size:12px;padding:3px 8px}
     .rg-dirty{color:var(--warning);font-size:12px;font-weight:500}
+    .modal.modal-wide{width:860px}
+    .sa-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .sa-tile{border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;background:var(--surface)}
+    .sa-tile .sa-v{font-size:22px;font-weight:700;color:var(--text-primary)}
+    .sa-tile .sa-l{font-size:12px;color:var(--text-muted);margin-top:2px}
+    .sa-tile .sa-s{font-size:12px;color:var(--text-secondary);margin-top:4px}
+    .sa-tile.warn{border-color:color-mix(in srgb, var(--warning) 55%, var(--border))}
+    .sa-tile.warn .sa-v{color:var(--warning)}
+    .sa-tile.bad{border-color:color-mix(in srgb, var(--danger) 55%, var(--border))}
+    .sa-tile.bad .sa-v{color:var(--danger)}
+    .sa-bar{height:6px;border-radius:3px;background:var(--bg-secondary);overflow:hidden;margin-bottom:2px}
+    .sa-bar i{display:block;height:100%;background:var(--primary);border-radius:3px}
+    tr.dup-hot>td{background:color-mix(in srgb, var(--warning) 8%, transparent)}
+    tr.dup-hot>td:first-child{box-shadow:inset 3px 0 0 var(--warning)}
+    tr.dup-hot.bad>td{background:color-mix(in srgb, var(--danger) 8%, transparent)}
+    tr.dup-hot.bad>td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+    .dup-hot-legend{padding:0 4px;border-radius:3px;background:color-mix(in srgb, var(--warning) 18%, transparent)}
+    .dup-sends{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
+    .dup-send-tag{font-size:12px;line-height:18px;padding:0 6px;border-radius:4px;cursor:pointer;border:1px solid color-mix(in srgb, var(--warning) 50%, var(--border));background:var(--surface);color:var(--text-primary)}
+    .dup-send-tag:hover{border-color:var(--primary);color:var(--primary)}
+    .dup-send-tag.bad{border-color:color-mix(in srgb, var(--danger) 55%, var(--border))}
+    .dup-send-tag b{color:var(--danger);font-weight:600;margin-left:2px}
+    .dup-sends-tabs{display:flex;gap:6px;margin-bottom:10px}
+    .dup-sends-body{max-height:60vh;overflow:auto}
+    .dup-sum{display:flex;flex-wrap:wrap;gap:2px;margin-bottom:8px}
+    .dup-msg{max-height:54px;overflow:hidden;white-space:pre-wrap;margin-top:2px}
     .qb-what{font-size:12px;word-break:break-all;background:var(--surface-2, var(--surface));border:1px solid var(--border);border-radius:6px;padding:6px 8px;margin-bottom:8px;max-height:84px;overflow:auto}
     .qb-list{display:grid;gap:4px;max-height:320px;overflow:auto}
     .qb-rg{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer}
@@ -866,6 +892,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         <a class="nav-item" data-tab="directory">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
           <span>群成员缓存</span>
+        </a>
+        <a class="nav-item" data-tab="storage">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3C7.58 3 4 4.79 4 7v10c0 2.21 3.59 4 8 4s8-1.79 8-4V7c0-2.21-3.58-4-8-4zm6 14c0 .5-2.13 2-6 2s-6-1.5-6-2v-2.23c1.61.78 3.72 1.23 6 1.23s4.39-.45 6-1.23V17zm0-4.55c-1.3.95-3.58 1.55-6 1.55s-4.7-.6-6-1.55V9.64c1.47.83 3.61 1.36 6 1.36s4.53-.53 6-1.36v2.81zM12 9C8.13 9 6 7.5 6 7s2.13-2 6-2 6 1.5 6 2-2.13 2-6 2z"/></svg>
+          <span>存储管理</span>
         </a>
         <a class="nav-item" data-tab="settings">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -1337,7 +1367,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="settings-list" id="csSwitches"></div>
             <div class="mn-body">
               <div class="mn-row"><label style="width:150px">图片超过多少 KB 压缩</label><input type="number" min="50" max="5000" class="input-sm" id="csMaxKb" style="width:100px" /><span>KB</span></div>
-              <div class="mn-row"><label style="width:150px">记录和图片保留</label><input type="number" min="0" max="8760" class="input-sm" id="csTtlHours" style="width:100px" /><span>小时（0 = 统计窗口 × 2）</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
+              <div class="mn-row"><label style="width:150px">记录和图片保留</label><input type="number" min="0" max="8760" class="input-sm" id="csTtlHours" style="width:100px" /><span>小时（0 = 自动，7 天）</span><span class="mn-hint">常用：168 = 7 天，720 = 30 天</span></div>
+              <div class="mn-row"><label style="width:150px">按人累计保留</label><input type="number" min="0" max="3650" class="input-sm" id="csStatsDays" style="width:100px" /><span>天（0 = 永久）</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
               <p class="mn-hint" id="csTtlHint">每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留指定小时数后自动删除。</p>
             </div>
           </div>
@@ -1766,7 +1797,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
               </select>
               <label class="mn-hint"><input type="checkbox" id="dupExempt" /> 显示管理员 / 白名单</label>
               <label class="mn-hint"><input type="checkbox" id="dupIgnored" /> 显示已忽略</label>
-              <select class="input-sm" id="dupSort" style="width:150px"><option value="count">所在群多的在前</option><option value="recent_join">最近入群的在前</option><option value="uid">按 QQ 号从小到大</option></select>
+              <select class="input-sm" id="dupSent" style="width:170px" title="按这个人发过的链接 / 小程序 / 码筛选（记录保留期内；码是长期累计）"><option value="">所有人</option><option value="any">发过链接 / 小程序 / 码</option><option value="bad">有被撤回或提醒的</option><option value="link">发过链接</option><option value="miniapp">发过小程序</option><option value="code">发过码</option></select>
+              <select class="input-sm" id="dupSort" style="width:150px"><option value="count">所在群多的在前</option><option value="sends">发得多的在前</option><option value="recent_join">最近入群的在前</option><option value="uid">按 QQ 号从小到大</option></select>
               <input class="input-sm" id="dupKeyword" placeholder="QQ号 / 名片" style="width:170px" />
             </div></div>
           <div class="mn-body" style="padding-bottom:0">
@@ -1973,6 +2005,34 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
         </div>
       </div>
 
+      <div class="tab-panel" id="tab-storage">
+        <div class="page-header"><h1>存储管理</h1><button class="btn btn-ghost btn-sm" id="btnSaReload">重新统计</button></div>
+        <p class="mn-intro">插件的数据都在 AstrBot 数据目录下：一个 SQLite 数据库，加上几个存图片的文件夹。这里看每一类记录占了多少，可以按需删掉旧记录、清理没人用的图片、把大图重新压缩、整理数据库把空间还给磁盘。<strong>删除不能恢复</strong>；每次操作都会写进操作记录。平时各类记录按各自的保留时长自动清理（见表格「自动清理」一列）。</p>
+        <div class="card">
+          <div class="card-header"><h2>总览</h2><span class="rules-subtle" id="saGenerated"></span></div>
+          <div class="mn-body"><div class="sa-tiles" id="saTiles"><p class="mn-hint">统计中...</p></div>
+            <div class="mn-row" style="margin-top:10px"><button class="btn btn-outline btn-sm" id="btnSaVacuum">整理数据库</button>
+              <span class="mn-hint" id="saVacuumHint">删掉记录后数据库文件不会自己变小，空出来的地方留着给新记录用；整理一次才会把空闲部分还给磁盘。数据库大时要几秒到几十秒，期间插件写数据库会稍等。</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>按类别</h2><span class="rules-subtle">数据库占用含索引；「图片」是这一类在数据目录里保存的图片文件</span></div>
+          <div class="log-container" id="saCats"><p class="empty">统计中...</p></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>图片文件夹</h2><span class="rules-subtle">孤儿文件 = 数据库里已经没有记录、不会再显示的图片</span></div>
+          <div class="log-container" id="saDirs"><p class="empty">统计中...</p></div>
+          <div class="mn-body">
+            <div class="mn-row"><button class="btn btn-outline btn-sm" id="btnSaOrphans">删除孤儿文件</button>
+              <span class="mn-hint">只删数据库不认识的文件，不影响任何记录</span></div>
+            <div class="mn-row"><label>把超过</label><input type="number" class="input-sm" id="saMaxKb" min="30" max="5000" value="300" style="width:90px" /><label>KB 的图片重新压缩</label>
+              <button class="btn btn-outline btn-sm" id="btnSaRecompress">开始压缩</button>
+              <span class="mn-hint">转成 JPEG、逐步降低质量 / 缩小到不超过这个大小；会损失一些清晰度，压缩后不能还原。一次最多处理每个文件夹最大的 5000 张</span></div>
+          </div>
+        </div>
+        <div id="saResult"></div>
+      </div>
+
       <div class="tab-panel" id="tab-settings">
         <div class="page-header"><h1>设置</h1><button class="btn btn-primary btn-sm" id="btnSaveSettings">保存更改</button></div>
         <p class="mn-intro">插件的全部全局配置。功能页面里已经有的开关在那些页面里改更方便；这里按分类列出全部项，改完点右上角「保存更改」。</p>
@@ -2163,6 +2223,10 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
     <a class="mobile-nav-item" data-tab="directory">
       <svg viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
       <span>群成员缓存</span>
+    </a>
+    <a class="mobile-nav-item" data-tab="storage">
+      <svg viewBox="0 0 24 24"><path d="M12 3C7.58 3 4 4.79 4 7v10c0 2.21 3.59 4 8 4s8-1.79 8-4V7c0-2.21-3.58-4-8-4zm6 14c0 .5-2.13 2-6 2s-6-1.5-6-2v-2.23c1.61.78 3.72 1.23 6 1.23s4.39-.45 6-1.23V17zm0-4.55c-1.3.95-3.58 1.55-6 1.55s-4.7-.6-6-1.55V9.64c1.47.83 3.61 1.36 6 1.36s4.53-.53 6-1.36v2.81zM12 9C8.13 9 6 7.5 6 7s2.13-2 6-2 6 1.5 6 2-2.13 2-6 2z"/></svg>
+      <span>存储管理</span>
     </a>
     <a class="mobile-nav-item" data-tab="settings">
       <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -2850,6 +2914,7 @@ function switchTab(tabName) {
     if (tabName === 'batch') loadBatch();
     if (tabName === 'dup') { mnLoadOverview().then(loadDup); }
     if (tabName === 'directory') loadDirectory();
+    if (tabName === 'storage') loadStorage();
     if (tabName === 'settings') loadSettings();
   } finally { MN_OV.nav = false; }
 }
@@ -3565,6 +3630,7 @@ var MANUAL_SETTING_KEYS = {
   code_store_enabled: true,
   code_image_max_kb: true,
   code_store_ttl_hours: true,
+  code_stats_keep_days: true,
   wxcode_allow_codes: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
@@ -5070,6 +5136,123 @@ function mnCodeTestFile() {
 }
 
 /* ---- 快捷拉黑（小程序 / 码）时选规则组：命中后按那个组的处理方式和生效范围；记住上次选的组 ---- */
+/* ---- 存储管理（storage_admin.py） ---- */
+var SA = { data: null, busy: false };
+function saSize(n) {
+  if (n === null || n === undefined) return '—';
+  n = Number(n || 0);
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return Math.round(n / 1024) + ' KB';
+  return n + ' B';
+}
+async function loadStorage() {
+  var ep = beginLoad('storage');
+  $('#saGenerated').textContent = '统计中…';
+  var res = await safeGet('minimal/storage', {}, 120000);
+  if (!isCurrentLoad('storage', ep)) return;
+  if (isApiError(res)) { $('#saCats').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; $('#saGenerated').textContent = ''; return; }
+  SA.data = mnData(res) || {};
+  saRender();
+}
+function saTile(label, value, sub, tone) {
+  return '<div class="sa-tile' + (tone ? ' ' + tone : '') + '"><div class="sa-v">' + value + '</div><div class="sa-l">' + esc(label) + '</div>' + (sub ? '<div class="sa-s">' + sub + '</div>' : '') + '</div>';
+}
+function saRender() {
+  var d = SA.data, db = d.db || {};
+  var cats = d.categories || [], dirs = d.dirs || [];
+  var files = dirs.reduce(function(a, x) { return a + (x.bytes || 0); }, 0);
+  var orphan = dirs.reduce(function(a, x) { return a + (x.orphans ? x.orphans.bytes : 0); }, 0);
+  var orphanN = dirs.reduce(function(a, x) { return a + (x.orphans ? x.orphans.files : 0); }, 0);
+  $('#saGenerated').textContent = '统计于 ' + mnTime(d.generated_at) + (d.data_dir ? ' · ' + d.data_dir : '');
+  $('#saTiles').innerHTML =
+    saTile('数据库', saSize(db.total), '数据 ' + saSize(db.used_bytes) + (db.wal ? ' · 日志 ' + saSize(db.wal) : '')) +
+    saTile('可回收空间', saSize(db.free_bytes), db.free_bytes > 0 ? '「整理数据库」后还给磁盘' : '不用整理', db.free_bytes > 50 * 1048576 ? 'warn' : '') +
+    saTile('图片文件', saSize(files), dirs.reduce(function(a, x) { return a + (x.files || 0); }, 0) + ' 个' + (orphanN ? ' · 孤儿 ' + orphanN + ' 个（' + saSize(orphan) + '）' : ''), orphanN ? 'warn' : '') +
+    (d.disk ? saTile('磁盘剩余', saSize(d.disk.free), '共 ' + saSize(d.disk.total), d.disk.free < 2 * 1073741824 ? 'bad' : '') : '');
+  var maxBytes = Math.max(1, Math.max.apply(null, cats.map(function(c) { return (c.db_bytes || 0) + (c.file_bytes || 0); })));
+  $('#saCats').innerHTML = '<table class="mn-table"><thead><tr><th>类别</th><th style="text-align:right">记录</th><th style="text-align:right">数据库</th><th style="text-align:right">图片</th><th style="width:150px">占比</th><th>最早一条</th><th>自动清理</th><th></th></tr></thead><tbody>' +
+    cats.map(function(c, i) {
+      var total = (c.db_bytes || 0) + (c.file_bytes || 0);
+      var tables = (c.tables || []).map(function(t) { return t.name + '：' + t.rows + ' 行' + (t.bytes != null ? '，' + saSize(t.bytes) : ''); }).join('\n');
+      return '<tr><td><b>' + esc(c.name) + '</b><br><span class="mn-hint">' + esc(c.desc) + '</span></td>' +
+        '<td style="text-align:right;white-space:nowrap" title="' + escAttr(tables) + '">' + Number(c.rows).toLocaleString() + '</td>' +
+        '<td style="text-align:right;white-space:nowrap">' + (d.dbstat ? saSize(c.db_bytes) : (c.db_bytes ? '<span title="估算：抽样算平均每行大小 × 行数，按比例对上数据库实际大小">约 ' + saSize(c.db_bytes) + '</span>' : '<span class="mn-hint">—</span>')) + '</td>' +
+        '<td style="text-align:right;white-space:nowrap">' + (c.files ? saSize(c.file_bytes) + '<br><span class="mn-hint">' + c.files + ' 个</span>' : '<span class="mn-hint">—</span>') + '</td>' +
+        '<td><div class="sa-bar"><i style="width:' + Math.max(total ? 2 : 0, Math.round(total / maxBytes * 100)) + '%"></i></div><span class="mn-hint">' + saSize(total) + '</span></td>' +
+        '<td style="white-space:nowrap">' + (c.oldest ? esc(mnDate(c.oldest)) : '<span class="mn-hint">—</span>') + '</td>' +
+        '<td class="mn-hint">' + esc(c.retention || '') + '</td>' +
+        '<td style="white-space:nowrap">' + (c.can_purge && c.rows ? '<button class="btn btn-ghost btn-sm" data-sa-purge="' + i + '" style="color:var(--danger)">删除旧记录…</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>' + (d.dbstat ? '' : '<p class="mn-hint" style="padding:8px 12px">数据库占用是估算值（这个环境的 SQLite 不支持精确按表统计）：每张表抽样算平均每行大小 × 行数，再按比例对上数据库实际已用大小。</p>');
+  var DIR_NAMES = { code_images: '码的原图和裁剪图', log_images: '违规记录的图片', leave_images: '退群记录的图片', outbox: '待发送的群文件（临时）' };
+  $('#saDirs').innerHTML = dirs.length ? '<table class="mn-table"><thead><tr><th>文件夹</th><th style="text-align:right">文件</th><th style="text-align:right">大小</th><th style="text-align:right">孤儿文件</th></tr></thead><tbody>' +
+    dirs.map(function(x) {
+      return '<tr><td><b>' + esc(x.name) + '</b> <span class="mn-hint">' + esc(DIR_NAMES[x.name] || '') + '</span></td><td style="text-align:right">' + x.files + '</td><td style="text-align:right">' + saSize(x.bytes) + '</td>' +
+        '<td style="text-align:right">' + (x.orphans ? (x.orphans.files ? '<span style="color:var(--warning)">' + x.orphans.files + ' 个 · ' + saSize(x.orphans.bytes) + '</span>' : '0') : '<span class="mn-hint">—</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">没有图片文件夹</p>';
+  $('#btnSaOrphans').disabled = !orphanN;
+  saSetBusy(!!d.busy);
+}
+function saSetBusy(on) {
+  SA.busy = on;
+  ['btnSaVacuum', 'btnSaOrphans', 'btnSaRecompress'].forEach(function(id) { var b = document.getElementById(id); if (b && on) b.disabled = true; else if (b && id !== 'btnSaOrphans') b.disabled = false; });
+  $$('[data-sa-purge]').forEach(function(b) { b.disabled = on; });
+}
+async function saAction(body, doing) {
+  saSetBusy(true);
+  $('#saResult').innerHTML = '<div class="mn-result no">' + esc(doing) + '……</div>';
+  var res = await safePost('minimal/storage/action', body, 600000);
+  saSetBusy(false);
+  if (isApiError(res)) { $('#saResult').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return null; }
+  return mnData(res) || {};
+}
+async function saPurge(c) {
+  var v = await promptModal({ title: '删除旧记录：' + c.name,
+    label: '删掉多少天以前的？（' + c.desc + '）\n现有 ' + Number(c.rows).toLocaleString() + ' 条，最早一条在 ' + (c.oldest ? mnDate(c.oldest) : '—') + '。\n填 0 = 全部删除。',
+    value: '90', okText: '下一步' });
+  if (v === null) return;
+  var days = Number(v);
+  if (!(days >= 0) || Math.floor(days) !== days) { toast('天数填 0 或正整数', 'warning'); return; }
+  var what = days === 0 ? '「' + c.name + '」的全部记录' : '「' + c.name + '」里 ' + days + ' 天以前的记录';
+  if (!(await mnConfirm('删除' + what + (c.files ? '，以及对应的图片文件' : '') + '？\n删除后不能恢复；相关页面里的统计、历史也会跟着变少。', { title: '确认删除', okText: '删除', danger: true }))) return;
+  if (days === 0) {
+    var typed = await promptModal({ title: '再确认一次', label: '将清空「' + c.name + '」。请输入「全部删除」确认：', okText: '确认' });
+    if (typed !== '全部删除') { if (typed !== null) toast('输入不对，已取消', 'warning'); return; }
+  }
+  var r = await saAction({ action: 'purge', category: c.key, days: days }, '正在删除');
+  if (!r) return;
+  $('#saResult').innerHTML = '<div class="mn-result ok">已删除 ' + r.rows + ' 条' + (r.files ? '、图片 ' + r.files + ' 个（' + saSize(r.bytes) + '）' : '') + '（' + r.seconds + ' 秒）。数据库文件要「整理数据库」后才会变小。</div>';
+  loadStorage();
+}
+async function saOnClick(e) {
+  var b = e.target.closest('[data-sa-purge]');
+  if (b && SA.data) { saPurge(SA.data.categories[Number(b.getAttribute('data-sa-purge'))]); }
+}
+async function saVacuum() {
+  var db = (SA.data || {}).db || {};
+  if (!(await mnConfirm('整理数据库（VACUUM）？\n当前 ' + saSize(db.total) + '，其中可回收 ' + saSize(db.free_bytes) + '。\n整理时会临时多占一份数据库大小的磁盘空间，期间插件写数据库会稍等。', { title: '整理数据库', okText: '开始整理' }))) return;
+  var r = await saAction({ action: 'vacuum' }, '正在整理数据库');
+  if (!r) return;
+  $('#saResult').innerHTML = '<div class="mn-result ok">整理完成：' + saSize(r.before) + ' → ' + saSize(r.after) + '（' + r.seconds + ' 秒）</div>';
+  loadStorage();
+}
+async function saOrphans() {
+  if (!(await mnConfirm('删除图片文件夹里数据库已经不认识的文件？这些图片在任何页面都不会再显示。', { title: '删除孤儿文件', okText: '删除', danger: true }))) return;
+  var r = await saAction({ action: 'orphans' }, '正在删除孤儿文件');
+  if (!r) return;
+  $('#saResult').innerHTML = '<div class="mn-result ok">已删除 ' + r.files + ' 个文件（' + saSize(r.bytes) + '）</div>';
+  loadStorage();
+}
+async function saRecompress() {
+  var kb = Number($('#saMaxKb').value);
+  if (!(kb >= 30 && kb <= 5000) || Math.floor(kb) !== kb) { toast('填 30–5000 的整数', 'warning'); return; }
+  if (!(await mnConfirm('把超过 ' + kb + ' KB 的已保存图片重新压缩成 JPEG？\n会损失一些清晰度，压缩后不能还原。图片多时要一会儿。', { title: '重新压缩图片', okText: '开始压缩', danger: true }))) return;
+  var r = await saAction({ action: 'recompress', max_kb: kb }, '正在压缩');
+  if (!r) return;
+  $('#saResult').innerHTML = '<div class="mn-result ok">压缩了 ' + r.files + ' 张：' + saSize(r.before) + ' → ' + saSize(r.after) + (r.failed ? '；' + r.failed + ' 张没压下来（不是图片或已经够小）' : '') + '（' + r.seconds + ' 秒）</div>';
+  loadStorage();
+}
+
 var QB_RG_KEY = 'gg_quick_rg';
 function rgActionText(g) {
   var p = [g.recall === false ? '不撤回，只抄送提醒' : '撤回'];
@@ -6193,7 +6376,7 @@ var FLT_LABELS = {
   mpBy: '显示', mpDaysSel: '时间', mpGroup: '群', mpSort: '排序',
   lkBy: '显示', lkDaysSel: '时间', lkGroup: '群', lkSort: '排序',
   gfView: '显示', gfGroupSel: '群', gfSort: '排序',
-  dupMin: '范围', dupSort: '排序',
+  dupMin: '范围', dupSent: '只看', dupSort: '排序',
   cbFilter: '只看', liveGroup: '群', liveFilter: '结果',
   llDays: '时间', llGroup: '群', llKind: '方式', llOrder: '排序',
   opDays: '时间', opAction: '操作', opOperator: '操作人', opSource: '来源', opOrder: '排序',
@@ -6487,6 +6670,8 @@ async function loadCodes(page) {
   $('#clTpl').value = mnCfg('code_limit_warn_template') || '';
   $('#csMaxKb').value = mnCfg('code_image_max_kb') || 500;
   $('#csTtlHours').value = Number(mnCfg('code_store_ttl_hours')) || 0;
+  var sd = mnCfg('code_stats_keep_days');
+  $('#csStatsDays').value = sd === undefined || sd === null || sd === '' ? 180 : Number(sd);
   var g = $('#csGroup'), cur = g.value;
   g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   g.value = cur;
@@ -6681,7 +6866,11 @@ async function csLoadStats() {
   hoursSel.innerHTML = '<option value="' + d.window_hours + '">最近 ' + d.window_hours + ' 小时（计次窗口）</option>' +
     '<option value="' + d.ttl_hours + '">最近 ' + d.ttl_hours + ' 小时（全部保留的）</option>';
   hoursSel.value = pick && Number(pick) === d.ttl_hours ? String(d.ttl_hours) : String(d.window_hours);
-  $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留 ' + d.ttl_hours + ' 小时' + (Number(d.ttl_custom) > 0 ? (Number(d.ttl_custom) < d.window_hours ? '（填的 ' + d.ttl_custom + ' 小时短于统计窗口，按统计窗口算）' : '') : '（自动：统计窗口 ' + d.window_hours + ' 小时 × 2）') + '后自动删除。' + (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
+  var ttlText = d.ttl_hours % 24 === 0 ? (d.ttl_hours / 24) + ' 天' : d.ttl_hours + ' 小时';
+  $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。' +
+    '发送记录和图片保留 ' + ttlText + (Number(d.ttl_custom) > 0 ? (Number(d.ttl_custom) < d.window_hours ? '（填的 ' + d.ttl_custom + ' 小时短于统计窗口，按统计窗口算）' : '') : '（自动）') + '后自动删除。' +
+    '「按人统计」（谁发过哪个码、几次）和码缩略图' + (d.stats_keep_days ? '保留 ' + d.stats_keep_days + ' 天：这么久没再发过的删掉。' : '永久保留。') +
+    (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
   var byUser = d.by === 'user';
   CS.total = d.total || 0;
   if (CS.view === 'code') $('#csCount').textContent = '共 ' + CS.total + ' 条';
@@ -7349,7 +7538,7 @@ async function dupSaveScope() {
 }
 function dupFilter() {
   return { min_groups: $('#dupMin').value, include_exempt: $('#dupExempt').checked ? 1 : 0,
-    include_ignored: $('#dupIgnored').checked ? 1 : 0, keyword: $('#dupKeyword').value.trim() };
+    include_ignored: $('#dupIgnored').checked ? 1 : 0, keyword: $('#dupKeyword').value.trim(), sent: $('#dupSent').value };
 }
 async function loadDup(page) {
   if (typeof page === 'number') DUP.page = page;
@@ -7360,7 +7549,7 @@ async function loadDup(page) {
   if (isApiError(res)) { $('#dupTable').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
   var d = mnData(res);
   DUP.items = d.items || [];
-  DUP.total = d.total || 0; DUP.page = d.page || 1; DUP.byCount = d.by_count || [];
+  DUP.total = d.total || 0; DUP.page = d.page || 1; DUP.byCount = d.by_count || []; DUP.sentPeople = d.sent_people;
   var c = d.coverage || {};
   var names = {}; (MN.overview && MN.overview.groups || []).forEach(function(g) { names[g.group_id] = g.group_name; });
   var cov = '检测范围内已缓存成员的群：<strong>' + c.groups_cached + ' / ' + c.groups_total + '</strong>';
@@ -7382,7 +7571,9 @@ function dupRenderTable() {
   $('#dupAllHint').textContent = '按当前筛选条件处理所有页的人（共 ' + DUP.total + ' 人，管理员 / 白名单不处理），各自保留最早加入的群';
   if (!DUP.items.length) { $('#dupTable').innerHTML = '<p class="empty">没有发现重复成员</p>'; return; }
   var dist = DUP.byCount.map(function(b) { return '在 ' + b.count + ' 个群 ' + b.people + ' 人'; }).join(' · ');
-  $('#dupTable').innerHTML = '<p class="mn-hint" style="margin-bottom:8px">共 <strong>' + DUP.total + '</strong> 人' + (dist ? '（' + esc(dist) + '）' : '') + '</p><table class="mn-table"><thead><tr>' + (bulk ? '<th></th>' : '') +
+  var sentNote = DUP.sentPeople != null && !$('#dupSent').value ? ' · 其中 <strong style="color:var(--danger)">' + DUP.sentPeople + '</strong> 人发过链接 / 小程序 / 码' : '';
+  $('#dupTable').innerHTML = '<p class="mn-hint" style="margin-bottom:8px">共 <strong>' + DUP.total + '</strong> 人' + (dist ? '（' + esc(dist) + '）' : '') + sentNote +
+    ' · <span class="dup-hot-legend">底色标出</span>的人发过链接 / 小程序 / 码，点标签看发送记录</p><table class="mn-table"><thead><tr>' + (bulk ? '<th></th>' : '') +
     '<th>成员</th><th>群数</th><th>所在的群' + (bulk ? '（单选 = 要保留的群）' : '') + '</th><th>操作</th></tr></thead><tbody>' +
     DUP.items.map(function(it, idx) {
       var tags = [];
@@ -7402,9 +7593,11 @@ function dupRenderTable() {
         '<button class="btn btn-primary btn-sm" data-dup-handle="' + idx + '">处理</button>' +
         (it.ignored ? ' <button class="btn btn-ghost btn-sm" data-dup-unignore="' + escAttr(it.user_id) + '">取消忽略</button>'
                     : ' <button class="btn btn-ghost btn-sm" data-dup-ignore-one="' + escAttr(it.user_id) + '">忽略</button>');
-      return '<tr>' + (bulk ? '<td><input type="checkbox" class="dup-check" value="' + escAttr(it.user_id) + '" /></td>' : '') +
+      var act = it.activity, hot = act && act.total > 0;
+      return '<tr' + (hot ? ' class="dup-hot' + (act.bad ? ' bad' : '') + '"' : '') + '>' + (bulk ? '<td><input type="checkbox" class="dup-check" value="' + escAttr(it.user_id) + '" /></td>' : '') +
         '<td><div style="display:flex;gap:8px;align-items:flex-start">' + dupAvatar(it) + '<div>' + mbrLink(it.user_id) + '<br><span class="mn-hint">' + esc(it.name) + '</span>' +
-        (tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">' + tags.join('') + '</div>' : '') + '</div></div></td>' +
+        (tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">' + tags.join('') + '</div>' : '') +
+        (hot ? '<div class="dup-sends">' + dupSendBadges(act, idx) + '</div>' : '') + '</div></div></td>' +
         '<td><strong>' + it.count + '</strong></td><td>' + groups + '</td><td style="white-space:nowrap">' + ops + '</td></tr>';
     }).join('') + '</tbody></table>' + renderPager(DUP.page, DUP.pageSize, DUP.total, 'dup');
   bindPager($('#dupTable'));
@@ -7417,6 +7610,101 @@ function dupRenderTable() {
   });
   $$('[data-dup-ignore-one]').forEach(function(btn) { btn.addEventListener('click', function() { mnDupIgnore([btn.getAttribute('data-dup-ignore-one')]); }); });
   $$('[data-dup-handle]').forEach(function(btn) { btn.addEventListener('click', function() { dupHandleOne(DUP.items[Number(btn.getAttribute('data-dup-handle'))]); }); });
+  $$('[data-dup-sends]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var p = btn.getAttribute('data-dup-sends').split(':');
+      dupShowSends(DUP.items[Number(p[0])], p[1]);
+    });
+  });
+}
+var DUP_SEND_KINDS = [['link', '链接'], ['miniapp', '小程序'], ['code', '码']];
+function dupSendBadges(act, idx) {
+  return DUP_SEND_KINDS.filter(function(k) { return act[k[0]] > 0; }).map(function(k) {
+    var bad = act[k[0] + '_bad'];
+    return '<button type="button" class="dup-send-tag' + (bad ? ' bad' : '') + '" data-dup-sends="' + idx + ':' + k[0] + '" title="' +
+      escAttr('发过 ' + act[k[0]] + ' 次' + k[1] + (bad ? '，其中 ' + bad + ' 次被撤回 / 提醒' : '') + '；最近 ' + mnTime(act.last_ts) + '。点击查看记录') + '">' +
+      k[1] + ' ' + act[k[0]] + (bad ? '<b>·撤 ' + bad + '</b>' : '') + '</button>';
+  }).join('');
+}
+/* ---- 发送记录浮窗：链接 / 小程序 / 码，切换标签不重新请求 ---- */
+var DUP_SENDS = { uid: '', data: null, tab: 'link', ep: 0 };
+function dupOutcome(outcome, label) {
+  var color = outcome === 'rule' || outcome === 'limit' ? 'var(--danger)' : outcome === 'notify' ? 'var(--warning)' : outcome === 'allow' ? 'var(--success)' : 'var(--text-muted)';
+  return '<span style="color:' + color + ';white-space:nowrap">' + esc(label || outcome || '') + '</span>';
+}
+function dupSendsBody() {
+  var d = DUP_SENDS.data, tab = DUP_SENDS.tab;
+  if (!d) return '<p class="empty">加载中...</p>';
+  if (tab === 'link') {
+    var lk = d.links;
+    if (!lk) return '<p class="empty">链接记录没有开启</p>';
+    if (!lk.recent.length) return '<p class="empty">最近 ' + lk.store_days + ' 天没有发过链接</p>';
+    return '<div class="dup-sum">' + lk.domains.slice(0, 12).map(function(x) {
+        return '<span class="mn-chip"' + (x.state === 'block' ? ' style="color:var(--danger)"' : '') + '>' + esc(x.domain) + ' ×' + x.total + (x.ruled ? '（撤 ' + x.ruled + '）' : '') + '</span>';
+      }).join('') + '</div>' +
+      '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>链接 / 消息</th><th>处理</th></tr></thead><tbody>' + lk.recent.map(function(r) {
+        return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td style="white-space:nowrap">' + esc(mpGroupName(r.group_id)) + '</td>' +
+          '<td style="word-break:break-all">' + (r.form === 'qrcode' ? '<span class="mn-chip" title="图片里的二维码解出来的链接">二维码</span>' : r.form === 'card' ? '<span class="mn-chip">卡片</span>' : '') +
+          '<span style="font-family:monospace;font-size:12px">' + esc(r.url) + '</span>' + (r.title ? '<br><b>' + esc(r.title) + '</b>' : '') +
+          (r.msg_text ? '<div class="mn-hint dup-msg">' + esc(r.msg_text) + '</div>' : '') + '</td><td>' + dupOutcome(r.outcome, r.outcome_label) + '</td></tr>';
+      }).join('') + '</tbody></table><p class="mn-hint">最近 ' + lk.recent.length + ' 条（保留 ' + lk.store_days + ' 天）</p>';
+  }
+  if (tab === 'miniapp') {
+    var mp = d.miniapps;
+    if (!mp) return '<p class="empty">小程序记录没有开启</p>';
+    if (!mp.recent.length) return '<p class="empty">最近 ' + mp.store_days + ' 天没有发过小程序</p>';
+    return '<div class="dup-sum">' + mp.apps.slice(0, 12).map(function(x) {
+        return '<span class="mn-chip"' + (x.state === 'block' ? ' style="color:var(--danger)"' : '') + '>' + esc(x.name) + ' ×' + x.total + (x.ruled ? '（撤 ' + x.ruled + '）' : '') + '</span>';
+      }).join('') + '</div>' +
+      '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>小程序 / 标题</th><th>处理</th></tr></thead><tbody>' + mp.recent.map(function(r) {
+        return '<tr><td style="white-space:nowrap">' + esc(mnTime(r.ts)) + '</td><td style="white-space:nowrap">' + esc(mpGroupName(r.group_id)) + '</td>' +
+          '<td style="word-break:break-all"><b>' + esc(r.name) + '</b> <span class="mn-hint">' + (r.form === 'link' ? '链接' : '卡片') + '</span>' +
+          (r.title ? '<br>' + esc(r.title) : '') + (r.content ? '<div class="mn-hint dup-msg">' + esc(r.content) + '</div>' : '') + '</td><td>' + dupOutcome(r.outcome, r.outcome_label) + '</td></tr>';
+      }).join('') + '</tbody></table><p class="mn-hint">最近 ' + mp.recent.length + ' 条（保留 ' + mp.store_days + ' 天）</p>';
+  }
+  var cs = d.codes;
+  if (!cs) return '<p class="empty">码记录没有开启</p>';
+  if (!cs.codes.length) return '<p class="empty">没有发过码</p>';
+  return '<table class="mn-table"><thead><tr><th></th><th>码内容</th><th>次数</th><th>群</th><th>最近</th></tr></thead><tbody>' + cs.codes.map(function(c) {
+      var bad = (c.ruled || 0) + (c.limited || 0);
+      return '<tr><td style="width:48px">' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">无图</span>') + '</td>' +
+        '<td style="word-break:break-all">' + csTagHtml(c.state) + '<span style="font-size:12px">' + esc(c.text.length > 160 ? c.text.slice(0, 160) + '…' : c.text) + '</span></td>' +
+        '<td style="white-space:nowrap"><b>' + c.total + '</b>' + (bad ? '<br><span style="color:var(--danger)">撤 ' + bad + '</span>' : '') + '</td>' +
+        '<td style="white-space:nowrap">' + c.group_ids.slice(0, 3).map(function(g) { return esc(mpGroupName(g)); }).join('<br>') + (c.group_ids.length > 3 ? '<br><span class="mn-hint">等 ' + c.group_ids.length + ' 个</span>' : '') + '</td>' +
+        '<td style="white-space:nowrap">' + esc(mnTime(c.last_ts)) + '</td></tr>';
+    }).join('') + '</tbody></table><p class="mn-hint">共 ' + cs.code_count + ' 个码、' + cs.total + ' 次（长期累计）</p>';
+}
+function dupSendsRender() {
+  var a = DUP_SENDS.act || {};
+  $('#dupSendsTabs').innerHTML = DUP_SEND_KINDS.map(function(k) {
+    return '<button class="btn btn-sm ' + (DUP_SENDS.tab === k[0] ? 'btn-primary' : 'btn-ghost') + '" data-dup-tab="' + k[0] + '">' + k[1] + ' ' + (a[k[0]] || 0) +
+      (a[k[0] + '_bad'] ? '<span style="color:' + (DUP_SENDS.tab === k[0] ? 'inherit' : 'var(--danger)') + '">·撤 ' + a[k[0] + '_bad'] + '</span>' : '') + '</button>';
+  }).join('');
+  $('#dupSendsBody').innerHTML = dupSendsBody();
+}
+async function dupShowSends(it, tab) {
+  if (!it) return;
+  DUP_SENDS.uid = it.user_id; DUP_SENDS.tab = tab || 'link'; DUP_SENDS.data = null; DUP_SENDS.act = it.activity || {};
+  var ep = ++DUP_SENDS.ep;
+  showModal((it.name ? it.name + '（' + it.user_id + '）' : it.user_id) + ' 的发送记录',
+    '<div class="dup-sends-tabs" id="dupSendsTabs"></div><div id="dupSendsBody" class="dup-sends-body"></div>',
+    '<button class="btn btn-ghost btn-sm" id="dupSendsProfile">打开成员档案</button><button class="btn btn-primary btn-sm" id="dupSendsClose">关闭</button>');
+  $('#modal').classList.add('modal-wide');
+  MODAL_ON_CLOSE = function() { $('#modal').classList.remove('modal-wide'); };
+  dupSendsRender();
+  $('#dupSendsTabs').addEventListener('click', function(e) {
+    var b = e.target.closest('[data-dup-tab]');
+    if (!b) return;
+    DUP_SENDS.tab = b.getAttribute('data-dup-tab');
+    dupSendsRender();
+  });
+  $('#dupSendsClose').addEventListener('click', closeModal);
+  $('#dupSendsProfile').addEventListener('click', function() { var uid = DUP_SENDS.uid; closeModal(); mbrGo(uid); });
+  var res = await safeGet('minimal/member/sends', { user_id: it.user_id });
+  if (ep !== DUP_SENDS.ep || !document.getElementById('dupSendsBody')) return;   // 已关闭或换了人
+  if (isApiError(res)) { $('#dupSendsBody').innerHTML = '<p class="empty">' + esc(mnErr(res)) + '</p>'; return; }
+  DUP_SENDS.data = mnData(res) || {};
+  dupSendsRender();
 }
 function dupGroupLabel(it, gid) {
   var g = (it.groups || []).filter(function(x) { return x.group_id === gid; })[0];
@@ -7519,7 +7807,8 @@ async function mnDupHandleAll(mode) {
   var desc = mode === 'keep_one'
     ? '各自只保留最早加入的群，从其余群踢出' + (block ? '，并在被踢的群里 QQ 拉黑' : '')
     : '从所有群踢出' + (block ? '，并加入插件黑名单' : '');
-  var cond = '在 ≥' + f.min_groups + ' 个群' + (f.keyword ? '、包含「' + f.keyword + '」' : '') + (f.include_ignored ? '、含已忽略的人' : '');
+  var cond = '在 ≥' + f.min_groups + ' 个群' + (f.keyword ? '、包含「' + f.keyword + '」' : '') + (f.include_ignored ? '、含已忽略的人' : '') +
+    (f.sent ? '、' + ($('#dupSent').selectedOptions[0] || {}).textContent : '');
   if (!(await mnConfirm('按条件处理：' + cond + '，共 ' + n + ' 人（管理员 / 白名单不处理）。\n' + desc + '\n原因：' + reason +
       '\n\n会创建批量任务逐个执行，可在「批量任务」里暂停或取消。', { title: '处理符合条件的全部 ' + n + ' 人', okText: '下一步', danger: true }))) return;
   var typed = await promptModal({ title: '再确认一次', label: '将处理 ' + n + ' 人。请输入人数 ' + n + ' 确认：', placeholder: String(n), okText: '确认处理' });
@@ -8828,7 +9117,7 @@ function initMinimalPages() {
 
   bindIfExists('btnDupReload', loadDup);
   registerPager('dup', DUP, function() { loadDup(); });
-  ['dupMin', 'dupSort', 'dupExempt', 'dupIgnored'].forEach(function(id) { bindIfExists(id, function() { loadDup(1); }, 'change'); });
+  ['dupMin', 'dupSent', 'dupSort', 'dupExempt', 'dupIgnored'].forEach(function(id) { bindIfExists(id, function() { loadDup(1); }, 'change'); });
   bindIfExists('btnDupAllKeep', function() { mnDupHandleAll('keep_one'); });
   bindIfExists('btnDupAllKick', function() { mnDupHandleAll('kick_all'); });
   bindIfExists('dupMin', loadDup, 'change');
@@ -8900,12 +9189,19 @@ function initMinimalPages() {
   bindIfExists('csSort', function(e) { try { localStorage.setItem('gg_cs_sort', e.target.value); } catch (err) { /* 忽略 */ } CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csHours', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csGroup', function() { CS.page = 1; csLoadStats(); }, 'change');
+  bindIfExists('btnSaReload', function() { loadStorage(); });
+  bindIfExists('btnSaVacuum', saVacuum);
+  bindIfExists('btnSaOrphans', saOrphans);
+  bindIfExists('btnSaRecompress', saRecompress);
+  bindIfExists('saCats', saOnClick);
   bindIfExists('btnCsSave', function() {
     var kb = Number($('#csMaxKb').value);
     var ttl = Number($('#csTtlHours').value || 0);
+    var days = Number($('#csStatsDays').value || 0);
     if (!(kb >= 50 && kb <= 5000) || Math.floor(kb) !== kb) { toast('压缩大小填 50–5000 的整数', 'warning'); return; }
     if (!(ttl >= 0 && ttl <= 8760) || Math.floor(ttl) !== ttl) { toast('保留小时填 0–8760 的整数', 'warning'); return; }
-    mnSaveConfig({ code_image_max_kb: kb, code_store_ttl_hours: ttl }, '已保存').then(function(ok) { if (ok) csLoadStats(); });
+    if (!(days >= 0 && days <= 3650) || Math.floor(days) !== days) { toast('按人累计保留天数填 0–3650 的整数', 'warning'); return; }
+    mnSaveConfig({ code_image_max_kb: kb, code_store_ttl_hours: ttl, code_stats_keep_days: days }, '已保存').then(function(ok) { if (ok) csLoadStats(); });
   });
   bindIfExists('btnCsAllowAdd', function() { var t = $('#csAllowAdd').value.trim(); if (!t) return; codeListSet('allow', t, true, true).then(function(ok) { if (ok) { $('#csAllowAdd').value = ''; csAfterListChange(); } }); });
   bindIfExists('btnCsBlockAdd', function() { var t = $('#csBlockAdd').value.trim(); if (!t) return; codeListSet('block', t, true, true).then(function(ok) { if (ok) { $('#csBlockAdd').value = ''; csAfterListChange(); } }); });
