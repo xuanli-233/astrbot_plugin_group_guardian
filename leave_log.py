@@ -17,7 +17,7 @@
 图片（leave_log_save_images，默认开）：记录消息时顺带记下图片的地址（每条最多 LEAVE_LOG_IMG_PER_MSG 张，
 只在内存）；有人退群时在后台把这些图片下载下来（压缩后）存到插件数据目录 leave_images/，WebUI 显示缩略图、
 点开看大图。QQ 图片链接过一段时间会失效，所以必须在退群时立刻下载；链接失效时再用 get_image 向协议端取一次。
-图片保留 leave_log_image_days 天（默认 30）后删除，记录里的文字不受影响。
+图片保留 leave_log_image_hours 小时（retention.py，默认 30 天）后删除，记录里的文字不受影响。
 """
 import asyncio
 import base64
@@ -549,8 +549,14 @@ class LeaveLogMixin:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def _ll_image_hours(self) -> int:
+        getter = getattr(self, "_ret_hours", None)
+        if callable(getter):
+            return getter("leave_log_image_hours")
+        return min(max(self._cfg_int("leave_log_image_days", 30), 1), 3650) * 24
+
     def _ll_image_days(self) -> int:
-        return min(max(self._cfg_int("leave_log_image_days", 30), 1), 3650)
+        return max(1, -(-self._ll_image_hours() // 24))
 
     @staticmethod
     async def _ll_offload(fn, *args):
@@ -659,8 +665,8 @@ class LeaveLogMixin:
             logger.debug(f"[GroupMgr] 清理退群记录图片失败: {e}")
 
     def _ll_clean_images(self, now: Optional[int] = None) -> int:
-        """删除保存超过 leave_log_image_days 天的图片（记录里的文字不动）。返回删除的张数。"""
-        cutoff = int(now or time.time()) - self._ll_image_days() * 86400
+        """删除保存超过 leave_log_image_hours 小时的图片（记录里的文字不动）。返回删除的张数。"""
+        cutoff = int(now or time.time()) - self._ll_image_hours() * 3600
         self._ll_init_db()
         with self._storage._connect() as conn:
             rows = conn.execute("SELECT hash, path FROM leave_images WHERE created_at < ?", (cutoff,)).fetchall()

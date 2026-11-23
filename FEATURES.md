@@ -165,6 +165,7 @@ main.py               入口：继承所有 Mixin，向 AstrBot 注册指令 / �
 ├─ leave_files.py     退群 / 被踢后删除他上传的群文件
 ├─ join_lock.py       踢人后暂停加群：被踢后改成禁止加群几小时，到点恢复
 ├─ storage_admin.py   存储管理：占用统计、删除旧记录、孤儿文件、重新压缩图片、整理数据库
+├─ retention.py       保留时长统一按小时：旧的按天配置换算一次，WebUI 集中设置
 ├─ link_guard.py      链接管理：记录消息里的链接、按域名统计、域名 / 链接拉黑、安全读取网页标题
 ├─ leave_log.py       退群记录（退群前的消息、次数），退群拉黑按它计次
 ├─ auto_accept.py     自动同意好友申请 / 进群邀请

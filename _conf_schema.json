@@ -292,10 +292,17 @@
         "hint": "0 = 自动（7 天；码发送次数统计窗口 × 2 更长时按它）。范围 0–8760；小于统计窗口时按统计窗口算，否则计次会漏算"
     },
     "code_stats_keep_days": {
-        "description": "码记录：按人累计保留几天",
+        "description": "（旧配置，已改用 code_stats_keep_hours）码记录：按人累计保留几天",
         "type": "int",
         "default": 180,
-        "hint": "谁发过哪个码、几次（码管理「按人统计」、成员档案、重复成员页用）。超过这么多天没再发过的删掉，码缩略图一起清理。0 = 永久保留。范围 0–3650"
+        "hint": "升级后第一次启动时已换算成 code_stats_keep_hours（× 24），之后不再使用；请改 code_stats_keep_hours 或在 WebUI「存储管理」里改",
+        "invisible": true
+    },
+    "code_stats_keep_hours": {
+        "description": "码记录：按人累计保留几小时",
+        "type": "int",
+        "default": 4320,
+        "hint": "默认 4320 = 180 天：超过这么久没再发过的删掉，码缩略图一起清理。0 = 永久保留。范围 0–87600"
     },
     "code_limit_window_hours": {
         "description": "码发送次数：统计最近几小时",
@@ -417,10 +424,17 @@
         "hint": "群里每次出现小程序（卡片或 #小程序:// 链接）都记一行：时间、群、发送者、哪个小程序、内容、是否被撤回；WebUI「小程序」页统计和看板用"
     },
     "miniapp_store_days": {
-        "description": "小程序：记录保留天数",
+        "description": "（旧配置，已改用 miniapp_store_hours）小程序：记录保留天数",
         "type": "int",
         "default": 90,
-        "hint": "范围 1–3650；小程序名称和缩略图不清理"
+        "hint": "升级后第一次启动时已换算成 miniapp_store_hours（× 24），之后不再使用；请改 miniapp_store_hours 或在 WebUI「存储管理」里改",
+        "invisible": true
+    },
+    "miniapp_store_hours": {
+        "description": "小程序：记录保留几小时",
+        "type": "int",
+        "default": 2160,
+        "hint": "默认 2160 = 90 天。在 WebUI「存储管理 → 保留时长与有效期」里可以按小时或天填。范围 1–87600"
     },
     "log_image_save_enabled": {
         "description": "违规记录：保存图片",
@@ -429,10 +443,17 @@
         "hint": "写违规记录时把消息里的图片（AstrBot 临时目录里的文件或 QQ 图片链接）读出来，压缩到 500KB 以内存到插件数据目录 log_images/，WebUI 直接看缩略图和大图，不再显示本机路径"
     },
     "log_image_days": {
-        "description": "违规记录：图片保留天数",
+        "description": "（旧配置，已改用 log_image_hours）违规记录：图片保留天数",
         "type": "int",
         "default": 30,
-        "hint": "范围 1–3650；到期只删图片，违规记录保留"
+        "hint": "升级后第一次启动时已换算成 log_image_hours（× 24），之后不再使用；请改 log_image_hours 或在 WebUI「存储管理」里改",
+        "invisible": true
+    },
+    "log_image_hours": {
+        "description": "违规记录：图片保留几小时",
+        "type": "int",
+        "default": 720,
+        "hint": "默认 720 = 30 天，到期只删图片，日志保留。范围 1–87600"
     },
     "leave_log_save_images": {
         "description": "退群记录：保存退群前消息里的图片",
@@ -441,10 +462,17 @@
         "hint": "有人退群时把他最近几条消息里的图片下载下来（压缩到 500KB 以内）存到插件数据目录 leave_images/，WebUI 里能看缩略图和大图。每条消息最多 4 张"
     },
     "leave_log_image_days": {
-        "description": "退群记录：图片保留天数",
+        "description": "（旧配置，已改用 leave_log_image_hours）退群记录：图片保留天数",
         "type": "int",
         "default": 30,
-        "hint": "范围 1–3650；到期只删图片，退群记录和文字保留"
+        "hint": "升级后第一次启动时已换算成 leave_log_image_hours（× 24），之后不再使用；请改 leave_log_image_hours 或在 WebUI「存储管理」里改",
+        "invisible": true
+    },
+    "leave_log_image_hours": {
+        "description": "退群记录：图片保留几小时",
+        "type": "int",
+        "default": 720,
+        "hint": "默认 720 = 30 天，到期只删图片，记录保留。范围 1–87600"
     },
     "leave_files_enabled": {
         "description": "退群删文件：成员离开后删除他上传的群文件",
@@ -476,10 +504,17 @@
         "hint": "关闭后不再记录新的链接（统计为空），拉黑照常生效"
     },
     "link_store_days": {
-        "description": "链接管理：记录保留天数",
+        "description": "（旧配置，已改用 link_store_hours）链接管理：记录保留天数",
         "type": "int",
         "default": 90,
-        "hint": "范围 1–3650。到期删除发送记录；读到的标题保留到这个链接没有任何记录为止"
+        "hint": "升级后第一次启动时已换算成 link_store_hours（× 24），之后不再使用；请改 link_store_hours 或在 WebUI「存储管理」里改",
+        "invisible": true
+    },
+    "link_store_hours": {
+        "description": "链接管理：记录保留几小时",
+        "type": "int",
+        "default": 2160,
+        "hint": "默认 2160 = 90 天。在 WebUI「存储管理 → 保留时长与有效期」里可以按小时或天填。范围 1–87600"
     },
     "link_title_mode": {
         "description": "链接管理：读取网页标题",

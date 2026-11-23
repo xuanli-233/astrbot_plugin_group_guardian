@@ -9,7 +9,7 @@
 电脑端地址等只用来检查黑名单（card_parse 的 alt_urls）。合并转发里的卡片同样处理（moderation.py 传进来）。
 
 每次出现记一行 lk_sends（时间、群、发送者、域名、链接、处理结果、带这个链接的消息原文、卡片的标题 / 描述 / 来源），
-保留 link_store_days 天；lk_urls 记每个链接本身、最近一次带它的消息原文和卡片内容、读到的网页标题，不随记录清理。
+保留 link_store_hours 小时（retention.py，默认 90 天）；lk_urls 记每个链接本身、最近一次带它的消息原文和卡片内容、读到的网页标题，不随记录清理。
 
 链接是什么内容，主要看「带它的消息原文」和「卡片里的标题 / 描述」（QQ 已经给出来了，不用访问网页）：很多页面限制
 浏览器标识、要在社交软件里登录才能打开，服务器去读标题读不到。读取网页标题只作为补充（默认手动）。
@@ -285,8 +285,15 @@ class LinkGuardMixin:
             logger.info(f"[GroupMgr] 链接管理：清理了 {len(bad)} 个误记成链接的图片地址")
         return len(bad)
 
+    def _lk_store_hours(self) -> int:
+        getter = getattr(self, "_ret_hours", None)
+        if callable(getter):
+            return getter("link_store_hours")
+        return min(max(self._cfg_int("link_store_days", 90), 1), LINK_STORE_DAYS_MAX) * 24
+
     def _lk_store_days(self) -> int:
-        return min(max(self._cfg_int("link_store_days", 90), 1), LINK_STORE_DAYS_MAX)
+        """给统计范围、页面提示用：不足一天按一天。"""
+        return max(1, -(-self._lk_store_hours() // 24))
 
     def _lk_title_mode(self) -> str:
         mode = self._cfg_str("link_title_mode", "manual").strip().lower()
@@ -505,7 +512,7 @@ class LinkGuardMixin:
 
     def _lk_clean(self, now: Optional[int] = None) -> int:
         """删掉过期的发送记录；没有任何记录、也没读过标题的链接一并删掉。"""
-        cutoff = int(now or time.time()) - self._lk_store_days() * 86400
+        cutoff = int(now or time.time()) - self._lk_store_hours() * 3600
         self._lk_init_db()
         with self._storage._connect() as conn:
             n = conn.execute("DELETE FROM lk_sends WHERE ts < ?", (cutoff,)).rowcount

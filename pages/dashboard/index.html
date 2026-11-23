@@ -569,6 +569,20 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .rg-presets .btn{font-size:12px;padding:3px 8px}
     .rg-dirty{color:var(--warning);font-size:12px;font-weight:500}
     .modal.modal-wide{width:860px}
+    img[data-zoom]{cursor:zoom-in}
+    .img-viewer{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.82);display:flex;flex-direction:column}
+    .img-viewer .iv-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;color:#fff;font-size:13px}
+    .img-viewer .iv-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .img-viewer .iv-size{opacity:.7}
+    .img-viewer .iv-btn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px}
+    .img-viewer .iv-btn:hover{background:rgba(255,255,255,.26)}
+    .img-viewer .iv-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:0 16px 16px;cursor:zoom-out}
+    .img-viewer .iv-stage img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+    .img-viewer.small .iv-stage img{image-rendering:pixelated}
+    .img-viewer.actual .iv-stage{align-items:flex-start;justify-content:flex-start}
+    .img-viewer.actual .iv-stage img{width:auto;height:auto;max-width:none;max-height:none;cursor:zoom-out;margin:auto;background:#fff}
+    tr.ret-flash>td{animation:retFlash 1.6s ease}
+    @keyframes retFlash{0%,40%{background:color-mix(in srgb, var(--primary) 18%, transparent)}100%{background:transparent}}
     .sa-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     .sa-tile{border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;background:var(--surface)}
     .sa-tile .sa-v{font-size:22px;font-weight:700;color:var(--text-primary)}
@@ -1228,7 +1242,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <div class="card-header"><h2>设置</h2></div>
           <div class="settings-list" id="lkSwitches"></div>
           <div class="mn-body">
-            <div class="mn-row"><label style="width:110px">记录保留</label><input type="number" min="1" max="3650" class="input-sm" id="lkDays" style="width:100px" /><span>天</span></div>
+            <div class="mn-row"><label style="width:110px">记录保留</label><span id="lkRet"></span></div>
             <div class="mn-row"><label style="width:110px">读取网页标题</label>
               <select class="input-sm" id="lkTitleMode" style="width:300px">
                 <option value="manual">手动：点「读取标题」时才读（推荐）</option>
@@ -1366,9 +1380,9 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="card-header"><h2>码记录与图片</h2></div>
             <div class="settings-list" id="csSwitches"></div>
             <div class="mn-body">
-              <div class="mn-row"><label style="width:150px">图片超过多少 KB 压缩</label><input type="number" min="50" max="5000" class="input-sm" id="csMaxKb" style="width:100px" /><span>KB</span></div>
-              <div class="mn-row"><label style="width:150px">记录和图片保留</label><input type="number" min="0" max="8760" class="input-sm" id="csTtlHours" style="width:100px" /><span>小时（0 = 自动，7 天）</span><span class="mn-hint">常用：168 = 7 天，720 = 30 天</span></div>
-              <div class="mn-row"><label style="width:150px">按人累计保留</label><input type="number" min="0" max="3650" class="input-sm" id="csStatsDays" style="width:100px" /><span>天（0 = 永久）</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
+              <div class="mn-row"><label style="width:150px">图片超过多少 KB 压缩</label><input type="number" min="50" max="5000" class="input-sm" id="csMaxKb" style="width:100px" /><span>KB</span><button class="btn btn-primary btn-sm" id="btnCsSave">保存</button></div>
+              <div class="mn-row"><label style="width:150px">记录和图片保留</label><span id="csRetTtl"></span></div>
+              <div class="mn-row"><label style="width:150px">按人统计保留</label><span id="csRetStats"></span></div>
               <p class="mn-hint" id="csTtlHint">每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。记录和图片保留指定小时数后自动删除。</p>
             </div>
           </div>
@@ -1453,7 +1467,7 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="card-header"><h2>记录</h2></div>
             <div class="settings-list" id="mpSwitches"></div>
             <div class="mn-body">
-              <div class="mn-row"><label style="width:110px">记录保留</label><input type="number" min="1" max="3650" class="input-sm" id="mpDays" style="width:100px" /><span>天</span><button class="btn btn-primary btn-sm" id="btnMpSave">保存</button></div>
+              <div class="mn-row"><label style="width:110px">记录保留</label><span id="mpRet"></span></div>
               <p class="mn-hint">卡片按 appid 区分小程序；链接只有名字，若已知的卡片小程序里恰好有一个名字以它开头（「刺猬云印」→「刺猬云印丨打印5分 包邮到家」），就算同一个小程序。小程序名称和缩略图一直保留。</p>
             </div>
           </div>
@@ -1947,7 +1961,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
           <div class="settings-list" id="leaveLogSwitches"></div>
           <div class="mn-body">
             <div class="mn-row"><label style="width:150px">保存退群前几条消息</label><input type="number" min="0" max="30" class="input-sm" id="llMsgCount" style="width:100px" /><span class="mn-hint">0–30，0 = 只记退群不存消息</span></div>
-            <div class="mn-row"><label style="width:150px">图片保留</label><input type="number" min="1" max="3650" class="input-sm" id="llImgDays" style="width:100px" /><span class="mn-hint">天（1–3650），到期只删图片</span><button class="btn btn-primary btn-sm" id="btnLlSave">保存</button></div>
+            <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnLlSave">保存</button></div>
+            <div class="mn-row"><label style="width:150px">图片保留</label><span id="llRet"></span><span class="mn-hint">到期只删图片</span></div>
             <p class="mn-hint">消息只记开启之后插件收到的（文字最多 120 字，表情 / 卡片写成 [表情] 这样的占位），只存内存；插件重启后靠群历史兜底（最近 100 条）。被撤回的消息群历史里可能已经没有了。开启「保存图片」后，退群时把这些消息里的图片下载保存（每条最多 4 张），点缩略图看大图；退群前很久发的图片链接可能已失效，会显示「图片未能保存」。</p>
           </div>
         </div>
@@ -1986,8 +2001,8 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="card-header"><h2>缓存设置</h2></div>
             <div class="settings-list" id="dirSwitches"></div>
             <div class="mn-body">
-              <div class="mn-row"><label style="width:150px">群列表有效期（秒）</label><input type="number" class="input-sm" id="dirGroupTtl" style="width:120px" /></div>
-              <div class="mn-row"><label style="width:150px">群成员有效期（秒）</label><input type="number" class="input-sm" id="dirMemberTtl" style="width:120px" /></div>
+              <div class="mn-row"><label style="width:150px">群列表有效期</label><span id="dirRetGroup"></span></div>
+              <div class="mn-row"><label style="width:150px">群成员有效期</label><span id="dirRetMember"></span></div>
               <div class="mn-row"><label style="width:150px">接口最小间隔（毫秒）</label><input type="number" class="input-sm" id="dirInterval" style="width:120px" /></div>
               <div class="mn-row"><button class="btn btn-primary btn-sm" id="btnDirSave">保存</button></div>
             </div>
@@ -2014,6 +2029,12 @@ body.bs-full #tab-bigscreen{padding:20px 24px;min-height:100vh;box-sizing:border
             <div class="mn-row" style="margin-top:10px"><button class="btn btn-outline btn-sm" id="btnSaVacuum">整理数据库</button>
               <span class="mn-hint" id="saVacuumHint">删掉记录后数据库文件不会自己变小，空出来的地方留着给新记录用；整理一次才会把空闲部分还给磁盘。数据库大时要几秒到几十秒，期间插件写数据库会稍等。</span></div>
           </div>
+        </div>
+        <div class="card" id="retCard">
+          <div class="card-header"><h2>保留时长与有效期</h2><span class="rules-subtle">所有会自动过期的记录和缓存都在这里设置；每项可以按小时或天填</span></div>
+          <div class="log-container" id="retTable"><p class="empty">加载中...</p></div>
+          <div class="mn-body"><div class="mn-row"><button class="btn btn-primary btn-sm" id="btnRetSave">保存</button><span class="mn-hint" id="retDirty"></span></div>
+            <p class="mn-hint">缩短保留时长后，超出的记录在下一次自动清理时删除（各类每隔一段时间检查一次）；想马上腾出空间，可以用下面的「删除旧记录…」。码的发送次数限制按「码管理 → 发送次数限制」里的统计窗口计次，码发送记录至少保留这么久。</p></div>
         </div>
         <div class="card">
           <div class="card-header"><h2>按类别</h2><span class="rules-subtle">数据库占用含索引；「图片」是这一类在数据目录里保存的图片文件</span></div>
@@ -3631,6 +3652,12 @@ var MANUAL_SETTING_KEYS = {
   code_image_max_kb: true,
   code_store_ttl_hours: true,
   code_stats_keep_days: true,
+  code_stats_keep_hours: true,
+  link_store_hours: true,
+  miniapp_store_hours: true,
+  log_image_hours: true,
+  leave_log_image_hours: true,
+  log_image_days: true,
   wxcode_allow_codes: true,
   blacklist_reject_join_enabled: true,
   blacklist_kick_on_join: true,
@@ -5136,6 +5163,161 @@ function mnCodeTestFile() {
 }
 
 /* ---- 快捷拉黑（小程序 / 码）时选规则组：命中后按那个组的处理方式和生效范围；记住上次选的组 ---- */
+/* ---- 保留时长与有效期（retention.py）：统一在存储管理页设置，按小时 / 天（缓存还可以按分钟）填 ---- */
+var RET_UNITS = { m: [60, '分钟'], h: [3600, '小时'], d: [86400, '天'] };
+var RET_UI = [
+  { key: 'code_store_ttl_hours', native: 3600, def: 0, min: 0, max: 8760, units: ['h', 'd'], label: '码发送记录和图片', desc: '码管理里每次发码的记录、原图和码的裁剪图', zero: '0 = 自动（7 天；码计次窗口 × 2 更长时按它）' },
+  { key: 'code_stats_keep_hours', native: 3600, def: 4320, min: 0, max: 87600, units: ['h', 'd'], label: '码按人统计', desc: '谁发过哪个码、几次（按人统计、成员档案、重复成员页）；这么久没再发过的删掉', zero: '0 = 永久保留' },
+  { key: 'link_store_hours', native: 3600, def: 2160, min: 1, max: 87600, units: ['h', 'd'], label: '链接记录', desc: '每次发链接的记录（链接管理、成员档案、重复成员页）' },
+  { key: 'miniapp_store_hours', native: 3600, def: 2160, min: 1, max: 87600, units: ['h', 'd'], label: '小程序记录', desc: '每次发小程序的记录（小程序页、成员档案、重复成员页）；小程序本身和图标一直保留' },
+  { key: 'log_image_hours', native: 3600, def: 720, min: 1, max: 87600, units: ['h', 'd'], label: '违规记录的图片', desc: '到期只删图片，违规记录本身保留' },
+  { key: 'leave_log_image_hours', native: 3600, def: 720, min: 1, max: 87600, units: ['h', 'd'], label: '退群记录的图片', desc: '到期只删图片，退群记录和文字保留' },
+  { key: 'directory_group_ttl', native: 1, def: 3600, min: 60, max: 86400, units: ['m', 'h', 'd'], label: '群列表缓存有效期', desc: '过期后再用到时重新向 QQ 拉一次（群成员缓存页也可以手动刷新）', cache: true },
+  { key: 'directory_member_ttl', native: 1, def: 21600, min: 300, max: 604800, units: ['m', 'h', 'd'], label: '群成员缓存有效期', desc: '过期的群在后台补齐时刷新；跨群踢人、找人、重复成员都读这份缓存', cache: true }
+];
+var RET = { dirty: false };
+function hoursText(h) { h = Number(h || 0); return h && h % 24 === 0 ? (h / 24) + ' 天' : h + ' 小时'; }
+function retItem(key) { return RET_UI.filter(function(x) { return x.key === key; })[0]; }
+function retSeconds(it) {
+  var v = mnCfg(it.key);
+  v = v === undefined || v === null || v === '' ? it.def : Number(v);
+  return (isNaN(v) ? it.def : v) * it.native;
+}
+function retSplit(it, sec) {
+  if (!sec) return { n: 0, u: it.units[it.units.length - 1] };
+  for (var i = it.units.length - 1; i >= 0; i--) {
+    var f = RET_UNITS[it.units[i]][0];
+    if (sec % f === 0) return { n: sec / f, u: it.units[i] };
+  }
+  return { n: sec / RET_UNITS[it.units[0]][0], u: it.units[0] };
+}
+function retText(key) {
+  var it = retItem(key);
+  if (!it) return '';
+  var sec = retSeconds(it);
+  if (!sec) return it.key === 'code_store_ttl_hours' ? '自动（7 天）' : '永久';
+  var p = retSplit(it, sec);
+  return p.n + ' ' + RET_UNITS[p.u][1];
+}
+function retLinkHtml(key) {
+  return '<b data-ret-text="' + escAttr(key) + '">' + esc(retText(key)) + '</b> <a href="javascript:void(0)" class="mn-hint" data-ret-go="' + escAttr(key) + '">在「存储管理」里修改</a>';
+}
+function retRefreshTexts() {
+  $$('[data-ret-text]').forEach(function(el) { el.textContent = retText(el.getAttribute('data-ret-text')); });
+}
+function retRender() {
+  var rows = function(cache) {
+    return RET_UI.filter(function(it) { return !!it.cache === cache; }).map(function(it) {
+      var p = retSplit(it, retSeconds(it));
+      return '<tr data-ret-row="' + escAttr(it.key) + '"><td><b>' + esc(it.label) + '</b><br><span class="mn-hint">' + esc(it.desc) + '</span></td>' +
+        '<td style="white-space:nowrap"><input type="number" class="input-sm" min="0" step="any" style="width:90px" data-ret-n="' + escAttr(it.key) + '" value="' + escAttr(p.n) + '" /> ' +
+        '<select class="input-sm" style="width:80px" data-ret-u="' + escAttr(it.key) + '">' + it.units.map(function(u) {
+          return '<option value="' + u + '"' + (u === p.u ? ' selected' : '') + '>' + RET_UNITS[u][1] + '</option>';
+        }).join('') + '</select></td>' +
+        '<td class="mn-hint" data-ret-note="' + escAttr(it.key) + '">' + esc(retNote(it, p.n, p.u)) + '</td></tr>';
+    }).join('');
+  };
+  $('#retTable').innerHTML = '<table class="mn-table"><thead><tr><th>记录保留</th><th style="width:200px">时长</th><th>说明</th></tr></thead><tbody>' + rows(false) +
+    '<tr><th colspan="3" style="padding-top:12px">缓存有效期</th></tr>' + rows(true) + '</tbody></table>';
+  RET.dirty = false; $('#retDirty').textContent = '';
+}
+function retNote(it, n, u) {
+  var sec = Number(n) * RET_UNITS[u][0];
+  var parts = [];
+  if (it.zero) parts.push(it.zero);
+  if (sec && !isNaN(sec)) {
+    var h = sec / 3600;
+    parts.push('= ' + (h >= 24 && h % 24 === 0 ? (h / 24) + ' 天' : (h >= 1 ? (Math.round(h * 100) / 100) + ' 小时' : Math.round(sec / 60) + ' 分钟')));
+  }
+  var lo = it.min * it.native, hi = it.max * it.native;
+  parts.push('范围 ' + retHuman(lo) + ' – ' + retHuman(hi));
+  return parts.join('；');
+}
+function retHuman(sec) {
+  if (!sec) return '0';
+  if (sec % 86400 === 0) return (sec / 86400) + ' 天';
+  if (sec % 3600 === 0) return (sec / 3600) + ' 小时';
+  return Math.round(sec / 60) + ' 分钟';
+}
+function retOnInput(e) {
+  var k = e.target.getAttribute('data-ret-n') || e.target.getAttribute('data-ret-u');
+  if (!k) return;
+  var it = retItem(k);
+  var n = $('[data-ret-n="' + k + '"]').value, u = $('[data-ret-u="' + k + '"]').value;
+  $('[data-ret-note="' + k + '"]').textContent = retNote(it, n, u);
+  RET.dirty = true; $('#retDirty').textContent = '有修改未保存';
+}
+async function retSave() {
+  var values = {}, errs = [];
+  RET_UI.forEach(function(it) {
+    var raw = $('[data-ret-n="' + it.key + '"]').value.trim(), u = $('[data-ret-u="' + it.key + '"]').value;
+    var n = Number(raw);
+    if (raw === '' || isNaN(n) || n < 0) { errs.push(it.label + '：填一个不小于 0 的数'); return; }
+    var native = n * RET_UNITS[u][0] / it.native;
+    if (Math.abs(native - Math.round(native)) > 1e-6) { errs.push(it.label + '：换算后要是整' + (it.native === 3600 ? '小时' : '秒') + '（比如 1.5 天 = 36 小时可以，0.3 小时不行）'); return; }
+    native = Math.round(native);
+    if (native < it.min || native > it.max) { errs.push(it.label + '：' + (native === 0 && it.min > 0 ? '不能是 0' : '超出范围（' + retHuman(it.min * it.native) + ' – ' + retHuman(it.max * it.native) + '）')); return; }
+    if (Number(mnCfg(it.key) === undefined || mnCfg(it.key) === '' ? it.def : mnCfg(it.key)) !== native) values[it.key] = native;
+  });
+  if (errs.length) { toast(errs[0], 'warning'); return; }
+  if (!Object.keys(values).length) { toast('没有修改', 'info'); return; }
+  var shorter = Object.keys(values).filter(function(k) { var it = retItem(k); return !it.cache && values[k] && values[k] * it.native < retSeconds(it); });
+  if (shorter.length && !(await mnConfirm('缩短了这些保留时长：' + shorter.map(function(k) { return retItem(k).label; }).join('、') + '。\n超出的记录会在下一次自动清理时删除，不能恢复。继续保存？', { title: '缩短保留时长', okText: '保存', danger: true }))) return;
+  if (await mnSaveConfig(values, '已保存')) { retRender(); retRefreshTexts(); loadStorage(); }
+}
+function retGo(key) {
+  switchTab('storage');
+  setTimeout(function() {
+    var row = document.querySelector('[data-ret-row="' + key + '"]') || document.getElementById('retCard');
+    if (row) { mainScrollTo(row); row.classList.add('ret-flash'); setTimeout(function() { row.classList.remove('ret-flash'); }, 1600); var inp = row.querySelector('input'); if (inp) inp.focus(); }
+  }, 300);
+}
+document.addEventListener('click', function(e) {
+  var a = e.target.closest && e.target.closest('[data-ret-go]');
+  if (!a) return;
+  e.preventDefault();
+  retGo(a.getAttribute('data-ret-go'));
+});
+
+/* ---- 看大图：带 data-zoom 的图片点一下全屏看（再点切换原始大小，Esc / 点空白关闭）。盖在弹窗上面 ---- */
+function imgView(src, title) {
+  if (!src) return;
+  var old = document.getElementById('imgViewer');
+  if (old) old.remove();
+  var win = document.createElement('div');
+  win.id = 'imgViewer';
+  win.className = 'img-viewer';
+  win.innerHTML = '<div class="iv-bar"><span class="iv-title"></span><span class="iv-size"></span><button type="button" class="iv-btn" data-iv="fit">原始大小</button><button type="button" class="iv-btn" data-iv="close">关闭 ✕</button></div>' +
+    '<div class="iv-stage"><img alt="大图" /></div>';
+  win.querySelector('.iv-title').textContent = title || '';
+  var img = win.querySelector('img');
+  img.addEventListener('load', function() {
+    win.querySelector('.iv-size').textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+    if (Math.max(img.naturalWidth, img.naturalHeight) < 400) win.classList.add('small');   // 小图放大时不糊（码图）
+  });
+  img.src = src;
+  var toggle = function() {
+    var full = win.classList.toggle('actual');
+    win.querySelector('[data-iv="fit"]').textContent = full ? '适应窗口' : '原始大小';
+  };
+  var close = function() { win.remove(); document.removeEventListener('keydown', onKey, true); };
+  var onKey = function(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+  win.addEventListener('click', function(e) {
+    var b = e.target.closest('[data-iv]');
+    if (b) { if (b.getAttribute('data-iv') === 'close') close(); else toggle(); return; }
+    if (e.target === img) { toggle(); return; }
+    close();
+  });
+  document.addEventListener('keydown', onKey, true);
+  document.body.appendChild(win);
+}
+document.addEventListener('click', function(e) {
+  var img = e.target.closest && e.target.closest('img[data-zoom]');
+  if (!img) return;
+  e.preventDefault(); e.stopPropagation();
+  imgView(img.getAttribute('data-zoom') || img.src, img.getAttribute('data-zoom-title') || img.alt);
+}, true);
+
 /* ---- 存储管理（storage_admin.py） ---- */
 var SA = { data: null, busy: false };
 function saSize(n) {
@@ -5148,6 +5330,7 @@ function saSize(n) {
 }
 async function loadStorage() {
   var ep = beginLoad('storage');
+  if (await mnLoadOverview() && !RET.dirty) retRender();
   $('#saGenerated').textContent = '统计中…';
   var res = await safeGet('minimal/storage', {}, 120000);
   if (!isCurrentLoad('storage', ep)) return;
@@ -5514,7 +5697,7 @@ async function loadLinks(page) {
   if (page) LK.page = page;
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('lkSwitches');
-  $('#lkDays').value = Number(mnCfg('link_store_days')) || 90;
+  $('#lkRet').innerHTML = retLinkHtml('link_store_hours');
   $('#lkTitleMode').value = mnCfg('link_title_mode') || 'manual';
   var g = $('#lkGroup');
   if (g.options.length !== mnGroups().length + 1) g.innerHTML = mnGroupOptions(g.value, '所有群');
@@ -5731,7 +5914,7 @@ async function loadMiniapps(page) {
   if (page) MP.page = page;
   if (!await mnLoadOverview()) return;
   mnRenderSwitches('mpSwitches');
-  $('#mpDays').value = Number(mnCfg('miniapp_store_days')) || 90;
+  $('#mpRet').innerHTML = retLinkHtml('miniapp_store_hours');
   var g = $('#mpGroup'), cur = g.value;
   g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   g.value = cur;
@@ -5813,7 +5996,7 @@ async function mpShowDetail(it) {
   MP.detail = { app: app, data: d };
   var contents = (d.contents || []).map(function(c, ci) {
     var titleBtn = c.title ? '<br><button class="btn btn-outline btn-sm" style="margin-top:4px" data-mpd-title="' + ci + '">按这个标题拉黑</button>' : '';
-    return '<tr><td style="width:64px">' + (c.thumb ? '<img alt="预览" src="' + escAttr(c.thumb) + '" style="width:56px;height:56px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">' + (c.form === 'link' ? '链接' : '无图') + '</span>') + '</td>' +
+    return '<tr><td style="width:64px">' + (c.thumb ? '<img alt="小程序预览图" data-zoom title="点击看大图" src="' + escAttr(c.thumb) + '" style="width:56px;height:56px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">' + (c.form === 'link' ? '链接' : '无图') + '</span>') + '</td>' +
       '<td style="word-break:break-all">' + (c.title ? esc(c.title) + '<br>' : '') + '<span class="mn-hint">' + esc(c.content) + '</span></td>' +
       '<td style="white-space:nowrap"><strong>' + c.total + '</strong> 次<br><span class="mn-hint">' + c.users + ' 人</span>' + titleBtn + '</td><td style="white-space:nowrap">' + esc(mnTime(c.last_ts)) + '</td></tr>';
   }).join('');
@@ -6571,7 +6754,7 @@ function mbrSubHtml(sub) {
   if (sub === 'codes') {
     var c = p.codes || {};
     return t(['码', '内容', '次数', '群', '最近'], (c.codes || []).map(function(x, i) {
-      return '<tr><td style="width:56px">' + (x.thumb ? '<img alt="码" src="' + escAttr(x.thumb) + '" style="width:44px;height:44px;object-fit:contain" />' : '') + '</td>' +
+      return '<tr><td style="width:56px">' + (x.thumb ? '<img alt="码" data-zoom title="点击看大图" src="' + escAttr(x.thumb) + '" style="width:44px;height:44px;object-fit:contain" />' : '') + '</td>' +
         '<td style="word-break:break-all"><a href="javascript:void(0)" data-mbr-code="' + i + '">' + esc(x.text.length > 90 ? x.text.slice(0, 90) + '…' : x.text) + '</a> ' + mpStateTag(x.state) + '</td>' +
         '<td style="white-space:nowrap"><strong>' + x.total + '</strong>' + ((x.limited + x.ruled) ? '<div class="mn-hint" style="color:var(--danger)">撤回 ' + (x.limited + x.ruled) + '</div>' : '') + '</td>' +
         '<td>' + x.group_ids.map(function(g) { return esc(mbrGroupName(g)); }).join('、') + '</td><td style="white-space:nowrap">' + esc(mnTime(x.last_ts)) + '</td></tr>';
@@ -6669,9 +6852,8 @@ async function loadCodes(page) {
   $('#clMax').value = mnCfg('code_limit_max') || 3;
   $('#clTpl').value = mnCfg('code_limit_warn_template') || '';
   $('#csMaxKb').value = mnCfg('code_image_max_kb') || 500;
-  $('#csTtlHours').value = Number(mnCfg('code_store_ttl_hours')) || 0;
-  var sd = mnCfg('code_stats_keep_days');
-  $('#csStatsDays').value = sd === undefined || sd === null || sd === '' ? 180 : Number(sd);
+  $('#csRetTtl').innerHTML = retLinkHtml('code_store_ttl_hours');
+  $('#csRetStats').innerHTML = retLinkHtml('code_stats_keep_hours');
   var g = $('#csGroup'), cur = g.value;
   g.innerHTML = '<option value="">所有群</option>' + mnGroups().map(function(x) { return '<option value="' + escAttr(x.group_id) + '">' + esc(mnGroupLabel(x)) + '</option>'; }).join('');
   g.value = cur;
@@ -6741,8 +6923,8 @@ async function csShowDetail(it) {
   var text = d.text || CS.sel.text;
   var imgs = (d.images || []).map(function(m) {
     return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;min-width:0">' +
-      (m.orig ? '<a href="' + escAttr(m.orig) + '" target="_blank" rel="noopener" title="新窗口看原图"><img alt="原图" src="' + escAttr(m.orig) + '" style="max-width:140px;max-height:140px;display:block" /></a>' : '<span class="mn-hint">原图已清理</span>') +
-      (m.crop ? '<img alt="裁剪图" src="' + escAttr(m.crop) + '" style="max-width:80px;max-height:80px;background:#fff" />' : '') +
+      (m.orig ? '<img alt="原图" data-zoom data-zoom-title="原图 · ' + escAttr(mnTime(m.ts)) + '" title="点击看大图" src="' + escAttr(m.orig) + '" style="max-width:140px;max-height:140px;display:block" />' : '<span class="mn-hint">原图已清理</span>') +
+      (m.crop ? '<img alt="码裁剪图" data-zoom title="点击看大图" src="' + escAttr(m.crop) + '" style="max-width:80px;max-height:80px;background:#fff" />' : '') +
       '<div class="mn-hint">' + esc(mnTime(m.ts)) + '<br>' + esc(cuGroupName(m.group_id) || m.group_id) + '<br>' + mbrLink(m.user_id) + '</div></div>';
   }).join('');
   var people = {};
@@ -6765,8 +6947,8 @@ async function csShowDetail(it) {
     (d.state === 'block' && CB.blockedGroup && CB.blockedGroup[text] ? '<p class="mn-hint" style="margin:-2px 0 6px">按规则组「' + esc(CB.blockedGroup[text].group) + '」处理</p>' : '') +
     (CS.sel.user_id ? '<p class="mn-hint" style="margin-bottom:6px">只看 ' + mbrLink(CS.sel.user_id) + ' 发的 · <a href="javascript:void(0)" data-csd-user="">看所有人</a></p>' : '') +
     '<p class="mn-hint" style="margin:6px 0">最近的发送记录（' + (d.sends || []).length + ' 条，' + Object.keys(people).length + ' 人；点群名只看这个群，点 QQ 号看群成员档案）</p>' +
-    (sends ? '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>' : '<p class="mn-hint">发送记录已过期（保留 ' + d.ttl_hours + ' 小时）</p>') +
-    '<p class="mn-hint" style="margin:10px 0 6px">图片（同一张图只显示一次，最多 8 组；保留 ' + d.ttl_hours + ' 小时）</p>' +
+    (sends ? '<table class="mn-table"><thead><tr><th>时间</th><th>群</th><th>发送者</th><th>处理</th></tr></thead><tbody>' + sends + '</tbody></table>' : '<p class="mn-hint">发送记录已过期（保留 ' + hoursText(d.ttl_hours) + '）</p>') +
+    '<p class="mn-hint" style="margin:10px 0 6px">图片（同一张图只显示一次，最多 8 组；保留 ' + hoursText(d.ttl_hours) + '）</p>' +
     (imgs ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px">' + imgs + '</div>' : '<p class="mn-hint">没有保存的图片</p>') +
     '</div>';
 }
@@ -6864,12 +7046,12 @@ async function csLoadStats() {
   CS.window = d.window_hours; CS.ttl = d.ttl_hours; CS.items = d.items || [];
   var pick = hoursSel.value;
   hoursSel.innerHTML = '<option value="' + d.window_hours + '">最近 ' + d.window_hours + ' 小时（计次窗口）</option>' +
-    '<option value="' + d.ttl_hours + '">最近 ' + d.ttl_hours + ' 小时（全部保留的）</option>';
+    '<option value="' + d.ttl_hours + '">最近 ' + hoursText(d.ttl_hours) + '（全部保留的）</option>';
   hoursSel.value = pick && Number(pick) === d.ttl_hours ? String(d.ttl_hours) : String(d.window_hours);
-  var ttlText = d.ttl_hours % 24 === 0 ? (d.ttl_hours / 24) + ' 天' : d.ttl_hours + ' 小时';
+  var ttlText = hoursText(d.ttl_hours);
   $('#csTtlHint').textContent = '每个解出内容的码都记下时间、群、发送者和处理结果，并把原图和码的裁剪图存到插件数据目录（同一张图只存一份）。超过大小的图转成 JPEG 压缩。' +
     '发送记录和图片保留 ' + ttlText + (Number(d.ttl_custom) > 0 ? (Number(d.ttl_custom) < d.window_hours ? '（填的 ' + d.ttl_custom + ' 小时短于统计窗口，按统计窗口算）' : '') : '（自动）') + '后自动删除。' +
-    '「按人统计」（谁发过哪个码、几次）和码缩略图' + (d.stats_keep_days ? '保留 ' + d.stats_keep_days + ' 天：这么久没再发过的删掉。' : '永久保留。') +
+    '「按人统计」（谁发过哪个码、几次）和码缩略图' + (d.stats_keep_hours ? '保留 ' + retText('code_stats_keep_hours') + '：这么久没再发过的删掉。' : '永久保留。') +
     (d.store_enabled ? '' : '（当前已关闭，不记录新的码）');
   var byUser = d.by === 'user';
   CS.total = d.total || 0;
@@ -7667,7 +7849,7 @@ function dupSendsBody() {
   if (!cs.codes.length) return '<p class="empty">没有发过码</p>';
   return '<table class="mn-table"><thead><tr><th></th><th>码内容</th><th>次数</th><th>群</th><th>最近</th></tr></thead><tbody>' + cs.codes.map(function(c) {
       var bad = (c.ruled || 0) + (c.limited || 0);
-      return '<tr><td style="width:48px">' + (c.thumb ? '<img alt="码" src="' + escAttr(c.thumb) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">无图</span>') + '</td>' +
+      return '<tr><td style="width:48px">' + (c.thumb ? '<img alt="码" data-zoom title="点击看大图" src="' + escAttr(c.thumb) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px" />' : '<span class="mn-hint">无图</span>') + '</td>' +
         '<td style="word-break:break-all">' + csTagHtml(c.state) + '<span style="font-size:12px">' + esc(c.text.length > 160 ? c.text.slice(0, 160) + '…' : c.text) + '</span></td>' +
         '<td style="white-space:nowrap"><b>' + c.total + '</b>' + (bad ? '<br><span style="color:var(--danger)">撤 ' + bad + '</span>' : '') + '</td>' +
         '<td style="white-space:nowrap">' + c.group_ids.slice(0, 3).map(function(g) { return esc(mpGroupName(g)); }).join('<br>') + (c.group_ids.length > 3 ? '<br><span class="mn-hint">等 ' + c.group_ids.length + ' 个</span>' : '') + '</td>' +
@@ -7876,7 +8058,7 @@ async function loadLeaveLog(page) {
   mnRenderSwitches('leaveLogSwitches');
   var mc = mnCfg('leave_log_msg_count');
   $('#llMsgCount').value = (mc === undefined || mc === null || mc === '') ? 10 : mc;
-  $('#llImgDays').value = Number(mnCfg('leave_log_image_days')) || 30;
+  $('#llRet').innerHTML = retLinkHtml('leave_log_image_hours');
   var llg = $('#llGroup');
   if (llg.options.length !== mnGroups().length + 1) llg.innerHTML = mnGroupOptions(llg.value, '所有群');
   var res = await safeGet('minimal/leavelog', { keyword: $('#llKeyword').value.trim(), kind: $('#llKind').value,
@@ -8429,7 +8611,7 @@ function bsRender(d) {
   var notes = [];
   if (!d.wxcode_enabled) notes.push('葵花码 / 二维码识别没有开启（「识别服务与转发群」页面），不会有新的数据。');
   if (!d.store_enabled) notes.push('码记录已关闭（「码管理」页面），统计不会增加。');
-  if (Number($('#bsHours').value) > d.hours) notes.push('码记录只保留 ' + d.ttl_hours + ' 小时，按最近 ' + d.hours + ' 小时统计（可在「码管理 → 记录和图片保留」调长）。');
+  if (Number($('#bsHours').value) > d.hours) notes.push('码记录只保留 ' + hoursText(d.ttl_hours) + '，按最近 ' + d.hours + ' 小时统计（可在「存储管理 → 保留时长与有效期」调长）。');
   $('#bsNotice').style.display = notes.length ? '' : 'none';
   $('#bsNotice').textContent = notes.join(' ');
   BS.data = d;
@@ -8802,12 +8984,7 @@ function cbOnClick(e) {
   if (zoom) {
     var entry = CB.map[zoom.getAttribute('data-id')];
     var src = zoom.getAttribute('data-cb-zoom') === 'orig' ? (entry && entry.orig) : ((cbCode(zoom.getAttribute('data-id'), zoom.getAttribute('data-i')) || {}).crop);
-    if (src) {
-      showModal(zoom.getAttribute('data-cb-zoom') === 'orig' ? '原图（缩略图）' : '码裁剪图',
-        '<div class="cb-zoom" style="text-align:center"><img alt="放大查看" src="' + escAttr(src) + '" style="width:' + (zoom.getAttribute('data-cb-zoom') === 'orig' ? '100%' : '320px') + '" /></div>',
-        '<button class="btn btn-primary btn-sm" id="cbZoomClose">关闭</button>');
-      $('#cbZoomClose').addEventListener('click', closeModal);
-    }
+    if (src) imgView(src, zoom.getAttribute('data-cb-zoom') === 'orig' ? '原图（看板缩略图，完整原图在码详情里）' : '码裁剪图');
     return;
   }
   var ocrBtn = e.target.closest('[data-cb-ocr]');
@@ -8954,8 +9131,8 @@ async function loadDirectory(fromPoll) {
   if (!poll) {
     MN_SWITCHES.dirSwitches = [{ key: 'directory_background_refresh_enabled', label: '后台补齐缓存', desc: '每 5 分钟最多刷新 2 个已过期的群' }];
     mnRenderSwitches('dirSwitches');
-    $('#dirGroupTtl').value = mnCfg('directory_group_ttl') || 3600;
-    $('#dirMemberTtl').value = mnCfg('directory_member_ttl') || 21600;
+    $('#dirRetGroup').innerHTML = retLinkHtml('directory_group_ttl');
+    $('#dirRetMember').innerHTML = retLinkHtml('directory_member_ttl');
     $('#dirInterval').value = mnCfg('directory_min_interval_ms') || 1500;
   }
   var res = await safeGet('minimal/directory');
@@ -9190,18 +9367,17 @@ function initMinimalPages() {
   bindIfExists('csHours', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('csGroup', function() { CS.page = 1; csLoadStats(); }, 'change');
   bindIfExists('btnSaReload', function() { loadStorage(); });
+  bindIfExists('btnRetSave', retSave);
+  bindIfExists('retTable', retOnInput, 'input');
+  bindIfExists('retTable', retOnInput, 'change');
   bindIfExists('btnSaVacuum', saVacuum);
   bindIfExists('btnSaOrphans', saOrphans);
   bindIfExists('btnSaRecompress', saRecompress);
   bindIfExists('saCats', saOnClick);
   bindIfExists('btnCsSave', function() {
     var kb = Number($('#csMaxKb').value);
-    var ttl = Number($('#csTtlHours').value || 0);
-    var days = Number($('#csStatsDays').value || 0);
     if (!(kb >= 50 && kb <= 5000) || Math.floor(kb) !== kb) { toast('压缩大小填 50–5000 的整数', 'warning'); return; }
-    if (!(ttl >= 0 && ttl <= 8760) || Math.floor(ttl) !== ttl) { toast('保留小时填 0–8760 的整数', 'warning'); return; }
-    if (!(days >= 0 && days <= 3650) || Math.floor(days) !== days) { toast('按人累计保留天数填 0–3650 的整数', 'warning'); return; }
-    mnSaveConfig({ code_image_max_kb: kb, code_store_ttl_hours: ttl, code_stats_keep_days: days }, '已保存').then(function(ok) { if (ok) csLoadStats(); });
+    mnSaveConfig({ code_image_max_kb: kb }, '已保存').then(function(ok) { if (ok) csLoadStats(); });
   });
   bindIfExists('btnCsAllowAdd', function() { var t = $('#csAllowAdd').value.trim(); if (!t) return; codeListSet('allow', t, true, true).then(function(ok) { if (ok) { $('#csAllowAdd').value = ''; csAfterListChange(); } }); });
   bindIfExists('btnCsBlockAdd', function() { var t = $('#csBlockAdd').value.trim(); if (!t) return; codeListSet('block', t, true, true).then(function(ok) { if (ok) { $('#csBlockAdd').value = ''; csAfterListChange(); } }); });
@@ -9284,18 +9460,11 @@ function initMinimalPages() {
     if (await lkListSet('allow_domain', v, true)) { $('#lkAllowValue').value = ''; lkReload(); }
   });
   bindIfExists('btnLkSave', function() {
-    var n = Number($('#lkDays').value);
-    if (!(n >= 1 && n <= 3650) || Math.floor(n) !== n) { toast('保留天数填 1–3650 的整数', 'warning'); return; }
-    mnSaveConfig({ link_store_days: n, link_title_mode: $('#lkTitleMode').value }, '已保存').then(function(ok) { if (ok) lkReload(); });
+    mnSaveConfig({ link_title_mode: $('#lkTitleMode').value }, '已保存').then(function(ok) { if (ok) lkReload(); });
   });
   bindAutoFilter(['lkBy', 'lkDaysSel', 'lkGroup', 'lkSort', 'lkKeyword'], function() { LK.page = 1; lkLoadStats(); });
   var mpTab = document.getElementById('tab-miniapps');
   if (mpTab) mpTab.addEventListener('click', mpOnClick);
-  bindIfExists('btnMpSave', function() {
-    var n = Number($('#mpDays').value);
-    if (!(n >= 1 && n <= 3650) || Math.floor(n) !== n) { toast('填 1–3650 的整数', 'warning'); return; }
-    mnSaveConfig({ miniapp_store_days: n }, '已保存').then(function(ok) { if (ok) mpLoadStats(); });
-  });
   document.addEventListener('visibilitychange', function() { if (mpActive()) mpPoll(); });
   bindIfExists('btnBsFull', function() { bsSetFull(!document.body.classList.contains('bs-full')); });
   var bsHours = document.getElementById('bsHours');
@@ -9319,10 +9488,8 @@ function initMinimalPages() {
   bindIfExists('vrCheckAll', function(e) { $$('#userContainer .ck').forEach(function(ck) { ck.checked = e.target.checked; }); }, 'change');
   bindIfExists('btnLlSave', function() {
     var n = Number($('#llMsgCount').value);
-    var days = Number($('#llImgDays').value);
     if (!(n >= 0 && n <= 30) || Math.floor(n) !== n) { toast('消息条数填 0–30 的整数', 'warning'); return; }
-    if (!(days >= 1 && days <= 3650) || Math.floor(days) !== days) { toast('图片保留天数填 1–3650 的整数', 'warning'); return; }
-    mnSaveConfig({ leave_log_msg_count: n, leave_log_image_days: days }, '已保存');
+    mnSaveConfig({ leave_log_msg_count: n }, '已保存');
   });
   bindIfExists('btnLabSave', function() {
     var t = Number($('#labTimes').value), dd = Number($('#labDays').value);
@@ -9395,8 +9562,7 @@ function initMinimalPages() {
     mnDirRefresh({ all: true });
   });
   bindIfExists('btnDirSave', function() {
-    mnSaveConfig({ directory_group_ttl: Number($('#dirGroupTtl').value), directory_member_ttl: Number($('#dirMemberTtl').value),
-      directory_min_interval_ms: Number($('#dirInterval').value) }, '已保存').then(function(ok) { if (ok) loadDirectory(); });
+    mnSaveConfig({ directory_min_interval_ms: Number($('#dirInterval').value) }, '已保存').then(function(ok) { if (ok) loadDirectory(); });
   });
 }
 

@@ -240,25 +240,29 @@ class StorageAdminMixin:
         scale = used_bytes / whole
         return {t: int(v * scale) for t, v in raw.items()}
 
+    @staticmethod
+    def _sa_hours_text(h: int) -> str:
+        return f"{h // 24} 天" if h and h % 24 == 0 else f"{h} 小时"
+
     def _sa_retention(self, key: str) -> str:
         """自动清理规则（给页面看）。"""
+        t = self._sa_hours_text
         try:
             if key == "links":
-                return f"自动保留 {self._lk_store_days()} 天" if callable(getattr(self, "_lk_store_days", None)) else ""
+                return f"自动保留 {t(self._lk_store_hours())}" if callable(getattr(self, "_lk_store_hours", None)) else ""
             if key == "miniapps":
-                return f"自动保留 {self._mp_store_days()} 天" if callable(getattr(self, "_mp_store_days", None)) else ""
+                return f"自动保留 {t(self._mp_store_hours())}" if callable(getattr(self, "_mp_store_hours", None)) else ""
             if key == "codes":
-                h = self._cs_ttl_hours()
-                return f"自动保留 {h // 24} 天" if h % 24 == 0 else f"自动保留 {h} 小时"
+                return f"自动保留 {t(self._cs_ttl_hours())}"
             if key == "code_stats":
-                d = self._cs_stats_keep_days()
-                return f"{d} 天没再发过的自动删除" if d else "永久保留"
+                h = self._cs_stats_keep_hours()
+                return f"{t(h)}没再发过的自动删除" if h else "永久保留"
             if key == "violations":
-                return f"图片自动保留 {self._ms_days()} 天，记录不自动删除" if callable(getattr(self, "_ms_days", None)) \
+                return f"图片自动保留 {t(self._ms_hours())}，记录不自动删除" if callable(getattr(self, "_ms_hours", None)) \
                     else "不自动删除"
             if key == "leaves":
-                return f"图片自动保留 {self._ll_image_days()} 天，记录不自动删除" \
-                    if callable(getattr(self, "_ll_image_days", None)) else "不自动删除"
+                return f"图片自动保留 {t(self._ll_image_hours())}，记录不自动删除" \
+                    if callable(getattr(self, "_ll_image_hours", None)) else "不自动删除"
             if key == "batch":
                 return f"只保留最近 {getattr(self, 'BQ_KEEP_JOBS', 200)} 个已结束的任务"
             if key == "oplog":

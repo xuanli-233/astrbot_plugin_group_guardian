@@ -8,7 +8,7 @@ data/temp/ 里，会被清理，而且浏览器打不开本机路径。现在每
 
 读不到的（文件已被清理、链接已失效）：http(s) 链接原样保留（可能还能打开），本机路径换成
 「failed:本地图片」，不再显示路径。
-开关 log_image_save_enabled（默认开），图片保留 log_image_days 天（默认 30，到期只删图片，日志保留）。
+开关 log_image_save_enabled（默认开），图片保留 log_image_hours 小时（retention.py，默认 30 天，到期只删图片，日志保留）。
 """
 import asyncio
 import base64
@@ -135,12 +135,18 @@ class MediaStoreMixin:
                     found[r["hash"]] = r["thumb"] or ""
         return found
 
+    def _ms_hours(self) -> int:
+        getter = getattr(self, "_ret_hours", None)
+        if callable(getter):
+            return getter("log_image_hours")
+        return min(max(self._cfg_int("log_image_days", 30), 1), 3650) * 24
+
     def _ms_days(self) -> int:
-        return min(max(self._cfg_int("log_image_days", 30), 1), 3650)
+        return max(1, -(-self._ms_hours() // 24))
 
     def _ms_clean(self, now: Optional[int] = None) -> int:
-        """删除保存超过 log_image_days 天的图片（日志本身不动）。返回删除的张数。"""
-        cutoff = int(now or time.time()) - self._ms_days() * 86400
+        """删除保存超过 log_image_hours 小时的图片（日志本身不动）。返回删除的张数。"""
+        cutoff = int(now or time.time()) - self._ms_hours() * 3600
         self._ms_init_db()
         with self._storage._connect() as conn:
             rows = conn.execute("SELECT hash, path FROM log_images WHERE created_at < ?", (cutoff,)).fetchall()

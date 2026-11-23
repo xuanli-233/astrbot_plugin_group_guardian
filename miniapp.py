@@ -9,7 +9,7 @@
         app_key 先查别名表（同一个名字之前对应过哪个小程序）；没有时在已知的卡片小程序里找
         名字以它开头的（如「刺猬云印」→「刺猬云印丨打印5分 包邮到家」），恰好一个才归并，否则用「name:刺猬云印」。
 
-每次出现记一行 mp_sends（时间、群、发送者、形式、小程序、内容、处理结果），保留 miniapp_store_days 天；
+每次出现记一行 mp_sends（时间、群、发送者、形式、小程序、内容、处理结果），保留 miniapp_store_hours 小时（retention.py，默认 90 天）；
 mp_apps / mp_contents 记小程序和内容的名字与缩略图（卡片图标、预览图，后台下载一次），不清理。
 处理结果：pass 放行 / rule 这条消息被撤回（规则组命中等）/ allow 白名单放行。
 白名单（mp_lists）里的小程序：卡片文字不参与关键词匹配，也不按规则组的小程序条目撤回。
@@ -106,8 +106,15 @@ class MiniAppMixin:
             conn.commit()
         self._mp_db_ready = True
 
+    def _mp_store_hours(self) -> int:
+        getter = getattr(self, "_ret_hours", None)
+        if callable(getter):
+            return getter("miniapp_store_hours")
+        return min(max(self._cfg_int("miniapp_store_days", 90), 1), MP_STORE_DAYS_MAX) * 24
+
     def _mp_store_days(self) -> int:
-        return min(max(self._cfg_int("miniapp_store_days", 90), 1), MP_STORE_DAYS_MAX)
+        """给统计范围、页面提示用：不足一天按一天。"""
+        return max(1, -(-self._mp_store_hours() // 24))
 
     # ------------------------------------------------------------------
     # 识别
@@ -309,7 +316,7 @@ class MiniAppMixin:
             logger.debug(f"[GroupMgr] 清理小程序记录失败: {e}")
 
     def _mp_clean(self, now: Optional[int] = None) -> int:
-        cutoff = int(now or time.time()) - self._mp_store_days() * 86400
+        cutoff = int(now or time.time()) - self._mp_store_hours() * 3600
         self._mp_init_db()
         with self._storage._connect() as conn:
             n = conn.execute("DELETE FROM mp_sends WHERE ts < ?", (cutoff,)).rowcount
@@ -463,7 +470,7 @@ class MiniAppMixin:
         """码大屏用：时段内小程序出现次数与排行。"""
         self._mp_init_db()
         now = int(now or time.time())
-        hours = min(max(int(hours or 24), 1), self._mp_store_days() * 24)
+        hours = min(max(int(hours or 24), 1), self._mp_store_hours())
         since = now - hours * 3600
         with self._storage._connect() as conn:
             t = conn.execute("SELECT COUNT(*) AS total, COUNT(DISTINCT app_key) AS apps, COUNT(DISTINCT user_id) AS users, "

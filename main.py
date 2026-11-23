@@ -44,6 +44,7 @@ from .group_files import GroupFilesMixin
 from .member_lookup import MemberLookupMixin
 from .owner_blacklist import OwnerBlacklistMixin
 from .storage_admin import StorageAdminMixin
+from .retention import RetentionMixin
 from .web_minimal import MinimalWebMixin
 from .membership import MembershipMixin
 from .moderation import ModerationMixin
@@ -56,7 +57,7 @@ from .web_identity import WebIdentityMixin
 
 
 @register(PLUGIN_NAME, "zhaisir（原作者）、xuanli-233（二次开发）", "QQ群智能守护者（精简版）- 多群管理工具集", PLUGIN_VERSION, "https://github.com/xuanli-233/astrbot_plugin_group_guardian")
-class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, OwnerBlacklistMixin, StorageAdminMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
+class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMixin, LeaveFilesMixin, JoinLockMixin, LeaveLogMixin, LiveLogMixin, BatchQueueMixin, CodeBoardMixin, AutoAcceptMixin, MsgMaskMixin, BotNotifyMixin, GroupBroadcastMixin, GroupNameTaskMixin, GroupDirectoryMixin, DuplicateMemberMixin, OperationLogMixin, KeywordGuardMixin, CodeLimitMixin, CardParseMixin, CodePipelineMixin, ImageRecognizerMixin, MessageBackupMixin, BackupRoutesMixin, MediaStoreMixin, RuleGroupMixin, MiniAppMixin, LinkGuardMixin, CommandCenterMixin, GroupFilesMixin, MemberLookupMixin, OwnerBlacklistMixin, StorageAdminMixin, RetentionMixin, SchedulerMixin, MinimalWebMixin, WebMixin, WebIdentityMixin, OneBotMixin, UtilitiesMixin, Star):
     """插件主类。所有 AstrBot 装饰器注册入口，业务逻辑委托给 mixin 模块。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
@@ -77,6 +78,11 @@ class Main(ModerationMixin, MembershipMixin, GroupBlacklistMixin, LeaveRecallMix
         # 单群管理类名单（群白/群黑/用户黑/用户白/管理员）：v2.4.0 起以 SQLite 为准，
         # 首次启动自动从旧 config 迁移。下面会填充 group_white_list / _group_white_set 等内存结构。
         self._migrate_and_load_managed_lists()
+        # 保留时长从「天」改为「小时」：旧配置换算一次（retention.py）
+        try:
+            self._ret_migrate()
+        except Exception as e:
+            logger.warning(f"[GroupMgr] 换算保留时长失败: {e}")
         # 同步 AstrBot 全局管理员到插件 admin_list（写入 DB managed_lists + 内存）
         self._sync_astrbot_admins()
         self.auto_moderate_enabled = self.config.get("auto_moderate_enabled", True)

@@ -74,7 +74,9 @@ MINIMAL_CONFIG_KEYS = (
     "card_parse_enabled", "card_scan_preview",
     "code_limit_enabled", "code_limit_scope", "code_limit_window_hours", "code_limit_max",
     "code_limit_warn_enabled", "code_limit_warn_template", "code_limit_count_by", "code_store_enabled", "code_image_max_kb",
-    "code_store_ttl_hours", "code_stats_keep_days",
+    "code_store_ttl_hours", "code_stats_keep_days", "code_stats_keep_hours",
+    "link_store_hours", "miniapp_store_hours", "log_image_hours", "leave_log_image_hours",
+    "directory_group_ttl", "directory_member_ttl",
     "live_log_enabled", "live_log_show_text", "live_log_size",
     "code_board_enabled", "code_board_size",
     "auto_accept_friend_enabled", "auto_accept_friend_scope", "auto_accept_invite_enabled",
@@ -779,7 +781,7 @@ class MinimalWebMixin:
             "items": items, "total": total, "by": by,
             "sort": str(args.get("sort", "") or "count") if str(args.get("sort", "") or "count") in self.CS_SORTS else "count",
             "window_hours": window, "ttl_hours": self._cs_ttl_hours(), "ttl_custom": self._cfg_int("code_store_ttl_hours", 0),
-            "stats_keep_days": self._cs_stats_keep_days(),
+            "stats_keep_days": self._cs_stats_keep_days(), "stats_keep_hours": self._cs_stats_keep_hours(),
             "store_enabled": bool(self._cfg("code_store_enabled", True)),
         }})
 
