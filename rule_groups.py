@@ -36,6 +36,15 @@ RG_CARD_ALLOW_MAX = 200       # 群名片规则：允许分享的群号上限
 RG_CARD_MODES = {"": "不检查", "others": "分享别的群的名片", "all": "分享任何群的名片"}
 RG_KICK_MODES = {"": "不踢", "kick": "踢出本群", "block": "踢出并拉黑"}
 RG_KICK_DAYS_DEFAULT = 7
+# 踢谁（都是 0 = 不看这一项；一项都不看 = 命中就踢）：
+#   kick_days    入群不满 N 天
+#   kick_groups  同时在 ≥ N 个管理的群（群成员缓存）
+#   kick_kicked  被踢过 ≥ N 次（退群记录，所有群合计）
+#   kick_left    主动退群过 ≥ N 次（同上）
+#   kick_match   any 满足任意一项就踢 / all 全部满足才踢
+RG_KICK_CONDS = {"kick_days": (3650, "入群天数"), "kick_groups": (500, "所在群数"), "kick_kicked": (1000, "被踢次数"),
+                 "kick_left": (1000, "主动退群次数")}
+RG_KICK_MATCH = {"any": "满足任意一项", "all": "全部满足"}
 DEFAULT_NOTICE = "[群管] {name} 的消息含违规内容，已撤回"
 
 
@@ -120,6 +129,12 @@ class RuleGroupMixin:
             kick_days = int(action.get("kick_days", RG_KICK_DAYS_DEFAULT))
         except (TypeError, ValueError):
             kick_days = RG_KICK_DAYS_DEFAULT
+
+        def cond(name):
+            try:
+                return max(0, min(RG_KICK_CONDS[name][0], int(action.get(name, 0) or 0)))
+            except (TypeError, ValueError):
+                return 0
         return {
             "id": int(row["id"]), "name": row["name"], "enabled": bool(row["enabled"]), "sort": int(row["sort"]),
             "is_default": bool(row["is_default"]), "scope": [str(x) for x in load(row["scope"], [])],
@@ -141,6 +156,9 @@ class RuleGroupMixin:
                 # kick_days：只踢入群不满这么多天的人（0 = 不看入群时间）；不满足时按上面的禁言处理
                 "kick": kick if kick in RG_KICK_MODES else "",
                 "kick_days": max(0, min(3650, kick_days)),
+                "kick_groups": cond("kick_groups"), "kick_kicked": cond("kick_kicked"), "kick_left": cond("kick_left"),
+                "kick_match": str(action.get("kick_match") or "any") if str(action.get("kick_match") or "any") in RG_KICK_MATCH
+                else "any",
             },
             "updated_at": int(row["updated_at"] or 0),
         }
@@ -390,6 +408,19 @@ class RuleGroupMixin:
             return None, "入群天数要填整数", []
         if not 0 <= kick_days <= 3650:
             return None, "入群天数填 0–3650（0 = 不看入群时间）", []
+        conds = {}
+        for ckey in ("kick_groups", "kick_kicked", "kick_left"):
+            raw = action.get(ckey)
+            try:
+                value = 0 if raw in (None, "") else int(raw)
+            except (TypeError, ValueError):
+                return None, f"{RG_KICK_CONDS[ckey][1]}要填整数", []
+            if not 0 <= value <= RG_KICK_CONDS[ckey][0]:
+                return None, f"{RG_KICK_CONDS[ckey][1]}填 0–{RG_KICK_CONDS[ckey][0]}（0 = 不看）", []
+            conds[ckey] = value
+        match = str(action.get("kick_match") or "any")
+        if match not in RG_KICK_MATCH:
+            return None, "踢人条件只能是：满足任意一项 / 全部满足", []
         return {
             "name": name, "enabled": bool(data.get("enabled", True)), "scope": sorted(set(scope)),
             "keywords": keywords, "code_rules": code_rules, "apps": apps,
@@ -398,7 +429,7 @@ class RuleGroupMixin:
                        "mute": bool(action.get("mute", False)), "mute_minutes": minutes,
                        "notice": bool(action.get("notice", False)),
                        "notice_template": str(action.get("notice_template", "") or "").strip()[:RG_TEMPLATE_MAX],
-                       "kick": kick, "kick_days": kick_days},
+                       "kick": kick, "kick_days": kick_days, **conds, "kick_match": match},
         }, "", []
 
     def _rg_save(self, data: dict, source: str = "WebUI", operator: str = "") -> Tuple[Optional[dict], str, list]:
@@ -555,6 +586,7 @@ class RuleGroupMixin:
             out.append({"id": g["id"], "name": g["name"], "enabled": g["enabled"], "is_default": g["is_default"],
                         "scope": g["scope"], "recall": g["action"]["recall"], "mute": g["action"]["mute"],
                         "mute_minutes": g["action"]["mute_minutes"], "kick": g["action"]["kick"],
+                        "kick_cond": self._rg_kick_cond_text(g["action"]) if g["action"]["kick"] else "",
                         "apps": len(g["apps"]), "codes": len(g["codes"])})
         return out
 
@@ -583,11 +615,26 @@ class RuleGroupMixin:
                       + "；" + ("撤回、" if a.get("recall", True) else "不撤回（只抄送提醒）、")
                       + ("禁言 %d 分钟" % a["mute_minutes"] if a["mute"] else "不禁言")
                       + ("、群内提示" if a["notice"] else "")
-                      + (f"、{RG_KICK_MODES[a['kick']]}"
-                         + (f"（入群不满 {a['kick_days']} 天）" if a["kick_days"] else "（不看入群时间）") if a["kick"] else ""))
+                      + (f"、{RG_KICK_MODES[a['kick']]}（{self._rg_kick_cond_text(a)}）" if a["kick"] else ""))
             record(op, source=source, operator=operator, detail=detail)
         except Exception as e:
             logger.debug(f"[GroupMgr] 记录规则组操作失败: {e}")
+
+    @staticmethod
+    def _rg_kick_cond_text(a: dict) -> str:
+        """踢人条件的说明：入群不满 7 天 或 在 ≥3 个群 …；都没填 = 命中就踢。"""
+        parts = []
+        if a.get("kick_days"):
+            parts.append(f"入群不满 {a['kick_days']} 天")
+        if a.get("kick_groups"):
+            parts.append(f"在 ≥{a['kick_groups']} 个群")
+        if a.get("kick_kicked"):
+            parts.append(f"被踢过 ≥{a['kick_kicked']} 次")
+        if a.get("kick_left"):
+            parts.append(f"主动退群 ≥{a['kick_left']} 次")
+        if not parts:
+            return "不看条件，命中就踢"
+        return (" 且 " if a.get("kick_match") == "all" else " 或 ").join(parts)
 
     def _rg_test(self, text: str = "", code: str = "", app: str = "", group_id: str = "", title: str = "",
                  card_group: str = "") -> dict:

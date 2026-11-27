@@ -292,5 +292,50 @@ class AutoKickTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.ops[-1][0], "群名片撤回")
 
 
+class KickConditionTests(unittest.IsolatedAsyncioTestCase):
+    """踢谁：入群天数 / 所在群数 / 被踢次数 / 主动退群次数，满足任意一项或全部满足。"""
+
+    def _h(self, join_days=40, groups=1, kicks=0, leaves=0, **action):
+        h = _H(join_days=join_days)
+        h._dir_find_user = lambda uid: [{"group_id": str(i)} for i in range(groups)]
+        h._ll_user_summary = lambda uid: {"kicks": kicks, "leaves": leaves}
+        h.group(action=action)
+        return h
+
+    async def _hit(self, h):
+        await h._run_hit_guards(_Event(), GID, UID, "荒", "来勤工俭学群", [])
+        await h.drain()
+        return bool(h.kicks)
+
+    async def test_any_mode(self):
+        # 老成员（40 天），但在 5 个群：满足「在 ≥3 个群」就踢，原因写清楚
+        h = self._h(groups=5, kick_groups=3)
+        self.assertTrue(await self._hit(h))
+        self.assertIn("在 5 个群", h.kicks[0][4]["reason"])
+        self.assertFalse(await self._hit(self._h(groups=2, kick_groups=3)))                      # 都不满足：只禁言
+        self.assertTrue(await self._hit(self._h(kicks=2, kick_kicked=2)))                        # 被踢过 2 次
+        self.assertTrue(await self._hit(self._h(leaves=3, kick_left=3)))                         # 主动退群 3 次
+        self.assertTrue(await self._hit(self._h(join_days=1, kick_left=3)))                      # 新人（7 天内）
+
+    async def test_all_mode(self):
+        h = self._h(join_days=1, groups=5, kick_groups=3, kick_kicked=1, kick_match="all")
+        self.assertFalse(await self._hit(h))                                                     # 没被踢过：不满足全部
+        self.assertIn("没有全部满足", h.ops[-1][1]["reason"])
+        self.assertTrue(await self._hit(self._h(join_days=1, groups=5, kicks=1, kick_groups=3, kick_kicked=1,
+                                                kick_match="all")))
+
+    async def test_no_conditions_kicks_everyone_and_validation(self):
+        self.assertTrue(await self._hit(self._h(join_days=400, kick_days=0)))                    # 都没填：命中就踢
+        h = _H()
+        base = {"name": "x", "keywords": ["a"]}
+        self.assertIn("所在群数", h._rg_save(dict(base, action={"kick": "kick", "kick_groups": -1}))[1])
+        self.assertIn("被踢次数", h._rg_save(dict(base, action={"kick": "kick", "kick_kicked": "x"}))[1])
+        self.assertIn("全部满足", h._rg_save(dict(base, action={"kick": "kick", "kick_match": "some"}))[1])
+        saved, err, _ = h._rg_save(dict(base, action={"kick": "block", "kick_days": 7, "kick_groups": 3, "kick_match": "any"}))
+        self.assertEqual(err, "")
+        self.assertEqual((saved["action"]["kick_groups"], saved["action"]["kick_match"]), (3, "any"))
+        self.assertIn("入群不满 7 天 或 在 ≥3 个群", h.ops[-1][1]["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -569,6 +569,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","P
     .rg-presets .btn{font-size:12px;padding:3px 8px}
     .rg-dirty{color:var(--warning);font-size:12px;font-weight:500}
     .modal.modal-wide{width:860px}
+    .rg-kick-cond{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin:0 0 10px;background:var(--bg-secondary)}
+    .rg-kick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px}
+    .rg-kc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 6px;border-radius:6px;border:1px solid transparent}
+    .rg-kc.on{border-color:color-mix(in srgb, var(--primary) 45%, var(--border));background:var(--surface)}
+    .rg-kc .mn-hint{flex-basis:100%;margin-left:2px}
     img[data-zoom]{cursor:zoom-in}
     .img-viewer{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.82);display:flex;flex-direction:column}
     .img-viewer .iv-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;color:#fff;font-size:13px}
@@ -4715,11 +4720,25 @@ function rgAppBuild(r) {
   return cond ? (r.app || '*') + ' | ' + cond : r.app;
 }
 var RG_KICK_TEXT = { kick: '踢出本群', block: '踢出并拉黑' };
+var RG_KICK_CONDS = [
+  ['kick_days', '入群不满', '天', 3650, '新进群的人'],
+  ['kick_groups', '同时在 ≥', '个管理的群', 500, '按群成员缓存数；广告号常常一次进很多群'],
+  ['kick_kicked', '被踢过 ≥', '次', 1000, '退群记录里所有群合计（谁踢的都算）'],
+  ['kick_left', '主动退群 ≥', '次', 1000, '退群记录里所有群合计；打完广告就退的号']
+];
+function rgKickCondText(a) {
+  var parts = [];
+  if (Number(a.kick_days) > 0) parts.push('入群不满 ' + a.kick_days + ' 天');
+  if (Number(a.kick_groups) > 0) parts.push('在 ≥' + a.kick_groups + ' 个群');
+  if (Number(a.kick_kicked) > 0) parts.push('被踢过 ≥' + a.kick_kicked + ' 次');
+  if (Number(a.kick_left) > 0) parts.push('主动退群 ≥' + a.kick_left + ' 次');
+  return parts.join(a.kick_match === 'all' ? ' 且 ' : ' 或 ');
+}
 // forceRecall：码黑名单等用默认组处理方式的命中总是撤回，不看默认组的「撤回」开关
 function rgActionText(a, forceRecall) {
   var recall = forceRecall || a.recall !== false;
   var parts = [recall ? '撤回' : '不撤回，只抄送提醒'];
-  if (a.kick) parts.push((Number(a.kick_days) > 0 ? '入群 ' + a.kick_days + ' 天内' : '') + RG_KICK_TEXT[a.kick]);
+  if (a.kick) { var kc = rgKickCondText(a); parts.push((kc ? kc + ' 的' : '') + RG_KICK_TEXT[a.kick]); }
   if (a.mute) parts.push((a.kick ? '否则' : '') + '禁言 ' + rgMinutesText(a.mute_minutes));
   if (a.notice && recall) parts.push('提示');
   return parts.join(' + ');
@@ -4791,7 +4810,8 @@ function rgToDraft(g) {
     id: g.id, is_default: g.is_default, name: g.name, enabled: g.enabled, scope: (g.scope || []).slice(),
     keywords: g.keywords.map(mnRuleParse), codes: g.code_rules.map(rgCodeParse), apps: g.apps.map(rgAppParse),
     cards: { group_card: (g.cards || {}).group_card || '', allow: ((g.cards || {}).allow || []).join(' ') },
-    action: Object.assign({ recall: true, mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 }, g.action)
+    action: Object.assign({ recall: true, mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7,
+      kick_groups: 0, kick_kicked: 0, kick_left: 0, kick_match: 'any' }, g.action)
   };
 }
 async function rgSelect(id, silent) {
@@ -4801,7 +4821,8 @@ async function rgSelect(id, silent) {
     RG.sel = 'new';
     RG.draft = id === 'preset' ? rgPresetDraft() : { id: 0, is_default: false, name: '', enabled: true, scope: [], keywords: [{ type: 'contains', value: '' }], codes: [], apps: [],
       cards: { group_card: '', allow: '' },
-      action: { recall: true, mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7 } };
+      action: { recall: true, mute: false, mute_minutes: 30, notice: false, notice_template: '', kick: '', kick_days: 7,
+        kick_groups: 0, kick_kicked: 0, kick_left: 0, kick_match: 'any' } };
     RG.dirty = true;
   } else {
     var g = RG.groups.filter(function(x) { return x.id === Number(id); })[0];
@@ -4855,6 +4876,20 @@ function rgShowCodes(d) {
     });
   });
 }
+function rgKickCondHtml(a) {
+  var any = Number(a.kick_days) > 0 || Number(a.kick_groups) > 0 || Number(a.kick_kicked) > 0 || Number(a.kick_left) > 0;
+  return '<div class="rg-kick-cond"><div class="mn-row" style="margin:0 0 6px"><b>踢谁</b>' +
+    '<select class="input-sm" style="width:200px" data-rg-f="kick_match">' +
+    [['any', '满足下面任意一项就踢'], ['all', '下面填了的全部满足才踢']].map(function(o) { return '<option value="' + o[0] + '"' + ((a.kick_match || 'any') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+    '<span class="mn-hint">每项填 0 = 不看这一项</span></div>' +
+    '<div class="rg-kick-grid">' + RG_KICK_CONDS.map(function(c) {
+      var v = a[c[0]] === undefined ? 0 : a[c[0]];
+      return '<label class="rg-kc' + (Number(v) > 0 ? ' on' : '') + '"><span>' + esc(c[1]) + '</span><input type="number" min="0" max="' + c[3] + '" class="input-sm" style="width:70px" data-rg-f="' + c[0] + '" value="' + escAttr(v) + '" /><span>' + esc(c[2]) + '</span>' +
+        '<span class="mn-hint">' + esc(c[4]) + '</span></label>';
+    }).join('') + '</div>' +
+    '<p class="mn-hint" style="margin:6px 0 0">' + (any ? '现在：<b>' + esc(rgKickCondText(a)) + '</b> 的人命中规则就' + RG_KICK_TEXT[a.kick] + '。' : '<span style="color:var(--danger)">四项都是 0：任何人命中规则都会被' + RG_KICK_TEXT[a.kick] + '（老成员误触也会）。</span>') +
+    '次数来自「退群记录」，所在群数来自「群成员缓存」，缓存不全时会少算。</p></div>';
+}
 function rgRenderEditor() {
   var d = RG.draft, box = $('#rgEditor');
   if (!d) { box.innerHTML = '<div class="split-empty">在左边选一个规则组</div>'; return; }
@@ -4888,12 +4923,12 @@ function rgRenderEditor() {
     '<div class="mn-row"><label><input type="checkbox" data-rg-f="recall"' + (recall ? ' checked' : '') + ' /> 撤回消息</label><label style="margin-left:8px">然后</label>' +
     '<select class="input-sm" style="width:250px" data-rg-f="kick">' +
     [['', '不踢人'], ['kick', '踢出本群'], ['block', '踢出并拉黑（所有管理的群 + 黑名单）']].map(function(o) { return '<option value="' + o[0] + '"' + ((d.action.kick || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
-    (d.action.kick ? '<span>只踢入群不满</span><input type="number" min="0" max="3650" class="input-sm" style="width:70px" data-rg-f="kick_days" value="' + escAttr(d.action.kick_days) + '" /><span>天的人</span><span class="mn-hint">0 = 不看入群时间</span>' : '') + '</div>' +
+    '</div>' + (d.action.kick ? rgKickCondHtml(d.action) : '') +
     (recall ? '' : '<p class="mn-hint rg-notify-hint">不撤回：消息留在群里，只把它抄送到勾选了对应类别（关键词命中、二维码 / 葵花码命中、小程序命中）的转发群，标题写「命中提醒（未撤回）」，由管理员看情况处理。' +
       '没有设置转发群，或「撤回前备份」关着时，就只记在违规记录和操作记录里。群内提示不会发（提示写的是「已撤回」）；下面的踢人、禁言照常。' +
       (d.is_default ? '码黑名单、解不出的码、码发送超限、已拉黑的链接这些用默认组处理方式的命中仍然撤回。' : '') + '</p>') +
     (d.action.kick ? '<p class="mn-hint" style="margin:0 0 8px">' + (d.action.kick === 'block' ? '踢出并拉黑：加入插件黑名单，在本群踢出并勾选「拒绝再次加群」，再把他从其它管理的群里踢出。' : '') +
-      '被踢后会触发「退群后处理」里开启的退群撤回、退群删文件、踢人后暂停加群。<b>不会踢</b>：群主、管理员、插件管理员、白名单用户；入群时间超过上面的天数或查不到入群时间的人——这些情况按下面的禁言处理。</p>' : '') +
+      '被踢后会触发「退群后处理」里开启的退群撤回、退群删文件、踢人后暂停加群。<b>不会踢</b>：群主、管理员、插件管理员、白名单用户；不满足上面「踢谁」条件的人（查不到入群时间的，「入群不满」这一项算不满足）——这些情况按下面的禁言处理。</p>' : '') +
     '<div class="mn-row"><span>' + (d.action.kick ? '没有踢的时候' : '') + '</span>' +
     '<label><input type="checkbox" data-rg-f="mute"' + (d.action.mute ? ' checked' : '') + ' /> 同时禁言</label>' +
     '<select class="input-sm" style="width:110px" data-rg-f="mute_minutes"' + (d.action.mute ? '' : ' disabled') + '>' + muteOpts.map(function(x) { return '<option value="' + x + '"' + (x === m ? ' selected' : '') + '>' + rgMinutesText(x) + '</option>'; }).join('') + '<option value="custom">自定义…</option></select></div>' +
@@ -4926,7 +4961,11 @@ function rgField(path, el) {
   else if (path === 'card_mode') { d.cards.group_card = v; rgRenderEditorKeep(); }
   else if (path === 'card_allow') d.cards.allow = v;
   else if (path === 'kick') { d.action.kick = v; rgRenderEditorKeep(); }
-  else if (path === 'kick_days') d.action.kick_days = v === '' ? '' : Number(v);
+  else if (path === 'kick_days' || path === 'kick_groups' || path === 'kick_kicked' || path === 'kick_left') {
+    d.action[path] = v === '' ? '' : Number(v);
+    var lab = el.closest && el.closest('.rg-kc'); if (lab) lab.classList.toggle('on', Number(v) > 0);
+  }
+  else if (path === 'kick_match') { d.action.kick_match = v; rgRenderEditorKeep(); }
   else if (path === 'notice') { d.action.notice = v; rgRenderEditorKeep(); }
   else if (path === 'notice_template') d.action.notice_template = v;
   else if (path === 'mute_minutes') {
@@ -4958,21 +4997,29 @@ function rgCollect() {
   var allow = String(d.cards.allow || '').split(/[\s,，;；]+/).filter(Boolean);
   if (allow.some(function(x) { return !/^\d+$/.test(x); })) bad.push('允许分享的群号只能填数字，用空格分隔');
   var kd = Number(d.action.kick_days);
-  if (d.action.kick && !(d.action.kick_days !== '' && kd >= 0 && kd <= 3650 && Math.floor(kd) === kd)) bad.push('入群天数填 0–3650 的整数（0 = 不看入群时间）');
+  if (d.action.kick) {
+    RG_KICK_CONDS.forEach(function(c) {
+      var x = d.action[c[0]] === undefined ? 0 : d.action[c[0]], n = Number(x);
+      if (x === '' || !(n >= 0 && n <= c[3]) || Math.floor(n) !== n) bad.push(c[1].replace(' ≥', '') + '：填 0–' + c[3] + ' 的整数（0 = 不看）');
+    });
+  }
   if (d.action.kick && !kw.length && !codes.length && !apps.length && !d.cards.group_card) bad.push('选了踢人，但这个组没有任何规则');
   return { bad: bad, data: { id: d.id || undefined, name: String(d.name).trim(), enabled: d.is_default ? true : d.enabled, scope: scope,
     keywords: kw, code_rules: codes, apps: apps, cards: { group_card: d.cards.group_card, allow: allow },
-    action: Object.assign({}, d.action, { kick_days: d.action.kick ? kd : (Number(d.action.kick_days) || 7) }) } };
+    action: Object.assign({}, d.action, { kick_days: d.action.kick ? kd : (Number(d.action.kick_days) || 7),
+      kick_groups: Number(d.action.kick_groups) || 0, kick_kicked: Number(d.action.kick_kicked) || 0, kick_left: Number(d.action.kick_left) || 0,
+      kick_match: d.action.kick_match === 'all' ? 'all' : 'any' }) } };
 }
 async function rgSave() {
   var c = rgCollect();
   if (c.bad.length) { $('#rgErr').innerHTML = '<div class="mn-result err">' + c.bad.map(esc).join('<br>') + '</div>'; return; }
   // 踢人不可撤销：保存前说清楚会发生什么
   var a = c.data.action, was = (RG.groups.filter(function(x) { return x.id === c.data.id; })[0] || {}).action || {};
-  if (a.kick && (was.kick !== a.kick || Number(was.kick_days) !== Number(a.kick_days))) {
-    var who = Number(a.kick_days) > 0 ? '入群不满 ' + a.kick_days + ' 天的成员' : '任何成员（不看入群时间）';
+  var condNow = rgKickCondText(a), condWas = was.kick ? rgKickCondText(was) : null;
+  if (a.kick && (was.kick !== a.kick || condWas !== condNow)) {
+    var who = condNow ? '「' + condNow + '」的成员' : '任何成员（不看条件）';
     if (!(await mnConfirm('保存后，' + who + '只要命中「' + c.data.name + '」里的任意一条规则，就会被自动' + RG_KICK_TEXT[a.kick] + '，不需要人工确认。' +
-      (Number(a.kick_days) > 0 ? '' : '\n\n没有限定入群时间，老成员误触规则也会被踢。') + '\n\n建议先用页面下方的「测试规则组」试几条正常消息。', { okText: '保存', danger: true }))) return;
+      (condNow ? '' : '\n\n没有设置踢人条件，老成员误触规则也会被踢。') + '\n\n建议先用页面下方的「测试规则组」试几条正常消息。', { okText: '保存', danger: true }))) return;
   }
   var res = await safePost('minimal/rulegroups/save', { group: c.data });
   if (isApiError(res)) { $('#rgErr').innerHTML = '<div class="mn-result err">' + esc(mnErr(res)) + '</div>'; return; }
@@ -5437,9 +5484,9 @@ async function saRecompress() {
 }
 
 var QB_RG_KEY = 'gg_quick_rg';
-function rgActionText(g) {
+function rgChoiceText(g) {
   var p = [g.recall === false ? '不撤回，只抄送提醒' : '撤回'];
-  if (g.kick) p.push(g.kick === 'block' ? '踢出并拉黑' : '踢出本群');
+  if (g.kick) p.push((g.kick_cond && g.kick_cond.indexOf('不看条件') < 0 ? g.kick_cond + ' 的' : '') + (g.kick === 'block' ? '踢出并拉黑' : '踢出本群'));
   if (g.mute) p.push('禁言 ' + rgMinutesText(g.mute_minutes));
   return p.join(' + ');
 }
@@ -5465,7 +5512,7 @@ async function rgPickModal(opts) {
     var tags = rgTags(g) + (opts.current && g.id === opts.current ? '<span class="mn-chip" style="color:var(--primary)">现在在这个组</span>' : '');
     return '<label class="qb-rg' + (g.enabled ? '' : ' off') + '"><input type="radio" name="qbRg" value="' + g.id + '"' + (g.id === pick.id ? ' checked' : '') + ' />' +
       '<span class="qb-main"><span class="qb-title"><b>' + esc(g.name) + '</b>' + tags + '</span>' +
-      '<span class="mn-hint">命中后：' + esc(rgActionText(g)) + ' · 生效：' + esc(rgScopeText(g)) + '</span></span></label>';
+      '<span class="mn-hint">命中后：' + esc(rgChoiceText(g)) + ' · 生效：' + esc(rgScopeText(g)) + '</span></span></label>';
   }).join('');
   var what = String(opts.what || '');
   return new Promise(function(resolve) {
@@ -5570,7 +5617,7 @@ async function brPickRg(i) {
       '<div class="qb-list" id="brRgList" style="margin-left:22px">' + BR.rgs.map(function(g) {
         return '<label class="qb-rg' + (g.enabled ? '' : ' off') + '"><input type="checkbox" class="br-rg-ck" value="' + g.id + '"' + (sel[g.id] ? ' checked' : '') + ' />' +
           '<span class="qb-main"><span class="qb-title"><b>' + esc(g.name) + '</b>' + rgTags(g) + '</span>' +
-          '<span class="mn-hint">' + esc(rgActionText(g)) + ' · 生效：' + esc(rgScopeText(g)) + '</span></span></label>';
+          '<span class="mn-hint">' + esc(rgChoiceText(g)) + ' · 生效：' + esc(rgScopeText(g)) + '</span></span></label>';
       }).join('') + '</div>',
       '<button class="btn btn-ghost btn-sm" id="__brRgCancel">取消</button><button class="btn btn-primary btn-sm" id="__brRgOk">确定</button>');
     var sync = function() {

@@ -331,19 +331,69 @@ class KeywordGuardMixin:
             return None
         return max(0.0, (time.time() - join_time) / 86400)
 
-    async def _hg_kick_check(self, client, group_id: str, user_id: str, action: dict) -> str:
-        """这个人能不能自动踢 → 不能踢的原因（空 = 可以踢）。宁可不踢：拿不准就按禁言处理。"""
+    def _hg_user_groups(self, user_id: str) -> int:
+        """这个人在几个管理的群里（群成员缓存，备份群不算）。"""
+        find = getattr(self, "_dir_find_user", None)
+        if not callable(find):
+            return 0
+        is_backup = getattr(self, "_is_backup_group", None)
+        try:
+            return len([g for g in find(user_id) if not (callable(is_backup) and is_backup(g["group_id"]))])
+        except Exception:
+            return 0
+
+    def _hg_leave_counts(self, user_id: str) -> Tuple[int, int]:
+        """(被踢次数, 主动退群次数)，退群记录里所有群合计。"""
+        summary = getattr(self, "_ll_user_summary", None)
+        if not callable(summary):
+            return 0, 0
+        try:
+            s = summary(user_id)
+            return int(s.get("kicks", 0) or 0), int(s.get("leaves", 0) or 0)
+        except Exception:
+            return 0, 0
+
+    async def _hg_kick_eval(self, client, group_id: str, user_id: str, action: dict) -> Tuple[bool, str]:
+        """按规则组的「踢谁」条件判断 → (踢不踢, 说明)。说明：踢时写满足了哪几项，不踢时写为什么。
+
+        条件（都是 0 = 不看）：入群不满 kick_days 天、在 ≥ kick_groups 个群、被踢过 ≥ kick_kicked 次、
+        主动退群 ≥ kick_left 次；kick_match = any 满足任意一项 / all 全部满足。一项都没填 = 命中就踢。
+        入群时间查不到的，「入群天数」这一项算不满足（宁可不踢）。
+        """
         exempt = getattr(self, "_is_blacklist_exempt", None)
         if callable(exempt) and exempt(user_id):
-            return "插件管理员 / 白名单用户，不踢"
+            return False, "插件管理员 / 白名单用户，不踢"
+        results = []          # (满足?, 说明)
         days_limit = int(action.get("kick_days", 0) or 0)
         if days_limit > 0:
             days = await self._hg_join_days(client, group_id, user_id)
             if days is None:
-                return "不知道入群时间，没有踢"
-            if days > days_limit:
-                return f"入群已 {int(days)} 天（超过 {days_limit} 天），没有踢"
-        return ""
+                results.append((False, "不知道入群时间"))
+            else:
+                results.append((days <= days_limit, f"入群已 {int(days)} 天" + ("" if days <= days_limit else f"（超过 {days_limit} 天）")))
+        need_groups = int(action.get("kick_groups", 0) or 0)
+        if need_groups > 0:
+            n = self._hg_user_groups(user_id)
+            results.append((n >= need_groups, f"在 {n} 个群" + ("" if n >= need_groups else f"（不到 {need_groups} 个）")))
+        need_kicked, need_left = int(action.get("kick_kicked", 0) or 0), int(action.get("kick_left", 0) or 0)
+        if need_kicked > 0 or need_left > 0:
+            kicked, left = self._hg_leave_counts(user_id)
+            if need_kicked > 0:
+                results.append((kicked >= need_kicked, f"被踢过 {kicked} 次" + ("" if kicked >= need_kicked else f"（不到 {need_kicked} 次）")))
+            if need_left > 0:
+                results.append((left >= need_left, f"主动退群 {left} 次" + ("" if left >= need_left else f"（不到 {need_left} 次）")))
+        if not results:
+            return True, ""
+        if action.get("kick_match") == "all":
+            ok = all(r[0] for r in results)
+            return ok, "、".join(r[1] for r in results) if ok else "条件没有全部满足：" + "、".join(r[1] for r in results) + "，没有踢"
+        ok = any(r[0] for r in results)
+        return ok, "、".join(r[1] for r in results if r[0]) if ok else "条件都不满足：" + "、".join(r[1] for r in results) + "，没有踢"
+
+    async def _hg_kick_check(self, client, group_id: str, user_id: str, action: dict) -> str:
+        """这个人能不能自动踢 → 不能踢的原因（空 = 可以踢）。宁可不踢：拿不准就按禁言处理。"""
+        ok, why = await self._hg_kick_eval(client, group_id, user_id, action)
+        return "" if ok else why
 
     async def _hg_kick(self, event, group_id: str, user_id: str, action: dict, reason: str) -> Tuple[str, str]:
         """按规则组设置踢人 → (结果：踢出 / 踢出并拉黑 / 空, 说明)。
@@ -357,12 +407,12 @@ class KeywordGuardMixin:
         client = await self._get_client(event)
         if not client:
             return "", "没有可用的 QQ 连接，没有踢"
-        why = await self._hg_kick_check(client, group_id, user_id, action)
-        if why:
+        ok, why = await self._hg_kick_eval(client, group_id, user_id, action)
+        if not ok:
             return "", why
         block = action.get("kick") == "block"
         label = "踢出并拉黑" if block else "踢出"
-        why_text = f"命中规则自动{label}：{reason}"[:200]
+        why_text = (f"命中规则自动{label}：{reason}" + (f"（{why}）" if why else ""))[:200]
         if block:
             self._add_user_blacklist(user_id, why_text, source="自动", group_id=group_id)
         log = {"source": "自动", "operator": "", "reason": why_text}
